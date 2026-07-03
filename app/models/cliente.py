@@ -1,0 +1,41 @@
+import uuid
+from datetime import date
+
+from sqlalchemy import String, Date, Boolean, DateTime, ForeignKey, Numeric, func
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base
+
+
+class Cliente(Base):
+    __tablename__ = "clientes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    profissional_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
+    )
+    nome: Mapped[str] = mapped_column(String, nullable=False)
+    tipo: Mapped[str] = mapped_column(String, nullable=False)  # 'PF' | 'PJ'
+    documento: Mapped[str] = mapped_column(String, nullable=False)
+    data_cadastro: Mapped[date] = mapped_column(Date, server_default=func.current_date())
+    status: Mapped[str] = mapped_column(String, default="ativo")  # ativo | excluido
+    data_exclusao: Mapped[date | None] = mapped_column(Date, nullable=True)
+    motivo_churn: Mapped[str | None] = mapped_column(String, nullable=True)
+    motivo_churn_detalhe: Mapped[str | None] = mapped_column(String, nullable=True)
+    conexao_pausada: Mapped[bool] = mapped_column(Boolean, default=False)
+    perfil_comportamental: Mapped[str | None] = mapped_column(String, nullable=True)
+    objetivo_principal: Mapped[str | None] = mapped_column(String, nullable=True)
+    valor_honorario_mensal: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    criado_em: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    @property
+    def data_limite_exclusao(self) -> date:
+        """Espelha a coluna gerada do banco (data_cadastro + 35 dias) para uso em Python
+        sem precisar de round-trip ao banco. A fonte da verdade continua sendo a coluna
+        GENERATED do schema; isto é só uma conveniência de leitura."""
+        from datetime import timedelta
+
+        from app.core.config import settings
+
+        return self.data_cadastro + timedelta(days=settings.PRAZO_EXCLUSAO_SEM_COBRANCA_DIAS)
