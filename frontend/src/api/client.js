@@ -1,0 +1,61 @@
+const BASE_URL = import.meta.env.VITE_API_BASE_URL
+
+class ApiError extends Error {
+  constructor(status, detail) {
+    super(detail || `Erro ${status}`)
+    this.status = status
+  }
+}
+
+function getToken() {
+  return localStorage.getItem("fluxo_token")
+}
+
+export function setToken(token) {
+  if (token) localStorage.setItem("fluxo_token", token)
+  else localStorage.removeItem("fluxo_token")
+}
+
+async function request(path, { method = "GET", body, auth = true } = {}) {
+  const headers = { "Content-Type": "application/json" }
+  if (auth) {
+    const token = getToken()
+    if (token) headers.Authorization = `Bearer ${token}`
+  }
+
+  const res = await fetch(`${BASE_URL}${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  })
+
+  if (res.status === 401) {
+    setToken(null)
+    // Deixa o AuthContext perceber a queda de sessão no próximo render/rota
+    // protegida — evita import circular chamando navigate() daqui.
+    window.dispatchEvent(new Event("fluxo:unauthorized"))
+  }
+
+  let data = null
+  const text = await res.text()
+  if (text) {
+    try {
+      data = JSON.parse(text)
+    } catch {
+      data = null
+    }
+  }
+
+  if (!res.ok) {
+    throw new ApiError(res.status, data?.detail)
+  }
+
+  return data
+}
+
+export const apiGet = (path, opts) => request(path, { ...opts, method: "GET" })
+export const apiPost = (path, body, opts) => request(path, { ...opts, method: "POST", body })
+export const apiPatch = (path, body, opts) => request(path, { ...opts, method: "PATCH", body })
+export const apiDelete = (path, body, opts) => request(path, { ...opts, method: "DELETE", body })
+
+export { ApiError }

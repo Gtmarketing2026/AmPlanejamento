@@ -1,0 +1,29 @@
+@import "tailwindcss";
+
+/* Tokens espelhando fluxo-app.html (fonte da verdade visual) — não inventar paleta nova. */
+@theme {
+  --color-bg: #0a0e12;
+  --color-panel: #12171d;
+  --color-panel-2: #171d24;
+  --color-line: #232b33;
+  --color-text: #e9edf0;
+  --color-text-dim: #8b96a3;
+  --color-text-faint: #5a6570;
+  --color-accent: #26d9a8;
+  --color-accent-dim: #1a9e7c;
+  --color-amber: #f0a63c;
+  --color-red: #e5645a;
+  --color-blue: #4c8dff;
+
+  --font-display: "Space Grotesk", sans-serif;
+  --font-sans: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
