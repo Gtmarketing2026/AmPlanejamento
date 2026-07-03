@@ -111,8 +111,13 @@ def processar_ciclo_do_profissional(profissional_id: uuid.UUID, ciclo_referencia
         except Exception as e:
             print(f"[faturamento] Aviso: não foi possível buscar payment do Asaas ainda: {e}")
 
-        db.commit()
+        # refresh ANTES do commit: precisa estar dentro da mesma transação em
+        # que o SET LOCAL vale. Depois do commit, o custom GUC vira string
+        # vazia (não NULL) na mesma conexão, e o cast ''::UUID da policy de
+        # RLS quebra a query.
+        db.flush()
         db.refresh(fatura)
+        db.commit()
 
         print(
             f"[faturamento] Fatura gerada: profissional={profissional_id} "
