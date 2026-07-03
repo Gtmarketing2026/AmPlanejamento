@@ -16,8 +16,18 @@ class Cliente(Base):
         UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
     )
     nome: Mapped[str] = mapped_column(String, nullable=False)
-    tipo: Mapped[str] = mapped_column(String, nullable=False)  # 'PF' | 'PJ'
-    documento: Mapped[str] = mapped_column(String, nullable=False)
+    tipo: Mapped[str] = mapped_column(String, nullable=False)  # 'PF' | 'PJ' (tipo principal)
+    documento: Mapped[str] = mapped_column(String, nullable=False)  # CPF, sempre obrigatório
+    # Contexto PJ opcional: cliente PF que também tem uma empresa (ex: Marina
+    # Castro pessoa física + Castro Design ME) — presença de cnpj habilita a
+    # aba Pessoal/PJ no dashboard, sem precisar de um segundo cadastro.
+    cnpj: Mapped[str | None] = mapped_column(String, nullable=True)
+    nome_pj: Mapped[str | None] = mapped_column(String, nullable=True)
+    # Acesso do cliente final ao próprio dashboard (login separado do
+    # profissional). nickname único globalmente pra servir de identificador
+    # de login simples.
+    nickname: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
+    senha_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     data_cadastro: Mapped[date] = mapped_column(Date, server_default=func.current_date())
     status: Mapped[str] = mapped_column(String, default="ativo")  # ativo | excluido
     data_exclusao: Mapped[date | None] = mapped_column(Date, nullable=True)

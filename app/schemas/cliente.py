@@ -37,9 +37,13 @@ class ProfissionalPerfil(BaseModel):
 # ---------- Clientes ----------
 class ClienteCriar(BaseModel):
     nome: str
-    tipo: str  # 'PF' | 'PJ'
-    documento: str
+    tipo: str  # 'PF' | 'PJ' (tipo principal)
+    documento: str  # CPF, sempre obrigatório
+    cnpj: str | None = None  # contexto PJ opcional (ex: Marina PF + Castro Design PJ)
+    nome_pj: str | None = None
     valor_honorario_mensal: float | None = None
+    nickname: str  # login do cliente final
+    senha: str
 
 
 class ClienteResposta(BaseModel):
@@ -47,6 +51,9 @@ class ClienteResposta(BaseModel):
     nome: str
     tipo: str
     documento: str
+    cnpj: str | None
+    nome_pj: str | None
+    nickname: str | None
     status: str
     data_cadastro: date
     valor_honorario_mensal: float | None
@@ -58,3 +65,9 @@ class ClienteResposta(BaseModel):
 class ClienteExcluir(BaseModel):
     motivo_churn: str | None = None
     motivo_churn_detalhe: str | None = None
+
+
+# ---------- Login do cliente final ----------
+class ClienteLoginRequest(BaseModel):
+    nickname: str
+    senha: str

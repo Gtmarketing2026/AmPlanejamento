@@ -20,7 +20,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.core.security import decodificar_access_token
+from app.core.security import decodificar_access_token, decodificar_token_cliente
 from app.db.base import SessionLocal, SessionLocalAdmin
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -51,6 +51,19 @@ def get_profissional_id_atual(token: str = Depends(oauth2_scheme)) -> uuid.UUID:
             headers={"WWW-Authenticate": "Bearer"},
         )
     return uuid.UUID(profissional_id)
+
+
+def get_cliente_id_atual(token: str = Depends(oauth2_scheme)) -> uuid.UUID:
+    """Gate pras rotas do cliente final (ex: GET /clientes/eu) — nunca aceita
+    um token de profissional aqui, mesmo que o sub seja um UUID válido."""
+    cliente_id = decodificar_token_cliente(token)
+    if not cliente_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido ou expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return uuid.UUID(cliente_id)
 
 
 def get_db_com_rls(

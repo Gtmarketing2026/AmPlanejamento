@@ -5,10 +5,12 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db_com_rls, get_profissional_id_atual
+from app.api.deps import get_cliente_id_atual, get_db_admin, get_db_com_rls, get_db_sem_rls, get_profissional_id_atual
 from app.core.config import settings
+from app.core.security import criar_access_token, hash_senha, verificar_senha
+from app.db.base import SessionLocalAdmin
 from app.models.cliente import Cliente
-from app.schemas.cliente import ClienteCriar, ClienteExcluir, ClienteResposta
+from app.schemas.cliente import ClienteCriar, ClienteExcluir, ClienteLoginRequest, ClienteResposta, TokenResponse
 
 router = APIRouter(prefix="/clientes", tags=["clientes"])
 
@@ -27,9 +29,15 @@ def criar_cliente(
     db: Session = Depends(get_db_com_rls),
     profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
 ):
-    total_ativos = db.scalar(
-        select(Cliente).where(Cliente.status == "ativo")
-    )
+    # nickname é único globalmente (login do cliente final não sabe o
+    # subdomínio do profissional antecipadamente) — checagem via conexão
+    # privilegiada, porque RLS restringiria a busca só aos clientes do
+    # profissional atual, deixando passar duplicata de outro tenant.
+    with SessionLocalAdmin() as db_admin:
+        ja_existe_nickname = db_admin.scalar(select(Cliente).where(Cliente.nickname == dados.nickname))
+    if ja_existe_nickname:
+        raise HTTPException(status_code=400, detail="Nickname já está em uso")
+
     # Nota: isto é ilustrativo — em produção, usar select(func.count()) em vez
     # de carregar o objeto. Mantido simples aqui para foco na regra de negócio.
     qtd_ativos = len(db.scalars(select(Cliente).where(Cliente.status == "ativo")).all())
@@ -39,6 +47,10 @@ def criar_cliente(
         nome=dados.nome,
         tipo=dados.tipo,
         documento=dados.documento,
+        cnpj=dados.cnpj,
+        nome_pj=dados.nome_pj,
+        nickname=dados.nickname,
+        senha_hash=hash_senha(dados.senha),
         valor_honorario_mensal=dados.valor_honorario_mensal,
         data_cadastro=date.today(),
     )
@@ -83,3 +95,33 @@ def excluir_cliente(
         "gerara_cobranca_proximo_ciclo": not dentro_do_prazo,
         "data_limite_que_era": cliente.data_limite_exclusao,
     }
+
+
+@router.post("/login", response_model=TokenResponse)
+def login_cliente(dados: ClienteLoginRequest, db: Session = Depends(get_db_sem_rls)):
+    # get_db_sem_rls já usa a conexão privilegiada — necessário aqui porque
+    # login busca por nickname sem ainda saber o profissional_id (RLS de
+    # clientes bloquearia a busca, igual ao login de profissional).
+    cliente = db.scalar(select(Cliente).where(Cliente.nickname == dados.nickname))
+    if not cliente or not cliente.senha_hash or not verificar_senha(dados.senha, cliente.senha_hash):
+        raise HTTPException(status_code=401, detail="Nickname ou senha inválidos")
+
+    if cliente.status == "excluido":
+        raise HTTPException(status_code=403, detail="Cadastro encerrado. Fale com seu planejador.")
+
+    token = criar_access_token(str(cliente.id), tipo="cliente_final")
+    return TokenResponse(access_token=token)
+
+
+@router.get("/eu", response_model=ClienteResposta)
+def perfil_cliente_atual(
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    # Não há policy de RLS por cliente_id (só por profissional_id) -- por
+    # isso usa a conexão privilegiada, mas o filtro abaixo por cliente_id
+    # (vindo do token já validado) garante que só o próprio cliente é lido.
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    return cliente

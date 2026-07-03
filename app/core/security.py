@@ -16,16 +16,32 @@ def verificar_senha(senha_texto: str, senha_hash: str) -> bool:
     return pwd_context.verify(senha_texto, senha_hash)
 
 
-def criar_access_token(profissional_id: str) -> str:
+def criar_access_token(sub: str, tipo: str = "profissional") -> str:
+    """tipo distingue quem é o dono do token (profissional | cliente_final) --
+    impede que um token de cliente final seja aceito numa rota de profissional
+    e vice-versa, mesmo que ambos sejam UUIDs válidos assinados com a mesma chave."""
     expira_em = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_EXPIRE_MINUTES)
-    payload = {"sub": profissional_id, "exp": expira_em}
+    payload = {"sub": sub, "tipo": tipo, "exp": expira_em}
     return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
 def decodificar_access_token(token: str) -> str | None:
-    """Retorna o profissional_id do token, ou None se inválido/expirado."""
+    """Retorna o profissional_id do token, ou None se inválido/expirado/de outro tipo."""
     try:
         payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("tipo", "profissional") != "profissional":
+            return None
+        return payload.get("sub")
+    except JWTError:
+        return None
+
+
+def decodificar_token_cliente(token: str) -> str | None:
+    """Retorna o cliente_id do token, ou None se inválido/expirado/de outro tipo."""
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("tipo") != "cliente_final":
+            return None
         return payload.get("sub")
     except JWTError:
         return None

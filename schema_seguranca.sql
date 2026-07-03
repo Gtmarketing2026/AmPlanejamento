@@ -81,8 +81,17 @@ CREATE TABLE clientes (
     id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     profissional_id         UUID NOT NULL REFERENCES profissionais(id) ON DELETE CASCADE,
     nome                    TEXT NOT NULL,
-    tipo                    TEXT NOT NULL CHECK (tipo IN ('PF', 'PJ')),
-    documento               TEXT NOT NULL,  -- CPF ou CNPJ
+    tipo                    TEXT NOT NULL CHECK (tipo IN ('PF', 'PJ')),  -- tipo principal
+    documento               TEXT NOT NULL,  -- CPF, sempre obrigatório
+    -- Contexto PJ opcional: cliente PF que também tem uma empresa (ex:
+    -- Marina Castro PF + Castro Design ME) -- presença de cnpj habilita a
+    -- aba Pessoal/PJ no dashboard, sem precisar de um segundo cadastro.
+    cnpj                    TEXT,
+    nome_pj                 TEXT,
+    -- Acesso do cliente final ao próprio dashboard (login separado do
+    -- profissional).
+    nickname                TEXT UNIQUE,
+    senha_hash               TEXT,
     data_cadastro            DATE NOT NULL DEFAULT CURRENT_DATE,
     data_limite_exclusao     DATE GENERATED ALWAYS AS (data_cadastro + INTERVAL '35 days') STORED,
     status                  TEXT NOT NULL DEFAULT 'ativo'
