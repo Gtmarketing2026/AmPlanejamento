@@ -2,6 +2,25 @@
 name = "fluxo-backend"
 version = "0.1.0"
 requires-python = ">=3.12"
+# Mantido em sincronia com requirements.txt (fonte usada em dev local via
+# `pip install -r requirements.txt`) — o build da Vercel usa `uv` lendo
+# daqui, não do requirements.txt.
+dependencies = [
+    "fastapi==0.115.0",
+    "uvicorn[standard]==0.30.6",
+    "sqlalchemy==2.0.35",
+    "psycopg2-binary==2.9.9",
+    "alembic==1.13.2",
+    "pydantic==2.9.2",
+    "pydantic-settings==2.5.2",
+    "email-validator==2.2.0",
+    "python-jose[cryptography]==3.3.0",
+    "passlib[bcrypt]==1.7.4",
+    "bcrypt==4.0.1",
+    "python-multipart==0.0.9",
+    "python-dotenv==1.0.1",
+    "requests==2.32.3",
+]
 
 [tool.vercel]
 entrypoint = "app.main:app"

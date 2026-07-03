@@ -5,3 +5,6 @@ __pycache__/
 .vercel/
 pluggy_output/
 .DS_Store
+
+.vercel
+.env*
