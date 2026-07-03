@@ -17,6 +17,8 @@ def listar_faturas(db: Session = Depends(get_db_com_rls)):
             "ciclo_referencia": f.ciclo_referencia,
             "clientes_inclusos_no_ciclo": f.clientes_inclusos_no_ciclo,
             "clientes_extras_no_ciclo": f.clientes_extras_no_ciclo,
+            "valor_base": f.valor_base,
+            "valor_extras": f.valor_extras,
             "valor_total": f.valor_total,
             "status": f.status,
         }
