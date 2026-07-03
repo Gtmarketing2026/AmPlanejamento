@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     # para quais rotas legitimamente precisam dela.
     DATABASE_URL_ADMIN: str
 
+    # URL de produção do frontend (Vercel) — liberada no CORS além do localhost
+    # de desenvolvimento. Vazio = só localhost liberado.
+    FRONTEND_URL: str = ""
+
     # Auth
     JWT_SECRET_KEY: str
     JWT_ALGORITHM: str = "HS256"

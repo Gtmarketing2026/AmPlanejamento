@@ -1,8 +1,22 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import admin, auth, clientes, faturas, webhooks
+from app.core.config import settings
 
 app = FastAPI(title="Fluxo API", version="0.1.0")
+
+_origins_liberadas = ["http://localhost:5173"]
+if settings.FRONTEND_URL:
+    _origins_liberadas.append(settings.FRONTEND_URL)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_origins_liberadas,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(auth.router)
 app.include_router(clientes.router)

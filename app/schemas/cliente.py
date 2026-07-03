@@ -22,6 +22,18 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
 
 
+class ProfissionalPerfil(BaseModel):
+    id: uuid.UUID
+    nome: str
+    email: EmailStr
+    subdominio: str
+    status: str
+    is_admin: bool
+    trial_ate: date | None
+
+    model_config = {"from_attributes": True}
+
+
 # ---------- Clientes ----------
 class ClienteCriar(BaseModel):
     nome: str

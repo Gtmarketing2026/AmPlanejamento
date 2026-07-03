@@ -1,11 +1,13 @@
+import uuid
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db_sem_rls
+from app.api.deps import get_db_com_rls, get_db_sem_rls, get_profissional_id_atual
 from app.core.security import criar_access_token, hash_senha, verificar_senha
 from app.models.profissional import Profissional
-from app.schemas.cliente import LoginRequest, ProfissionalCadastro, TokenResponse
+from app.schemas.cliente import LoginRequest, ProfissionalCadastro, ProfissionalPerfil, TokenResponse
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -56,3 +58,16 @@ def login(dados: LoginRequest, db: Session = Depends(get_db_sem_rls)):
 
     token = criar_access_token(str(profissional.id))
     return TokenResponse(access_token=token)
+
+
+@router.get("/me", response_model=ProfissionalPerfil)
+def perfil_atual(
+    db: Session = Depends(get_db_com_rls),
+    profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
+):
+    # RLS libera essa leitura mesmo pela conexão restrita: a policy
+    # isolar_profissional permite ver a PRÓPRIA linha (id = tenant atual).
+    profissional = db.get(Profissional, profissional_id)
+    if not profissional:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profissional não encontrado")
+    return profissional
