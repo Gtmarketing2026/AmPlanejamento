@@ -1,20 +1,34 @@
 import { useState } from "react"
+import { useNavigate } from "react-router-dom"
 import Stage from "../../components/layout/Stage"
 import Card from "../../components/ui/Card"
 import Button from "../../components/ui/Button"
 import Field, { Select } from "../../components/ui/Field"
+import Pill from "../../components/ui/Pill"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import { useClientes, useCriarCliente, useExcluirCliente } from "../../hooks/useClientes"
 import { formatarData, iniciais, somarDias } from "../../lib/format"
 
 const CLIENTES_INCLUSOS = 4
+const FORM_VAZIO = {
+  nome: "",
+  tipo: "PF",
+  documento: "",
+  cnpj: "",
+  nome_pj: "",
+  valor_honorario_mensal: "",
+  nickname: "",
+  senha: "",
+}
 
 export default function ClientesPage() {
+  const navigate = useNavigate()
   const { data: clientes, isLoading, error } = useClientes()
   const criar = useCriarCliente()
   const excluir = useExcluirCliente()
   const [formAberto, setFormAberto] = useState(false)
-  const [form, setForm] = useState({ nome: "", tipo: "PF", documento: "", valor_honorario_mensal: "" })
+  const [form, setForm] = useState(FORM_VAZIO)
+  const [erro, setErro] = useState(null)
 
   function set(campo) {
     return (e) => setForm((f) => ({ ...f, [campo]: e.target.value }))
@@ -22,14 +36,23 @@ export default function ClientesPage() {
 
   async function onSubmit(e) {
     e.preventDefault()
-    await criar.mutateAsync({
-      nome: form.nome,
-      tipo: form.tipo,
-      documento: form.documento,
-      valor_honorario_mensal: form.valor_honorario_mensal ? Number(form.valor_honorario_mensal) : null,
-    })
-    setForm({ nome: "", tipo: "PF", documento: "", valor_honorario_mensal: "" })
-    setFormAberto(false)
+    setErro(null)
+    try {
+      await criar.mutateAsync({
+        nome: form.nome,
+        tipo: form.tipo,
+        documento: form.documento,
+        cnpj: form.cnpj || null,
+        nome_pj: form.nome_pj || null,
+        valor_honorario_mensal: form.valor_honorario_mensal ? Number(form.valor_honorario_mensal) : null,
+        nickname: form.nickname,
+        senha: form.senha,
+      })
+      setForm(FORM_VAZIO)
+      setFormAberto(false)
+    } catch (err) {
+      setErro(err.message)
+    }
   }
 
   async function onExcluir(id) {
@@ -41,7 +64,7 @@ export default function ClientesPage() {
   const vagasLivres = Math.max(0, CLIENTES_INCLUSOS - total)
 
   return (
-    <Stage eyebrow="Etapa 02" title="Profissional cadastra um cliente" description="Cadastrar já cobra o ciclo atual integralmente — o prazo de 35 dias evita a cobrança do próximo ciclo, não reembolsa o primeiro.">
+    <Stage eyebrow="Etapa 02" title="Profissional cadastra um cliente" description="Cadastrar já cobra o ciclo atual integralmente — o prazo de 35 dias evita a cobrança do próximo ciclo, não reembolsa o primeiro. Clique num cliente pra entrar no dash dele.">
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="font-display font-semibold text-lg">Meus clientes</div>
@@ -61,25 +84,44 @@ export default function ClientesPage() {
 
       {formAberto && (
         <Card className="mb-4">
-          <form onSubmit={onSubmit} className="grid grid-cols-4 gap-3 items-end">
-            <Field label="Nome" value={form.nome} onChange={set("nome")} required />
-            <Select label="Tipo" value={form.tipo} onChange={set("tipo")}>
-              <option value="PF">PF</option>
-              <option value="PJ">PJ</option>
-            </Select>
-            <Field label="CPF/CNPJ" value={form.documento} onChange={set("documento")} required />
-            <Field
-              label="Honorário mensal"
-              type="number"
-              step="0.01"
-              value={form.valor_honorario_mensal}
-              onChange={set("valor_honorario_mensal")}
-            />
-            <div className="col-span-4">
-              <Button type="submit" disabled={criar.isPending}>
-                {criar.isPending ? "Salvando…" : "Salvar cliente"}
-              </Button>
+          <form onSubmit={onSubmit}>
+            <div className="grid grid-cols-4 gap-3">
+              <Field label="Nome" value={form.nome} onChange={set("nome")} required />
+              <Select label="Tipo principal" value={form.tipo} onChange={set("tipo")}>
+                <option value="PF">PF</option>
+                <option value="PJ">PJ</option>
+              </Select>
+              <Field label="CPF" value={form.documento} onChange={set("documento")} required />
+              <Field
+                label="Honorário mensal"
+                type="number"
+                step="0.01"
+                value={form.valor_honorario_mensal}
+                onChange={set("valor_honorario_mensal")}
+              />
             </div>
+
+            <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mt-2 mb-2">
+              Contexto PJ (opcional — mesma pessoa, também tem empresa)
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              <Field label="CNPJ" value={form.cnpj} onChange={set("cnpj")} placeholder="opcional" />
+              <Field label="Nome da empresa" value={form.nome_pj} onChange={set("nome_pj")} placeholder="ex: Castro Design" />
+            </div>
+
+            <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mt-2 mb-2">
+              Acesso do cliente ao próprio dashboard
+            </div>
+            <div className="grid grid-cols-4 gap-3 items-end">
+              <Field label="Nickname (login)" value={form.nickname} onChange={set("nickname")} required />
+              <Field label="Senha" type="password" value={form.senha} onChange={set("senha")} required />
+              <div className="col-span-2">
+                <Button type="submit" disabled={criar.isPending}>
+                  {criar.isPending ? "Salvando…" : "Salvar cliente"}
+                </Button>
+              </div>
+            </div>
+            {erro && <p className="text-red text-[12.5px] mt-3">{erro}</p>}
           </form>
         </Card>
       )}
@@ -98,13 +140,14 @@ export default function ClientesPage() {
             </Thead>
             <tbody>
               {clientes?.map((c) => (
-                <Tr key={c.id}>
+                <Tr key={c.id} className="cursor-pointer hover:bg-panel" onClick={() => navigate(`/dashboard/${c.id}`)}>
                   <Td>
                     <div className="flex items-center gap-2.5">
                       <div className="w-8 h-8 rounded-full bg-panel border border-line flex items-center justify-center text-[11px] font-mono">
                         {iniciais(c.nome)}
                       </div>
                       {c.nome}
+                      {c.cnpj && <Pill variant="neutral">PJ: {c.nome_pj || "sem nome"}</Pill>}
                     </div>
                   </Td>
                   <Td>{c.tipo}</Td>
@@ -112,7 +155,10 @@ export default function ClientesPage() {
                   <Td className="font-mono text-text-dim">{formatarData(somarDias(c.data_cadastro, 35))}</Td>
                   <Td className="text-right">
                     <button
-                      onClick={() => onExcluir(c.id)}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onExcluir(c.id)
+                      }}
                       className="text-red text-[12px] hover:underline"
                     >
                       Excluir

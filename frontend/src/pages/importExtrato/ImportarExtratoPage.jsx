@@ -6,13 +6,18 @@ import Button from "../../components/ui/Button"
 import Pill from "../../components/ui/Pill"
 import Tabs from "../../components/ui/Tabs"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
-import { importExtratoMockInicial } from "../../mocks/importExtrato.mock"
+import {
+  adicionarImportacao,
+  excluirImportacao,
+  marcarProcessada,
+  useImportacoes,
+} from "../../mocks/importacoesStore"
 
 const STATUS_VARIANT = { processado: "on", processando: "warn", erro: "off" }
 
 export default function ImportarExtratoPage() {
   const [tipoDoc, setTipoDoc] = useState("extrato")
-  const [historico, setHistorico] = useState(importExtratoMockInicial)
+  const historico = useImportacoes()
   const [processando, setProcessando] = useState(false)
 
   function onProcessar(e) {
@@ -20,19 +25,23 @@ export default function ImportarExtratoPage() {
     setProcessando(true)
     // MOCK: nao existe endpoint de upload/parse ainda -- simula o ciclo
     // pendente -> processado, so pra ilustrar o fluxo esperado.
-    const novaLinha = {
+    const id = `imp-${Date.now()}`
+    adicionarImportacao({
+      id,
       arquivo: tipoDoc === "extrato" ? "novo_extrato.ofx" : "nova_fatura.pdf",
       periodo: "jul/2026",
-      transacoes: "processando…",
+      transacoesCount: 0,
       status: "processando",
-    }
-    setHistorico((h) => [novaLinha, ...h])
+    })
     setTimeout(() => {
-      setHistorico((h) =>
-        h.map((item, i) => (i === 0 ? { ...item, transacoes: "51 novas", status: "processado" } : item))
-      )
+      marcarProcessada(id, 51)
       setProcessando(false)
     }, 1500)
+  }
+
+  function onExcluir(id, arquivo) {
+    if (!confirm(`Excluir a importação "${arquivo}"? Isso remove também todos os lançamentos dela.`)) return
+    excluirImportacao(id)
   }
 
   return (
@@ -86,25 +95,41 @@ export default function ImportarExtratoPage() {
               <Th>Período</Th>
               <Th>Transações</Th>
               <Th>Status</Th>
+              <Th></Th>
             </Thead>
             <tbody>
-              {historico.map((h, i) => (
-                <Tr key={i}>
+              {historico.map((h) => (
+                <Tr key={h.id}>
                   <Td>{h.arquivo}</Td>
                   <Td className="font-mono text-text-dim">{h.periodo}</Td>
-                  <Td className="font-mono">{h.transacoes}</Td>
+                  <Td className="font-mono">{h.status === "processando" ? "—" : `${h.transacoesCount} lançamentos`}</Td>
                   <Td>
                     <Pill variant={STATUS_VARIANT[h.status]} pulse={h.status === "processando"}>
                       {h.status}
                     </Pill>
                   </Td>
+                  <Td className="text-right">
+                    <button
+                      onClick={() => onExcluir(h.id, h.arquivo)}
+                      className="text-red text-[12px] hover:underline"
+                    >
+                      Excluir
+                    </button>
+                  </Td>
                 </Tr>
               ))}
+              {!historico.length && (
+                <Tr>
+                  <Td colSpan={5} className="text-text-faint text-center py-6">
+                    Nenhuma importação ainda.
+                  </Td>
+                </Tr>
+              )}
             </tbody>
           </Table>
           <p className="text-text-faint text-[11px] mt-3 leading-relaxed">
             Transações duplicadas (já importadas antes) são identificadas automaticamente e não entram de
-            novo na conciliação.
+            novo na conciliação. Excluir uma importação remove também os lançamentos gerados por ela.
           </p>
         </Card>
       </div>

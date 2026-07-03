@@ -3,6 +3,7 @@ import { Select } from "../../components/ui/Field"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import Pill from "../../components/ui/Pill"
 import { dashboardMock as m } from "../../mocks/dashboard.mock"
+import { useTransacoes } from "../../mocks/importacoesStore"
 
 const LEGENDA = [
   { icone: "🏠", label: "Desp. obrigatórias" },
@@ -17,7 +18,8 @@ const LEGENDA = [
 ]
 
 export default function LancamentosTab() {
-  const { filtros, transacoes } = m
+  const { filtros } = m
+  const transacoes = useTransacoes()
 
   return (
     <div>
@@ -53,8 +55,8 @@ export default function LancamentosTab() {
             <Th className="text-right">Valor</Th>
           </Thead>
           <tbody>
-            {transacoes.map((t, i) => (
-              <Tr key={i} className="cursor-pointer hover:bg-panel">
+            {transacoes.map((t) => (
+              <Tr key={t.id} className="cursor-pointer hover:bg-panel">
                 <Td>
                   <span className="mr-1.5">{t.icone}</span>
                   {t.categoria}

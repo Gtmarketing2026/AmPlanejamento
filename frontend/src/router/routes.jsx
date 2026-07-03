@@ -19,6 +19,8 @@ import ImportarExtratoPage from "../pages/importExtrato/ImportarExtratoPage"
 import CadastrosPage from "../pages/cadastros/CadastrosPage"
 import AdminMetricasPage from "../pages/admin/AdminMetricasPage"
 import AdminProfissionaisPage from "../pages/admin/AdminProfissionaisPage"
+import ClienteLoginPage from "../pages/clienteFinal/ClienteLoginPage"
+import ClienteDashboardPage from "../pages/clienteFinal/ClienteDashboardPage"
 
 export const router = createBrowserRouter([
   {
@@ -26,8 +28,10 @@ export const router = createBrowserRouter([
     children: [
       { path: "/login", element: <LoginPage /> },
       { path: "/cadastro", element: <CadastroPage /> },
+      { path: "/cliente/login", element: <ClienteLoginPage /> },
     ],
   },
+  { path: "/cliente/dashboard", element: <ClienteDashboardPage /> },
   {
     element: <ProtectedRoute />,
     children: [
@@ -36,7 +40,7 @@ export const router = createBrowserRouter([
         children: [
           { path: "/", element: <Navigate to="/dashboard" replace /> },
           { path: "/dashboard", element: <DashboardPage /> },
-          { path: "/dashboard/:subtab", element: <DashboardPage /> },
+          { path: "/dashboard/:clienteId", element: <DashboardPage /> },
           { path: "/clientes", element: <ClientesPage /> },
           { path: "/consentimento", element: <ConsentPage /> },
           { path: "/assinatura", element: <AssinaturaPage /> },

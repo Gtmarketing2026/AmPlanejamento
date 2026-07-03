@@ -27,6 +27,8 @@ export default function Topbar() {
 
       <div className="flex items-center gap-1 bg-panel border border-line rounded-[10px] p-1 flex-wrap">
         <NavLink to="/dashboard" className={tabClass}>Dashboard</NavLink>
+        <NavLink to="/crm" className={tabClass}>CRM</NavLink>
+        <NavLink to="/painel-analitico" className={tabClass}>Painel Analítico</NavLink>
 
         <NavGroup
           label="Cadastros"
@@ -41,13 +43,6 @@ export default function Topbar() {
           items={[
             { to: "/importar-extrato", label: "Importar extrato" },
             { to: "/faturas", label: "Faturas" },
-          ]}
-        />
-        <NavGroup
-          label="Relacionamento"
-          items={[
-            { to: "/crm", label: "CRM" },
-            { to: "/painel-analitico", label: "Painel Analítico" },
           ]}
         />
         <NavGroup

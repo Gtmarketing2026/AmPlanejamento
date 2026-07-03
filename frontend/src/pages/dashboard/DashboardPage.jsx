@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { useParams } from "react-router-dom"
 import Stage from "../../components/layout/Stage"
 import Card from "../../components/ui/Card"
 import Pill from "../../components/ui/Pill"
@@ -11,16 +12,32 @@ import LancamentosTab from "./LancamentosTab"
 import PatrimonioMetasTab from "./PatrimonioMetasTab"
 
 export default function DashboardPage() {
+  const { clienteId } = useParams()
   const { data: clientes } = useClientes()
   const [subtab, setSubtab] = useState("fluxo")
-  const clienteAtual = clientes?.[0]
+  const [contexto, setContexto] = useState("pessoal")
+
+  const clienteAtual = clienteId ? clientes?.find((c) => c.id === clienteId) : clientes?.[0]
+  const temContextoPJ = !!clienteAtual?.cnpj
 
   return (
     <Stage eyebrow="Etapa 04" title="Dashboard de conciliação e planejamento" description="Visão do profissional sobre um cliente específico.">
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
-          <div className="font-display font-semibold text-lg">
-            {clienteAtual ? clienteAtual.nome : "Nenhum cliente cadastrado ainda"}
+          <div className="flex items-center gap-3">
+            <span className="font-display font-semibold text-lg">
+              {clienteAtual ? clienteAtual.nome : "Nenhum cliente cadastrado ainda"}
+            </span>
+            {temContextoPJ && (
+              <Tabs
+                options={[
+                  { value: "pessoal", label: "Pessoal" },
+                  { value: "pj", label: `PJ · ${clienteAtual.nome_pj || "empresa"}` },
+                ]}
+                active={contexto}
+                onChange={setContexto}
+              />
+            )}
           </div>
           <div className="text-text-faint text-[12px] font-mono">Julho 2026</div>
         </div>
@@ -50,6 +67,7 @@ export default function DashboardPage() {
             <p className="text-text-dim text-[12.5px] mt-1">
               Reserva de emergência cobre {m.saudeFinanceira.reservaMeses} meses de gastos · taxa de
               poupança de {m.saudeFinanceira.taxaPoupanca}% no mês
+              {temContextoPJ && ` — contexto: ${contexto === "pessoal" ? "Pessoal" : "PJ"} (dado ilustrativo, ainda não separado por contexto de verdade)`}
             </p>
           </div>
         </div>

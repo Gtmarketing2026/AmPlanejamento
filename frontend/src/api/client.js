@@ -16,11 +16,11 @@ export function setToken(token) {
   else localStorage.removeItem("fluxo_token")
 }
 
-async function request(path, { method = "GET", body, auth = true } = {}) {
+async function request(path, { method = "GET", body, auth = true, token } = {}) {
   const headers = { "Content-Type": "application/json" }
   if (auth) {
-    const token = getToken()
-    if (token) headers.Authorization = `Bearer ${token}`
+    const tokenFinal = token || getToken()
+    if (tokenFinal) headers.Authorization = `Bearer ${tokenFinal}`
   }
 
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -29,7 +29,10 @@ async function request(path, { method = "GET", body, auth = true } = {}) {
     body: body ? JSON.stringify(body) : undefined,
   })
 
-  if (res.status === 401) {
+  if (res.status === 401 && !token) {
+    // Só derruba a sessão do profissional quando o 401 veio de uma chamada
+    // usando o token ambiente dele -- chamadas com token explícito (ex: do
+    // cliente final) não devem mexer na sessão do profissional.
     setToken(null)
     // Deixa o AuthContext perceber a queda de sessão no próximo render/rota
     // protegida — evita import circular chamando navigate() daqui.
