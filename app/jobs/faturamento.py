@@ -144,8 +144,13 @@ def rodar_faturamento_do_dia(ciclo_referencia: date | None = None) -> None:
         # Esta query roda sem RLS (é o próprio job de sistema, não um
         # profissional logado) — por isso usa a conexão privilegiada
         # (SessionLocalAdmin), que enxerga todos os tenants.
+        # trial_ate no futuro = teste concedido manualmente pelo admin,
+        # esse profissional não é cobrado enquanto durar.
         profissionais = db.scalars(
-            select(Profissional).where(Profissional.status == "ativa")
+            select(Profissional).where(
+                Profissional.status == "ativa",
+                (Profissional.trial_ate.is_(None)) | (Profissional.trial_ate < date.today()),
+            )
         ).all()
     finally:
         db.close()

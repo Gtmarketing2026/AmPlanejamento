@@ -1,6 +1,7 @@
 import uuid
+from datetime import date
 
-from sqlalchemy import Boolean, String, DateTime, func
+from sqlalchemy import Boolean, Date, String, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,6 +16,7 @@ class Profissional(Base):
     email: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     senha_hash: Mapped[str] = mapped_column(String, nullable=False)
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    trial_ate: Mapped[date | None] = mapped_column(Date, nullable=True)
     subdominio: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     cor_marca: Mapped[str] = mapped_column(String, default="#4C8DFF")
     logo_url: Mapped[str | None] = mapped_column(String, nullable=True)

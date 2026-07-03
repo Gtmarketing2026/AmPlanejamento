@@ -23,6 +23,10 @@ CREATE TABLE profissionais (
     -- (lida com a conexão restrita, respeitando RLS normalmente). Ver
     -- app/api/deps.py::get_profissional_admin_atual.
     is_admin        BOOLEAN NOT NULL DEFAULT false,
+    -- Teste concedido manualmente pelo admin: enquanto hoje < trial_ate, o
+    -- job de faturamento pula esse profissional (não gera fatura), mesmo
+    -- com clientes cadastrados. NULL = sem teste em andamento.
+    trial_ate       DATE,
     -- Marca própria (subdominio/cor_marca/logo_url) é EXCLUSIVA do Plano
     -- Completo (assinaturas.tipo_plano = 'completo'). A aplicação deve
     -- checar isso antes de permitir editar esses campos ou de servir o

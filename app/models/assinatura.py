@@ -15,6 +15,7 @@ class Assinatura(Base):
     profissional_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
     )
+    tipo_plano: Mapped[str] = mapped_column(String, default="essencial")  # 'essencial' | 'completo'
     clientes_inclusos: Mapped[int] = mapped_column(default=4)
     valor_base: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
     valor_por_extra: Mapped[float] = mapped_column(Numeric(10, 2), nullable=False)
