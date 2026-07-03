@@ -17,6 +17,12 @@ CREATE TABLE profissionais (
     nome            TEXT NOT NULL,
     email           TEXT NOT NULL UNIQUE,
     senha_hash      TEXT NOT NULL,  -- hash bcrypt (passlib), nunca senha em texto puro
+    -- Admin interno da Fluxo (equipe/suporte) — enxerga todos os tenants via
+    -- rotas /admin/*, que usam a conexão privilegiada (SessionLocalAdmin)
+    -- SÓ depois de confirmar is_admin=true na própria linha do profissional
+    -- (lida com a conexão restrita, respeitando RLS normalmente). Ver
+    -- app/api/deps.py::get_profissional_admin_atual.
+    is_admin        BOOLEAN NOT NULL DEFAULT false,
     -- Marca própria (subdominio/cor_marca/logo_url) é EXCLUSIVA do Plano
     -- Completo (assinaturas.tipo_plano = 'completo'). A aplicação deve
     -- checar isso antes de permitir editar esses campos ou de servir o
