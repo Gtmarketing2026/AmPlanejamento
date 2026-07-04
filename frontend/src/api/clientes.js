@@ -1,8 +1,10 @@
-import { apiDelete, apiGet, apiPost } from "./client"
+import { apiDelete, apiGet, apiPatch, apiPost } from "./client"
 
 export const listarClientes = () => apiGet("/clientes")
 
 export const criarCliente = (dados) => apiPost("/clientes", dados)
+
+export const atualizarCliente = (id, dados) => apiPatch(`/clientes/${id}`, dados)
 
 export const excluirCliente = (id, dados) => apiDelete(`/clientes/${id}`, dados)
 
