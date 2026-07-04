@@ -96,10 +96,33 @@ primeiro que já estava em produção):
    (`app/api/routes/negocio.py`): `GET /negocio/metricas` (view
    `vw_metricas_negocio`), `GET /negocio/planejadores`,
    `GET /negocio/planejadores/{id}/clientes`,
-   `GET /negocio/clientes/{id}/transacoes` (drill-down até os lançamentos de
-   um cliente), `GET /negocio/financeiro/faturas` (faturas de todos os
-   planejadores) e `GET/POST/DELETE /negocio/despesas` (custos operacionais
-   do próprio negócio, tabela `despesas_operacionais`).
+   `GET /negocio/clientes/{id}/transacoes` (não usada pelo frontend hoje —
+   ficou só como endpoint de leitura direta, ver "Entrar como" abaixo),
+   `GET /negocio/financeiro/faturas` (faturas de todos os planejadores) e
+   `GET/POST/DELETE /negocio/despesas` (custos operacionais do próprio
+   negócio, tabela `despesas_operacionais`).
+
+   **"Entrar como" (impersonação real, não uma view bespoke)**:
+   `POST /negocio/planejadores/{id}/entrar` e
+   `POST /negocio/clientes/{id}/entrar` emitem um token GENUÍNO
+   (`tipo="profissional"` / `tipo="cliente_final"`, mesmo formato de
+   `criar_access_token` usado no login normal) pro admin — ele passa a usar
+   a MESMA SPA que o profissional/cliente usaria (Dashboard, Clientes, CRM,
+   Faturas / dashboard do cliente com edição de categoria), 100% do painel,
+   em vez de telas resumidas do nível Negócio. Não pede senha: o bypass de
+   RLS (`get_db_negocio`) já prova quem está pedindo. Frontend:
+   `frontend/src/hooks/useEntrarComo.js` (chama a rota, seta o token real
+   via `AuthContext.entrarComToken`/`setTokenCliente`, marca
+   `frontend/src/lib/impersonacao.js` e navega pra `/dashboard` ou
+   `/cliente/dashboard`), `frontend/src/components/negocio/BannerImpersonacao.jsx`
+   (banner fixo com botão "Voltar ao Painel do Negócio", mostrado em
+   `AppLayout`/`ClienteDashboardPage` enquanto o flag de impersonação está
+   ativo). **Cuidado ao mexer no botão de voltar**: a limpeza do token
+   impersonado só pode acontecer DEPOIS que a navegação de volta pra
+   `/negocio/planejadores` já terminou (feito no mount do `NegocioLayout`,
+   não no clique do botão) — limpar antes faz o `ProtectedRoute` (que
+   redireciona pro `/login` assim que o perfil vira `null`) vencer a corrida
+   contra o `navigate()` e voltar pro lugar errado.
 
    **Editar senha/login** (admin faz isso pra qualquer um dos três níveis,
    sem precisar da credencial antiga — suporte/recuperação de acesso):
@@ -115,12 +138,13 @@ primeiro que já estava em produção):
    `frontend/src/components/negocio/ContextBar.jsx`): login separado em
    `/negocio/login` (token em `localStorage['fluxo_admin_token']`, chave
    própria — não mistura com a sessão do profissional nem do cliente final),
-   Painel do Negócio, Planejadores e Financeiro da Plataforma, com a barra de
-   contexto **Negócio → Planejador → Cliente** que faz o drill-down real via
-   bypass de RLS (não um "login como", nunca pede a senha do planejador). A
-   conta de admin é criada manualmente na tabela `admins` (não há rota pública
-   de signup de admin, de propósito) — senha sempre fornecida pela pessoa,
-   nunca inventada pelo código.
+   Painel do Negócio, Planejadores (com "Entrar como" e "Ver clientes") e
+   Financeiro da Plataforma. A barra de contexto **Negócio → Planejador →
+   Cliente** também impersona ao escolher um item nos dropdowns (não é mais
+   uma navegação interna pra views bespoke). A conta de admin é criada
+   manualmente na tabela `admins` (não há rota pública de signup de admin, de
+   propósito) — senha sempre fornecida pela pessoa, nunca inventada pelo
+   código.
 
 **Pegadinha de GUC "suja" no pool de conexões** (já mordeu uma vez, documentado
 em `app/api/deps.py` e `app/jobs/faturamento.py`): depois que uma policy de
