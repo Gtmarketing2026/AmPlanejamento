@@ -118,7 +118,7 @@ export default function ClientesPage() {
   const salvando = criar.isPending || atualizar.isPending
 
   return (
-    <Stage eyebrow="Etapa 02" title="Profissional cadastra um cliente" description="Cadastrar já cobra o ciclo atual integralmente — o prazo de 35 dias evita a cobrança do próximo ciclo, não reembolsa o primeiro. Clique num cliente pra entrar no dash dele.">
+    <Stage eyebrow="Etapa 02" title="Profissional cadastra um cliente" description="Clique num cliente pra entrar no dash dele.">
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="font-display font-semibold text-lg">Meus clientes</div>
@@ -129,12 +129,15 @@ export default function ClientesPage() {
         <Button onClick={onNovoCliente}>+ Novo cliente</Button>
       </div>
 
-      <Card className="mb-4" style={{ borderColor: "rgba(240,166,60,0.3)", background: "rgba(240,166,60,0.08)" }}>
-        <p className="text-amber text-[12.5px] leading-relaxed">
-          ⚠️ Cadastrar um cliente já cobra o ciclo atual integralmente. O prazo abaixo só evita a
-          cobrança do <strong>próximo</strong> ciclo.
-        </p>
-      </Card>
+      {total >= CLIENTES_INCLUSOS && (
+        <Card className="mb-4" style={{ borderColor: "rgba(240,166,60,0.3)", background: "rgba(240,166,60,0.08)" }}>
+          <p className="text-amber text-[12.5px] leading-relaxed">
+            ⚠️ Você já usou as {CLIENTES_INCLUSOS} vagas incluídas no plano. Cadastrar mais um cliente
+            gera cobrança de <strong>cliente extra</strong> no próximo ciclo — o prazo de 35 dias evita
+            essa cobrança, não reembolsa o cliente já incluso.
+          </p>
+        </Card>
+      )}
 
       {formAberto && (
         <Card className="mb-4">

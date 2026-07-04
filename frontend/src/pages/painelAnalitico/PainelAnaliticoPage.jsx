@@ -4,12 +4,32 @@ import KpiStat from "../../components/ui/KpiStat"
 import SvgLineChart from "../../components/ui/SvgLineChart"
 import Pill from "../../components/ui/Pill"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
+import { useClientes } from "../../hooks/useClientes"
 import { painelAnaliticoMock as m } from "../../mocks/painelAnalitico.mock"
 
 const TEMP_VARIANT = { engajado: "on", "atenção": "warn", risco: "off" }
 
 export default function PainelAnaliticoPage() {
   const { kpis } = m
+  const { data: clientes } = useClientes()
+
+  if (!clientes?.length) {
+    return (
+      <Stage
+        eyebrow="Visão agregada"
+        title="Painel analítico do profissional"
+        description="Visão de carteira — todos os clientes juntos."
+      >
+        <Card>
+          <p className="text-text-dim text-sm">
+            Cadastre pelo menos um cliente em <strong>Cadastros → Cliente</strong> pra ver a visão
+            agregada da carteira.
+          </p>
+        </Card>
+      </Stage>
+    )
+  }
+
   return (
     <Stage
       eyebrow="Visão agregada"

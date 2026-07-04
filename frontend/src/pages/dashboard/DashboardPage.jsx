@@ -47,47 +47,49 @@ export default function DashboardPage() {
       {!clienteAtual && (
         <Card className="mb-5">
           <p className="text-text-dim text-sm">
-            Cadastre um cliente em <strong>Cadastros → Cliente</strong> pra ver o dashboard dele — os
-            números abaixo são ilustrativos, ainda sem transações reais (Open Finance/importação não
-            implementados).
+            Cadastre um cliente em <strong>Cadastros → Cliente</strong> pra ver o dashboard dele.
           </p>
         </Card>
       )}
 
-      <Card accent className="mb-5">
-        <div className="flex items-center gap-4">
-          <DonutChart pct={m.saudeFinanceira.pct} />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-display font-semibold">
-                Saúde financeira: {m.saudeFinanceira.status}
-              </span>
-              <Pill variant="on">reserva OK</Pill>
+      {clienteAtual && (
+        <>
+          <Card accent className="mb-5">
+            <div className="flex items-center gap-4">
+              <DonutChart pct={m.saudeFinanceira.pct} />
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-display font-semibold">
+                    Saúde financeira: {m.saudeFinanceira.status}
+                  </span>
+                  <Pill variant="on">reserva OK</Pill>
+                </div>
+                <p className="text-text-dim text-[12.5px] mt-1">
+                  Reserva de emergência cobre {m.saudeFinanceira.reservaMeses} meses de gastos · taxa de
+                  poupança de {m.saudeFinanceira.taxaPoupanca}% no mês (dado ilustrativo)
+                  {temContextoPJ && ` — contexto: ${contexto === "pessoal" ? "Pessoal" : "PJ"} (dado ilustrativo, ainda não separado por contexto de verdade)`}
+                </p>
+              </div>
             </div>
-            <p className="text-text-dim text-[12.5px] mt-1">
-              Reserva de emergência cobre {m.saudeFinanceira.reservaMeses} meses de gastos · taxa de
-              poupança de {m.saudeFinanceira.taxaPoupanca}% no mês
-              {temContextoPJ && ` — contexto: ${contexto === "pessoal" ? "Pessoal" : "PJ"} (dado ilustrativo, ainda não separado por contexto de verdade)`}
-            </p>
+          </Card>
+
+          <div className="mb-5">
+            <Tabs
+              options={[
+                { value: "fluxo", n: "A", label: "Fluxo de caixa" },
+                { value: "lancamentos", n: "B", label: "Lançamentos" },
+                { value: "patrimonio", n: "C", label: "Patrimônio & Metas" },
+              ]}
+              active={subtab}
+              onChange={setSubtab}
+            />
           </div>
-        </div>
-      </Card>
 
-      <div className="mb-5">
-        <Tabs
-          options={[
-            { value: "fluxo", n: "A", label: "Fluxo de caixa" },
-            { value: "lancamentos", n: "B", label: "Lançamentos" },
-            { value: "patrimonio", n: "C", label: "Patrimônio & Metas" },
-          ]}
-          active={subtab}
-          onChange={setSubtab}
-        />
-      </div>
-
-      {subtab === "fluxo" && <FluxoCaixaTab />}
-      {subtab === "lancamentos" && <LancamentosTab clienteId={clienteAtual?.id} />}
-      {subtab === "patrimonio" && <PatrimonioMetasTab />}
+          {subtab === "fluxo" && <FluxoCaixaTab />}
+          {subtab === "lancamentos" && <LancamentosTab clienteId={clienteAtual?.id} />}
+          {subtab === "patrimonio" && <PatrimonioMetasTab />}
+        </>
+      )}
     </Stage>
   )
 }
