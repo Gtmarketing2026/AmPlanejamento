@@ -92,9 +92,26 @@ primeiro que já estava em produção):
    `app.is_admin` na MESMA conexão restrita (`app_fluxo`), setada em
    `get_db_negocio` só depois de `get_admin_id_atual` validar o JWT — nunca
    aceitar esse valor vindo de header, query param ou body (ver o aviso de
-   segurança em `schema_seguranca.sql` antes das policies de RLS). Rotas:
-   `GET /negocio/metricas` (usa a view `vw_metricas_negocio`),
-   `GET /negocio/planejadores`, `GET /negocio/planejadores/{id}/clientes`.
+   segurança em `schema_seguranca.sql` antes das policies de RLS). Rotas
+   (`app/api/routes/negocio.py`): `GET /negocio/metricas` (view
+   `vw_metricas_negocio`), `GET /negocio/planejadores`,
+   `GET /negocio/planejadores/{id}/clientes`,
+   `GET /negocio/clientes/{id}/transacoes` (drill-down até os lançamentos de
+   um cliente), `GET /negocio/financeiro/faturas` (faturas de todos os
+   planejadores) e `GET/POST/DELETE /negocio/despesas` (custos operacionais
+   do próprio negócio, tabela `despesas_operacionais`).
+
+   **Frontend do nível Negócio** (construído — `frontend/src/pages/negocio/`,
+   `frontend/src/layouts/NegocioLayout.jsx`, `frontend/src/context/NegocioContext.jsx`,
+   `frontend/src/components/negocio/ContextBar.jsx`): login separado em
+   `/negocio/login` (token em `localStorage['fluxo_admin_token']`, chave
+   própria — não mistura com a sessão do profissional nem do cliente final),
+   Painel do Negócio, Planejadores e Financeiro da Plataforma, com a barra de
+   contexto **Negócio → Planejador → Cliente** que faz o drill-down real via
+   bypass de RLS (não um "login como", nunca pede a senha do planejador). A
+   conta de admin é criada manualmente na tabela `admins` (não há rota pública
+   de signup de admin, de propósito) — senha sempre fornecida pela pessoa,
+   nunca inventada pelo código.
 
 **Pegadinha de GUC "suja" no pool de conexões** (já mordeu uma vez, documentado
 em `app/api/deps.py` e `app/jobs/faturamento.py`): depois que uma policy de
