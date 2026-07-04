@@ -35,7 +35,10 @@ from app.schemas.negocio import (
     FaturaPlataformaResposta,
     MetricasNegocioResposta,
     PlanejadorResposta,
+    StatusClienteAtualizar,
+    StatusPlanejadorAtualizar,
     TransacaoNegocioResposta,
+    TrialAtualizar,
 )
 
 router = APIRouter(prefix="/negocio", tags=["negocio"])
@@ -112,7 +115,8 @@ def listar_planejadores(db: Session = Depends(get_db_negocio)):
     linhas = db.execute(
         text("""
             SELECT
-                p.id, p.nome, p.email, p.subdominio, p.status, p.criado_em,
+                p.id, p.nome, p.email, p.subdominio, p.status, p.criado_em, p.trial_ate,
+                (p.trial_ate IS NOT NULL AND p.trial_ate >= CURRENT_DATE) AS em_trial,
                 atual.tipo_plano AS tipo_plano_atual,
                 COALESCE(qtd.clientes_ativos, 0) AS clientes_ativos,
                 COALESCE(ultimo.mrr_contribuido, 0) AS mrr_contribuido
@@ -229,6 +233,127 @@ def atualizar_credenciais_cliente(
     db.flush()
     db.refresh(cliente)
     return cliente
+
+
+@router.patch("/planejadores/{profissional_id}/status")
+def atualizar_status_planejador(
+    profissional_id: uuid.UUID,
+    dados: StatusPlanejadorAtualizar,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    """Ativar/congelar/cancelar o acesso de um planejador. Congelar ou
+    cancelar também pausa as conexões Open Finance dos clientes dele (mesma
+    semântica da régua de inadimplência automatizada, disparada aqui
+    manualmente pelo admin)."""
+    if dados.status not in ("ativa", "congelada", "cancelada"):
+        raise HTTPException(status_code=422, detail="status inválido")
+
+    profissional = db.get(Profissional, profissional_id)
+    if not profissional:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Planejador não encontrado")
+
+    status_anterior = profissional.status
+    profissional.status = dados.status
+    db.add(profissional)
+
+    if dados.status in ("congelada", "cancelada"):
+        db.execute(
+            text("""
+                UPDATE contas_conectadas SET status = 'pausada'
+                WHERE profissional_id = :pid AND status = 'ativa'
+            """),
+            {"pid": str(profissional_id)},
+        )
+
+    # auditoria_log.ator_tipo não tem valor "admin" (só profissional/
+    # cliente_final/sistema) -- usamos 'sistema' e guardamos o admin_id no
+    # detalhe pra manter rastreabilidade sem precisar migrar o schema.
+    db.execute(
+        text("""
+            INSERT INTO auditoria_log (profissional_id, ator_tipo, acao, entidade, entidade_id, detalhe)
+            VALUES (:pid, 'sistema', 'ADMIN_STATUS_ALTERADO', 'profissional', :pid,
+                    jsonb_build_object('admin_id', :admin_id, 'status_anterior', :antes, 'status_novo', :depois))
+        """),
+        {"pid": str(profissional_id), "admin_id": str(admin_id), "antes": status_anterior, "depois": dados.status},
+    )
+
+    db.flush()
+    return {"id": profissional_id, "status": dados.status, "status_anterior": status_anterior}
+
+
+@router.patch("/planejadores/{profissional_id}/trial")
+def conceder_trial(
+    profissional_id: uuid.UUID,
+    dados: TrialAtualizar,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    profissional = db.get(Profissional, profissional_id)
+    if not profissional:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Planejador não encontrado")
+
+    trial_anterior = profissional.trial_ate
+    profissional.trial_ate = dados.trial_ate
+    db.add(profissional)
+
+    db.execute(
+        text("""
+            INSERT INTO auditoria_log (profissional_id, ator_tipo, acao, entidade, entidade_id, detalhe)
+            VALUES (:pid, 'sistema', 'ADMIN_TRIAL_CONCEDIDO', 'profissional', :pid,
+                    jsonb_build_object('admin_id', :admin_id, 'trial_anterior', :antes, 'trial_novo', :depois))
+        """),
+        {
+            "pid": str(profissional_id),
+            "admin_id": str(admin_id),
+            "antes": trial_anterior.isoformat() if trial_anterior else None,
+            "depois": dados.trial_ate.isoformat() if dados.trial_ate else None,
+        },
+    )
+
+    db.flush()
+    return {"id": profissional_id, "trial_ate": dados.trial_ate}
+
+
+@router.patch("/clientes/{cliente_id}/status")
+def atualizar_status_cliente(
+    cliente_id: uuid.UUID,
+    dados: StatusClienteAtualizar,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    """Mesma capacidade de ativar/desativar, agora pro cliente final --
+    diferente do fluxo normal de exclusão do planejador (que pede motivo de
+    churn), esse é um override direto do admin."""
+    if dados.status not in ("ativo", "excluido"):
+        raise HTTPException(status_code=422, detail="status inválido")
+
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+
+    status_anterior = cliente.status
+    cliente.status = dados.status
+    cliente.data_exclusao = date.today() if dados.status == "excluido" else None
+    db.add(cliente)
+
+    db.execute(
+        text("""
+            INSERT INTO auditoria_log (profissional_id, cliente_id, ator_tipo, acao, entidade, entidade_id, detalhe)
+            VALUES (:pid, :cid, 'sistema', 'ADMIN_STATUS_CLIENTE_ALTERADO', 'cliente', :cid,
+                    jsonb_build_object('admin_id', :admin_id, 'status_anterior', :antes, 'status_novo', :depois))
+        """),
+        {
+            "pid": str(cliente.profissional_id),
+            "cid": str(cliente_id),
+            "admin_id": str(admin_id),
+            "antes": status_anterior,
+            "depois": dados.status,
+        },
+    )
+
+    db.flush()
+    return {"id": cliente_id, "status": dados.status, "status_anterior": status_anterior}
 
 
 @router.get("/clientes/{cliente_id}/transacoes", response_model=list[TransacaoNegocioResposta])

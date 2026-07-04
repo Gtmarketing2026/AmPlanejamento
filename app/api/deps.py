@@ -17,7 +17,7 @@ from collections.abc import Generator
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import select, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.security import decodificar_access_token, decodificar_token_admin, decodificar_token_cliente
@@ -97,33 +97,13 @@ def get_db_com_rls(
         db.close()
 
 
-def get_profissional_admin_atual(
-    profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
-) -> uuid.UUID:
-    """Gate para as rotas /admin/*: confirma is_admin=true na PRÓPRIA linha
-    do profissional autenticado, usando a conexão restrita (RLS) — nunca a
-    privilegiada nesta checagem, pra não abrir a porta antes de confirmar
-    que quem está pedindo é mesmo admin."""
-    from app.models.profissional import Profissional
-
-    db = SessionLocal()
-    try:
-        db.execute(text("SET LOCAL app.current_profissional_id = :pid"), {"pid": str(profissional_id)})
-        db.execute(text("SET LOCAL app.is_admin = 'false'"))
-        eh_admin = db.scalar(select(Profissional.is_admin).where(Profissional.id == profissional_id))
-        db.commit()
-    finally:
-        db.close()
-
-    if not eh_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso restrito a administradores")
-    return profissional_id
-
-
 def get_db_admin() -> Generator[Session, None, None]:
-    """Conexão privilegiada (ignora RLS) para servir dado cross-tenant.
-    Usar SÓ em rotas que também dependem de get_profissional_admin_atual —
-    nunca isoladamente."""
+    """Conexão privilegiada (ignora RLS) — usada pelas rotas do cliente final
+    que precisam ler o próprio registro/categorias/transações sem contexto
+    de RLS por profissional_id (ex: GET /clientes/eu). O antigo painel de
+    suporte interno que também usava essa conexão (profissionais.is_admin)
+    foi substituído pelo nível Negócio (get_db_negocio, abaixo) — ver
+    CLAUDE.md, seção "Três níveis de acesso"."""
     db = SessionLocalAdmin()
     try:
         yield db
@@ -136,13 +116,9 @@ def get_db_admin() -> Generator[Session, None, None]:
 
 
 # ============================================================================
-# Nível "Negócio" (tabela `admins`, separada de profissionais.is_admin acima)
-# ============================================================================
-# Camada adicional: diferente do mecanismo de suporte interno acima
-# (get_db_admin + get_profissional_admin_atual, que usa uma SEGUNDA conexão
-# privilegiada e continua existindo sem mudanças), este nível faz o bypass de
-# RLS via a GUC `app.is_admin` na MESMA conexão restrita (app_fluxo/RLS),
-# como descrito no aviso de segurança do schema_seguranca.sql.
+# Nível "Negócio" (tabela `admins`) -- bypass de RLS via a GUC `app.is_admin`
+# na MESMA conexão restrita (app_fluxo/RLS), como descrito no aviso de
+# segurança do schema_seguranca.sql.
 # ============================================================================
 
 

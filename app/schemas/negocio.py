@@ -23,6 +23,8 @@ class PlanejadorResposta(BaseModel):
     tipo_plano_atual: str | None
     clientes_ativos: int
     mrr_contribuido: float
+    trial_ate: date | None
+    em_trial: bool
     criado_em: datetime
 
 
@@ -120,3 +122,22 @@ class CredenciaisClienteResposta(BaseModel):
     nickname: str | None
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Status/trial — mesma capacidade que existia no painel de suporte interno
+# (profissionais.is_admin), agora no nível Negócio de verdade, e estendida
+# pra clientes também.
+# ---------------------------------------------------------------------------
+
+
+class StatusPlanejadorAtualizar(BaseModel):
+    status: str  # 'ativa' | 'congelada' | 'cancelada'
+
+
+class TrialAtualizar(BaseModel):
+    trial_ate: date | None  # None = encerra o teste em andamento
+
+
+class StatusClienteAtualizar(BaseModel):
+    status: str  # 'ativo' | 'excluido'
