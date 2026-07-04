@@ -36,6 +36,11 @@ class Settings(BaseSettings):
     ASAAS_ENV: str = "sandbox"  # 'sandbox' ou 'production'
     ASAAS_WEBHOOK_TOKEN: str = ""  # token configurado no painel do Asaas ao criar o webhook
 
+    # Supabase Storage — upload de extratos/faturas (Plano Essencial)
+    SUPABASE_URL: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""  # bypassa RLS/policies de storage -- nunca expor ao frontend
+    SUPABASE_STORAGE_BUCKET: str = "importacoes"
+
     # Regras de negócio (centralizadas aqui para não espalhar "números mágicos" no código)
     CLIENTES_INCLUSOS_PLANO_BASE: int = 4
     PRAZO_EXCLUSAO_SEM_COBRANCA_DIAS: int = 35
