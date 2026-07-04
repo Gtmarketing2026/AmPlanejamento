@@ -62,6 +62,17 @@ class ClienteResposta(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ClienteAtualizar(BaseModel):
+    nome: str | None = None
+    tipo: str | None = None
+    documento: str | None = None
+    cnpj: str | None = None
+    nome_pj: str | None = None
+    valor_honorario_mensal: float | None = None
+    nickname: str | None = None
+    senha: str | None = None  # só re-hash se enviado
+
+
 class ClienteExcluir(BaseModel):
     motivo_churn: str | None = None
     motivo_churn_detalhe: str | None = None

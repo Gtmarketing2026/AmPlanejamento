@@ -10,7 +10,14 @@ from app.core.config import settings
 from app.core.security import criar_access_token, hash_senha, verificar_senha
 from app.db.base import SessionLocalAdmin
 from app.models.cliente import Cliente
-from app.schemas.cliente import ClienteCriar, ClienteExcluir, ClienteLoginRequest, ClienteResposta, TokenResponse
+from app.schemas.cliente import (
+    ClienteAtualizar,
+    ClienteCriar,
+    ClienteExcluir,
+    ClienteLoginRequest,
+    ClienteResposta,
+    TokenResponse,
+)
 
 router = APIRouter(prefix="/clientes", tags=["clientes"])
 
@@ -66,6 +73,42 @@ def criar_cliente(
         # (não bloqueia a criação — cliente extra é permitido, só é cobrado)
         pass
 
+    db.refresh(cliente)
+    return cliente
+
+
+@router.patch("/{cliente_id}", response_model=ClienteResposta)
+def atualizar_cliente(
+    cliente_id: uuid.UUID,
+    dados: ClienteAtualizar,
+    db: Session = Depends(get_db_com_rls),
+):
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        # RLS já garante que só clientes do próprio profissional aparecem aqui.
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    dados_informados = dados.model_dump(exclude_unset=True)
+
+    novo_nickname = dados_informados.pop("nickname", None)
+    if novo_nickname and novo_nickname != cliente.nickname:
+        with SessionLocalAdmin() as db_admin:
+            ja_existe_nickname = db_admin.scalar(
+                select(Cliente).where(Cliente.nickname == novo_nickname, Cliente.id != cliente_id)
+            )
+        if ja_existe_nickname:
+            raise HTTPException(status_code=400, detail="Nickname já está em uso")
+        cliente.nickname = novo_nickname
+
+    nova_senha = dados_informados.pop("senha", None)
+    if nova_senha:
+        cliente.senha_hash = hash_senha(nova_senha)
+
+    for campo, valor in dados_informados.items():
+        setattr(cliente, campo, valor)
+
+    db.add(cliente)
+    db.flush()
     db.refresh(cliente)
     return cliente
 
