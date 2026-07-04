@@ -43,7 +43,8 @@ Completo) ou upload manual de extrato/fatura (Plano Essencial).
 - Autenticação completa do fluxo do cliente final (consentimento Open Finance)
 - Deploy em produção (ver seção "Deploy na web" abaixo pro caminho recomendado)
 - Scheduler para os jobs rodarem sozinhos (hoje são scripts manuais)
-- Testes automatizados
+- Testes automatizados (só existe `tests/test_isolamento_negocio.py`, cobrindo
+  o isolamento do nível Admin/Negócio — o resto da API ainda não tem teste)
 
 ## Pagamento — Asaas
 
@@ -66,6 +67,54 @@ Bacen, API REST, sem mensalidade fixa). Pontos importantes:
 - **Atualizar valor da subscription só afeta cobranças futuras** — se
   precisar corrigir uma fatura já gerada, é outro endpoint (não implementado
   aqui ainda).
+
+## Três níveis de acesso (Admin / Planejador / Cliente)
+
+Implementado. Existem **DOIS mecanismos de admin distintos e independentes**,
+coexistindo de propósito (o segundo foi adicionado depois, sem quebrar o
+primeiro que já estava em produção):
+
+1. **Suporte interno** (`profissionais.is_admin = true`) — mecanismo mais
+   antigo. Um profissional comum promovido a admin via essa flag. Bypass de
+   RLS via uma SEGUNDA conexão privilegiada (`DATABASE_URL_ADMIN`, role
+   `postgres`), usada em `get_db_admin`/`get_profissional_admin_atual`
+   (`app/api/deps.py`), só depois de confirmar `is_admin=true` na própria
+   linha do profissional (checado pela conexão restrita). Rotas: `/admin/*`
+   (`app/api/routes/admin.py`) — listagem de profissionais, ativar/desativar,
+   conceder trial, métricas de negócio (formato próprio, não usa a view).
+
+2. **Negócio** (tabela `admins`, separada de `profissionais`) — nível mais
+   alto, dono/operador da plataforma. Não é um profissional com flag: sem
+   cota, sem assinatura, sem cobrança. Login próprio (`POST /negocio/login`,
+   `app/api/routes/negocio.py`), JWT com `tipo="admin"` (nunca aceito nas
+   rotas de profissional/cliente final, e vice-versa — ver
+   `app/core/security.py::decodificar_token_admin`). Bypass de RLS via GUC
+   `app.is_admin` na MESMA conexão restrita (`app_fluxo`), setada em
+   `get_db_negocio` só depois de `get_admin_id_atual` validar o JWT — nunca
+   aceitar esse valor vindo de header, query param ou body (ver o aviso de
+   segurança em `schema_seguranca.sql` antes das policies de RLS). Rotas:
+   `GET /negocio/metricas` (usa a view `vw_metricas_negocio`),
+   `GET /negocio/planejadores`, `GET /negocio/planejadores/{id}/clientes`.
+
+**Pegadinha de GUC "suja" no pool de conexões** (já mordeu uma vez, documentado
+em `app/api/deps.py` e `app/jobs/faturamento.py`): depois que uma policy de
+RLS referencia uma GUC customizada (`app.current_profissional_id` ou
+`app.is_admin`) via `SET LOCAL` e a transação comita, essa GUC fica "suja"
+como string vazia (`''`) — não `NULL` — na mesma conexão física, se o
+pool reaproveitar essa conexão numa request diferente. Como toda policy agora
+faz `current_setting(...)::UUID` e `current_setting(...)::boolean`
+incondicionalmente do lado esquerdo do `OR`, um `''` nesse cast explode antes
+mesmo de considerar o bypass. Por isso **toda** dependência que ativa RLS
+seta as DUAS GUCs explicitamente, mesmo a que não usa: `get_db_com_rls` e
+`get_profissional_admin_atual` setam `app.is_admin = 'false'`;
+`get_db_negocio` seta `app.current_profissional_id` como um UUID nulo
+(`00000000-...-0000`). Se um novo lugar no código passar a fazer `SET LOCAL`
+manual (fora dessas dependências), replicar o mesmo padrão.
+
+`app/models/admin.py`, `app/schemas/negocio.py`,
+`tests/test_isolamento_negocio.py` (confirma que profissional comum nunca
+consegue forjar o bypass via header/query/body, e que os tokens dos dois
+mecanismos de admin não vazam entre si nem pras rotas de profissional/cliente).
 
 ## Deploy na web — GitHub + Supabase + Vercel + Asaas
 

@@ -35,6 +35,12 @@ def processar_ciclo_do_profissional(profissional_id: uuid.UUID, ciclo_referencia
     db = SessionLocal()
     try:
         db.execute(text("SET LOCAL app.current_profissional_id = :pid"), {"pid": str(profissional_id)})
+        # Defesa em profundidade: mesmo que este job normalmente rode num
+        # processo/pool de conexão próprio (sem nunca ter setado app.is_admin
+        # antes), setar explicitamente como 'false' evita o mesmo erro de
+        # cast (current_setting(...)::boolean em '' ao invés de NULL) caso
+        # esse pool algum dia seja compartilhado com uma request de admin.
+        db.execute(text("SET LOCAL app.is_admin = 'false'"))
 
         idempotency_key = gerar_idempotency_key(profissional_id, ciclo_referencia)
 

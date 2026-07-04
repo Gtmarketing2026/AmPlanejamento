@@ -1,0 +1,4 @@
+# Só pra rodar a suíte de testes localmente. Instalar por cima do
+# requirements.txt: pip install -r requirements.txt -r requirements-dev.txt
+pytest==8.3.3
+httpx==0.27.2
