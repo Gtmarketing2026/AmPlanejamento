@@ -101,6 +101,15 @@ primeiro que já estava em produção):
    planejadores) e `GET/POST/DELETE /negocio/despesas` (custos operacionais
    do próprio negócio, tabela `despesas_operacionais`).
 
+   **Editar senha/login** (admin faz isso pra qualquer um dos três níveis,
+   sem precisar da credencial antiga — suporte/recuperação de acesso):
+   `GET/PATCH /negocio/perfil` (o próprio admin edita e-mail/senha),
+   `PATCH /negocio/planejadores/{id}/credenciais` (reseta e-mail/senha de um
+   profissional) e `PATCH /negocio/clientes/{id}/credenciais` (reseta
+   nickname/senha de um cliente final). Frontend: página "Minha conta"
+   (`/negocio/perfil`, link na topbar) e ação "Editar login" inline nas
+   listagens de Planejadores e de clientes na Carteira do planejador.
+
    **Frontend do nível Negócio** (construído — `frontend/src/pages/negocio/`,
    `frontend/src/layouts/NegocioLayout.jsx`, `frontend/src/context/NegocioContext.jsx`,
    `frontend/src/components/negocio/ContextBar.jsx`): login separado em
