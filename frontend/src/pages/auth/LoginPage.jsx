@@ -58,6 +58,11 @@ export default function LoginPage() {
           Cadastre-se
         </Link>
       </p>
+      <p className="text-text-faint text-[11.5px] mt-2 text-center">
+        <Link to="/negocio/login" className="hover:text-text-dim">
+          Acesso do administrador
+        </Link>
+      </p>
     </Card>
   )
 }

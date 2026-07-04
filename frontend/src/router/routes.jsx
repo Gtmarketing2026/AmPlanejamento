@@ -21,6 +21,13 @@ import AdminMetricasPage from "../pages/admin/AdminMetricasPage"
 import AdminProfissionaisPage from "../pages/admin/AdminProfissionaisPage"
 import ClienteLoginPage from "../pages/clienteFinal/ClienteLoginPage"
 import ClienteDashboardPage from "../pages/clienteFinal/ClienteDashboardPage"
+import NegocioLayout from "../layouts/NegocioLayout"
+import NegocioLoginPage from "../pages/negocio/NegocioLoginPage"
+import PainelNegocioPage from "../pages/negocio/PainelNegocioPage"
+import PlanejadoresPage from "../pages/negocio/PlanejadoresPage"
+import CarteiraPlanejadorPage from "../pages/negocio/CarteiraPlanejadorPage"
+import ClienteNegocioPage from "../pages/negocio/ClienteNegocioPage"
+import FinanceiroPlataformaPage from "../pages/negocio/FinanceiroPlataformaPage"
 
 export const router = createBrowserRouter([
   {
@@ -29,9 +36,20 @@ export const router = createBrowserRouter([
       { path: "/login", element: <LoginPage /> },
       { path: "/cadastro", element: <CadastroPage /> },
       { path: "/cliente/login", element: <ClienteLoginPage /> },
+      { path: "/negocio/login", element: <NegocioLoginPage /> },
     ],
   },
   { path: "/cliente/dashboard", element: <ClienteDashboardPage /> },
+  {
+    element: <NegocioLayout />,
+    children: [
+      { path: "/negocio", element: <PainelNegocioPage /> },
+      { path: "/negocio/planejadores", element: <PlanejadoresPage /> },
+      { path: "/negocio/planejadores/:planejadorId", element: <CarteiraPlanejadorPage /> },
+      { path: "/negocio/clientes/:clienteId", element: <ClienteNegocioPage /> },
+      { path: "/negocio/financeiro", element: <FinanceiroPlataformaPage /> },
+    ],
+  },
   {
     element: <ProtectedRoute />,
     children: [
