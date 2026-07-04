@@ -73,3 +73,49 @@ class TransacaoNegocioResposta(BaseModel):
     subcategoria_id: uuid.UUID | None
 
     model_config = {"from_attributes": True}
+
+
+# ---------------------------------------------------------------------------
+# Editar senha / login — o admin pode fazer isso pra si mesmo e, via bypass,
+# pra qualquer planejador ou cliente final (suporte: usuário esqueceu a
+# senha, quer trocar o e-mail/nickname de login etc.)
+# ---------------------------------------------------------------------------
+
+
+class AdminPerfilResposta(BaseModel):
+    id: uuid.UUID
+    nome: str
+    email: str
+    criado_em: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AdminAtualizar(BaseModel):
+    nome: str | None = None
+    email: str | None = None
+    senha: str | None = None  # só re-hash se enviada
+
+
+class CredenciaisProfissionalAtualizar(BaseModel):
+    email: str | None = None
+    senha: str | None = None
+
+
+class CredenciaisProfissionalResposta(BaseModel):
+    id: uuid.UUID
+    email: str
+
+    model_config = {"from_attributes": True}
+
+
+class CredenciaisClienteAtualizar(BaseModel):
+    nickname: str | None = None
+    senha: str | None = None
+
+
+class CredenciaisClienteResposta(BaseModel):
+    id: uuid.UUID
+    nickname: str | None
+
+    model_config = {"from_attributes": True}

@@ -14,8 +14,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db_negocio, get_db_sem_rls
-from app.core.security import criar_access_token, verificar_senha
+from app.api.deps import get_admin_id_atual, get_db_negocio, get_db_sem_rls
+from app.core.security import criar_access_token, hash_senha, verificar_senha
 from app.models.admin import Admin
 from app.models.cliente import Cliente
 from app.models.despesa_operacional import DespesaOperacional
@@ -23,7 +23,13 @@ from app.models.profissional import Profissional
 from app.models.transacao import Transacao
 from app.schemas.cliente import LoginRequest, TokenResponse
 from app.schemas.negocio import (
+    AdminAtualizar,
+    AdminPerfilResposta,
     ClienteDoPlanejadorResposta,
+    CredenciaisClienteAtualizar,
+    CredenciaisClienteResposta,
+    CredenciaisProfissionalAtualizar,
+    CredenciaisProfissionalResposta,
     DespesaCriar,
     DespesaResposta,
     FaturaPlataformaResposta,
@@ -46,6 +52,50 @@ def login_admin(dados: LoginRequest, db: Session = Depends(get_db_sem_rls)):
 
     token = criar_access_token(str(admin.id), tipo="admin")
     return TokenResponse(access_token=token)
+
+
+@router.get("/perfil", response_model=AdminPerfilResposta)
+def perfil_admin(
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    admin = db.get(Admin, admin_id)
+    if not admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin não encontrado")
+    return admin
+
+
+@router.patch("/perfil", response_model=AdminPerfilResposta)
+def atualizar_perfil_admin(
+    dados: AdminAtualizar,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    """O admin edita a própria senha e/ou e-mail de login (nível Negócio)."""
+    admin = db.get(Admin, admin_id)
+    if not admin:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Admin não encontrado")
+
+    dados_informados = dados.model_dump(exclude_unset=True)
+
+    novo_email = dados_informados.pop("email", None)
+    if novo_email and novo_email != admin.email:
+        ja_existe = db.scalar(select(Admin).where(Admin.email == novo_email, Admin.id != admin_id))
+        if ja_existe:
+            raise HTTPException(status_code=400, detail="E-mail já está em uso")
+        admin.email = novo_email
+
+    nova_senha = dados_informados.pop("senha", None)
+    if nova_senha:
+        admin.senha_hash = hash_senha(nova_senha)
+
+    for campo, valor in dados_informados.items():
+        setattr(admin, campo, valor)
+
+    db.add(admin)
+    db.flush()
+    db.refresh(admin)
+    return admin
 
 
 @router.get("/metricas", response_model=MetricasNegocioResposta)
@@ -93,6 +143,67 @@ def listar_clientes_do_planejador(profissional_id: uuid.UUID, db: Session = Depe
 
     clientes = db.scalars(select(Cliente).where(Cliente.profissional_id == profissional_id)).all()
     return clientes
+
+
+@router.patch("/planejadores/{profissional_id}/credenciais", response_model=CredenciaisProfissionalResposta)
+def atualizar_credenciais_planejador(
+    profissional_id: uuid.UUID, dados: CredenciaisProfissionalAtualizar, db: Session = Depends(get_db_negocio)
+):
+    """Suporte: admin reseta e-mail/senha de login de um planejador (ex: ele
+    esqueceu a senha ou perdeu acesso ao e-mail). Bypass de RLS já ativo
+    nesta conexão (get_db_negocio) -- enxerga qualquer profissional."""
+    profissional = db.get(Profissional, profissional_id)
+    if not profissional:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Planejador não encontrado")
+
+    dados_informados = dados.model_dump(exclude_unset=True)
+
+    novo_email = dados_informados.pop("email", None)
+    if novo_email and novo_email != profissional.email:
+        ja_existe = db.scalar(
+            select(Profissional).where(Profissional.email == novo_email, Profissional.id != profissional_id)
+        )
+        if ja_existe:
+            raise HTTPException(status_code=400, detail="E-mail já está em uso")
+        profissional.email = novo_email
+
+    nova_senha = dados_informados.pop("senha", None)
+    if nova_senha:
+        profissional.senha_hash = hash_senha(nova_senha)
+
+    db.add(profissional)
+    db.flush()
+    db.refresh(profissional)
+    return profissional
+
+
+@router.patch("/clientes/{cliente_id}/credenciais", response_model=CredenciaisClienteResposta)
+def atualizar_credenciais_cliente(
+    cliente_id: uuid.UUID, dados: CredenciaisClienteAtualizar, db: Session = Depends(get_db_negocio)
+):
+    """Mesma ideia, pro cliente final: admin reseta nickname/senha de login
+    sem precisar acionar o planejador dele."""
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+
+    dados_informados = dados.model_dump(exclude_unset=True)
+
+    novo_nickname = dados_informados.pop("nickname", None)
+    if novo_nickname and novo_nickname != cliente.nickname:
+        ja_existe = db.scalar(select(Cliente).where(Cliente.nickname == novo_nickname, Cliente.id != cliente_id))
+        if ja_existe:
+            raise HTTPException(status_code=400, detail="Nickname já está em uso")
+        cliente.nickname = novo_nickname
+
+    nova_senha = dados_informados.pop("senha", None)
+    if nova_senha:
+        cliente.senha_hash = hash_senha(nova_senha)
+
+    db.add(cliente)
+    db.flush()
+    db.refresh(cliente)
+    return cliente
 
 
 @router.get("/clientes/{cliente_id}/transacoes", response_model=list[TransacaoNegocioResposta])
