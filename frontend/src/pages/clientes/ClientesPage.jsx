@@ -32,14 +32,28 @@ export default function ClientesPage() {
   const [verId, setVerId] = useState(null)
   const [form, setForm] = useState(FORM_VAZIO)
   const [erro, setErro] = useState(null)
+  // Enquanto true, o nickname segue automaticamente o CPF digitado — some
+  // assim que o usuário edita o nickname manualmente (padrão só é sugestão).
+  const [nicknameAuto, setNicknameAuto] = useState(true)
 
   function set(campo) {
     return (e) => setForm((f) => ({ ...f, [campo]: e.target.value }))
   }
 
+  function setDocumento(e) {
+    const valor = e.target.value
+    setForm((f) => ({ ...f, documento: valor, nickname: nicknameAuto ? valor : f.nickname }))
+  }
+
+  function setNickname(e) {
+    setNicknameAuto(false)
+    setForm((f) => ({ ...f, nickname: e.target.value }))
+  }
+
   function onNovoCliente() {
     setEditandoId(null)
     setForm(FORM_VAZIO)
+    setNicknameAuto(true)
     setErro(null)
     setFormAberto((v) => (editandoId ? true : !v))
   }
@@ -53,9 +67,10 @@ export default function ClientesPage() {
       cnpj: c.cnpj || "",
       nome_pj: c.nome_pj || "",
       valor_honorario_mensal: c.valor_honorario_mensal ?? "",
-      nickname: c.nickname || "",
+      nickname: c.nickname || c.documento, // sugere o CPF se ainda não tem nickname
       senha: "",
     })
+    setNicknameAuto(!c.nickname)
     setErro(null)
     setFormAberto(true)
   }
@@ -133,7 +148,7 @@ export default function ClientesPage() {
                 <option value="PF">PF</option>
                 <option value="PJ">PJ</option>
               </Select>
-              <Field label="CPF" value={form.documento} onChange={set("documento")} required />
+              <Field label="CPF" value={form.documento} onChange={setDocumento} required />
               <Field
                 label="Honorário mensal"
                 type="number"
@@ -152,10 +167,10 @@ export default function ClientesPage() {
             </div>
 
             <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mt-2 mb-2">
-              Acesso do cliente ao próprio dashboard
+              Acesso do cliente ao próprio dashboard {nicknameAuto && "— nickname sugerido a partir do CPF, pode editar"}
             </div>
             <div className="grid grid-cols-4 gap-3 items-end">
-              <Field label="Nickname (login)" value={form.nickname} onChange={set("nickname")} required />
+              <Field label="Nickname (login)" value={form.nickname} onChange={setNickname} required />
               <Field
                 label="Senha"
                 type="password"
