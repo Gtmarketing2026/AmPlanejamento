@@ -145,6 +145,31 @@ def listar_clientes_do_planejador(profissional_id: uuid.UUID, db: Session = Depe
     return clientes
 
 
+@router.post("/planejadores/{profissional_id}/entrar", response_model=TokenResponse)
+def entrar_como_planejador(profissional_id: uuid.UUID, db: Session = Depends(get_db_negocio)):
+    """Emite um token de profissional de verdade -- o admin entra no MESMO
+    app que o planejador usa (Dashboard, Clientes, CRM, Faturas...), não uma
+    tela resumida à parte. Não precisa da senha dele: o bypass de RLS
+    (get_db_negocio) já dá acesso total aos dados; isso só troca a
+    experiência de views bespoke do admin pela SPA real do profissional."""
+    profissional = db.get(Profissional, profissional_id)
+    if not profissional:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Planejador não encontrado")
+    token = criar_access_token(str(profissional_id), tipo="profissional")
+    return TokenResponse(access_token=token)
+
+
+@router.post("/clientes/{cliente_id}/entrar", response_model=TokenResponse)
+def entrar_como_cliente(cliente_id: uuid.UUID, db: Session = Depends(get_db_negocio)):
+    """Mesma ideia, pro dashboard do cliente final -- 100% do painel dele,
+    não uma listagem de lançamentos à parte."""
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    token = criar_access_token(str(cliente_id), tipo="cliente_final")
+    return TokenResponse(access_token=token)
+
+
 @router.patch("/planejadores/{profissional_id}/credenciais", response_model=CredenciaisProfissionalResposta)
 def atualizar_credenciais_planejador(
     profissional_id: uuid.UUID, dados: CredenciaisProfissionalAtualizar, db: Session = Depends(get_db_negocio)
