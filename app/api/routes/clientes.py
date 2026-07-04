@@ -9,7 +9,10 @@ from app.api.deps import get_cliente_id_atual, get_db_admin, get_db_com_rls, get
 from app.core.config import settings
 from app.core.security import criar_access_token, hash_senha, verificar_senha
 from app.db.base import SessionLocalAdmin
+from app.models.categoria import Categoria, Subcategoria
 from app.models.cliente import Cliente
+from app.models.transacao import Transacao
+from app.schemas.categoria import CategoriaResposta, SubcategoriaResposta
 from app.schemas.cliente import (
     ClienteAtualizar,
     ClienteCriar,
@@ -18,6 +21,7 @@ from app.schemas.cliente import (
     ClienteResposta,
     TokenResponse,
 )
+from app.schemas.importacao import TransacaoAtualizar, TransacaoResposta
 
 router = APIRouter(prefix="/clientes", tags=["clientes"])
 
@@ -168,3 +172,75 @@ def perfil_cliente_atual(
     if not cliente:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
     return cliente
+
+
+@router.get("/eu/categorias", response_model=list[CategoriaResposta])
+def listar_minhas_categorias(
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    # Sem contexto de profissional_id no token do cliente final -- busca o
+    # profissional dono do cadastro pra replicar manualmente a mesma regra
+    # da policy de RLS (padrão do sistema OR custom do próprio profissional).
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    return db.scalars(
+        select(Categoria)
+        .where((Categoria.profissional_id.is_(None)) | (Categoria.profissional_id == cliente.profissional_id))
+        .order_by(Categoria.nome)
+    ).all()
+
+
+@router.get("/eu/subcategorias", response_model=list[SubcategoriaResposta])
+def listar_minhas_subcategorias(
+    categoria_id: uuid.UUID | None = None,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    query = select(Subcategoria).where(
+        (Subcategoria.profissional_id.is_(None)) | (Subcategoria.profissional_id == cliente.profissional_id)
+    )
+    if categoria_id:
+        query = query.where(Subcategoria.categoria_id == categoria_id)
+    return db.scalars(query.order_by(Subcategoria.nome)).all()
+
+
+@router.get("/eu/transacoes", response_model=list[TransacaoResposta])
+def listar_minhas_transacoes(
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    # Mesmo padrão de /clientes/eu: sem policy de RLS por cliente_id, então a
+    # conexão privilegiada é filtrada explicitamente pelo cliente_id do token.
+    transacoes = db.scalars(
+        select(Transacao).where(Transacao.cliente_id == cliente_id).order_by(Transacao.data.desc())
+    ).all()
+    return transacoes
+
+
+@router.patch("/eu/transacoes/{transacao_id}", response_model=TransacaoResposta)
+def atualizar_minha_transacao(
+    transacao_id: uuid.UUID,
+    dados: TransacaoAtualizar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    # Reclassificação manual pelo próprio cliente final -- única escrita
+    # permitida no dashboard dele, que é read-only pra tudo mais.
+    transacao = db.scalar(
+        select(Transacao).where(Transacao.id == transacao_id, Transacao.cliente_id == cliente_id)
+    )
+    if not transacao:
+        raise HTTPException(status_code=404, detail="Transação não encontrada")
+
+    for campo, valor in dados.model_dump(exclude_unset=True).items():
+        setattr(transacao, campo, valor)
+
+    db.add(transacao)
+    db.flush()
+    db.refresh(transacao)
+    return transacao

@@ -11,12 +11,14 @@ import uuid
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_com_rls, get_profissional_id_atual
+from app.integrations.openai_categorizador import ClassificacaoIndisponivel, classificar_transacoes
 from app.integrations.supabase_storage import excluir_arquivo, upload_arquivo
+from app.models.categoria import Categoria, Subcategoria
 from app.models.cliente import Cliente
 from app.models.conta_conectada import ContaConectada
 from app.models.importacao_extrato import ImportacaoExtrato
@@ -25,7 +27,7 @@ from app.parsers.csv_parser import CsvFormatoInvalido, parse_csv
 from app.parsers.dedup import calcular_hash_dedup
 from app.parsers.ofx_parser import parse_ofx
 from app.parsers.pdf_parser import parse_pdf
-from app.schemas.importacao import ImportacaoResposta, TransacaoResposta
+from app.schemas.importacao import ImportacaoResposta, TransacaoAtualizar, TransacaoResposta
 
 router = APIRouter(tags=["importacoes"])
 
@@ -128,6 +130,7 @@ async def criar_importacao(
     origem = "cartao" if tipo_documento == "fatura_cartao" else "conta"
     importadas = 0
     duplicadas = 0
+    inseridas = []  # [{"id", "descricao", "tipo"}] -- só as que entraram de fato (não duplicadas)
     for t in transacoes_parseadas:
         hash_dedup = calcular_hash_dedup(conta.id, t["data"], t["valor"], t["descricao"])
         stmt = (
@@ -145,12 +148,42 @@ async def criar_importacao(
                 hash_dedup=hash_dedup,
             )
             .on_conflict_do_nothing(index_elements=["conta_conectada_id", "hash_dedup"])
+            .returning(Transacao.id)
         )
         resultado = db.execute(stmt)
-        if resultado.rowcount > 0:
+        linha = resultado.first()
+        if linha:
             importadas += 1
+            inseridas.append({"id": linha[0], "descricao": t["descricao"], "tipo": t["tipo"]})
         else:
             duplicadas += 1
+
+    # Classificação automática via IA logo após a importação -- uma chamada
+    # pra leva inteira. Se a OpenAI falhar por qualquer motivo, as transações
+    # ficam sem categoria (classificável manualmente depois, ver PATCH
+    # /transacoes/{id}) e a importação segue normalmente -- nunca trava aqui.
+    if inseridas:
+        categorias = db.scalars(select(Categoria)).all()
+        subcategorias = db.scalars(select(Subcategoria)).all()
+        try:
+            classificacoes = classificar_transacoes(
+                [{"descricao": i["descricao"], "tipo": i["tipo"]} for i in inseridas],
+                categorias,
+                subcategorias,
+            )
+            categorias_por_nome = {c.nome.strip().lower(): c.id for c in categorias}
+            subcategorias_por_nome = {s.nome.strip().lower(): s.id for s in subcategorias}
+            for item, classif in zip(inseridas, classificacoes):
+                categoria_id = categorias_por_nome.get((classif.get("categoria") or "").strip().lower())
+                subcategoria_id = subcategorias_por_nome.get((classif.get("subcategoria") or "").strip().lower())
+                if categoria_id or subcategoria_id:
+                    db.execute(
+                        update(Transacao)
+                        .where(Transacao.id == item["id"])
+                        .values(categoria_id=categoria_id, subcategoria_id=subcategoria_id)
+                    )
+        except ClassificacaoIndisponivel:
+            pass
 
     importacao.status = "processado"
     importacao.transacoes_importadas = importadas
@@ -200,3 +233,23 @@ def listar_transacoes(cliente_id: uuid.UUID, db: Session = Depends(get_db_com_rl
         select(Transacao).where(Transacao.cliente_id == cliente_id).order_by(Transacao.data.desc())
     ).all()
     return transacoes
+
+
+@router.patch("/transacoes/{transacao_id}", response_model=TransacaoResposta)
+def atualizar_transacao(
+    transacao_id: uuid.UUID, dados: TransacaoAtualizar, db: Session = Depends(get_db_com_rls)
+):
+    # RLS já garante que só transações do próprio profissional aparecem aqui
+    # -- reclassificação manual (planejador) da categoria/subcategoria
+    # sugerida automaticamente pela IA na importação.
+    transacao = db.get(Transacao, transacao_id)
+    if not transacao:
+        raise HTTPException(status_code=404, detail="Transação não encontrada")
+
+    for campo, valor in dados.model_dump(exclude_unset=True).items():
+        setattr(transacao, campo, valor)
+
+    db.add(transacao)
+    db.flush()
+    db.refresh(transacao)
+    return transacao

@@ -26,11 +26,11 @@ class Transacao(Base):
     valor: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     tipo: Mapped[str] = mapped_column(String, nullable=False)  # entrada | saida
     origem: Mapped[str] = mapped_column(String, nullable=False)  # conta | cartao
-    # categoria_id/subcategoria_id/instituicao_id apontam pra tabelas que
-    # ainda não têm model Python (só existem no schema SQL, sem CRUD de API
-    # ainda -- ver CLAUDE.md). A FK real já existe no banco (schema_seguranca.sql);
-    # aqui fica só como UUID simples pra não quebrar o SQLAlchemy tentando
-    # resolver dependência com uma tabela sem mapper registrado.
+    # categoria_id/subcategoria_id/instituicao_id ficam como UUID simples (sem
+    # ForeignKey() no lado do SQLAlchemy) porque instituicao_id ainda aponta pra
+    # uma tabela sem model Python -- se um dos três virar FK e os outros não, o
+    # DELETE de Transacao passa a exigir cuidado extra; mais simples manter os
+    # três iguais. A FK real já existe no banco (schema_seguranca.sql) pra todos.
     categoria_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     subcategoria_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     instituicao_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)

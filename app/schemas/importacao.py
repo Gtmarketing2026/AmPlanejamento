@@ -21,6 +21,11 @@ class ImportacaoResposta(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TransacaoAtualizar(BaseModel):
+    categoria_id: uuid.UUID | None = None
+    subcategoria_id: uuid.UUID | None = None
+
+
 class TransacaoResposta(BaseModel):
     id: uuid.UUID
     data: date
@@ -29,6 +34,8 @@ class TransacaoResposta(BaseModel):
     tipo: str
     origem: str
     conciliado: bool
+    categoria_id: uuid.UUID | None
+    subcategoria_id: uuid.UUID | None
     importacao_id: uuid.UUID | None
     criado_em: datetime
 

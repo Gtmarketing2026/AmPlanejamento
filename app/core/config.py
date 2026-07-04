@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_ROLE_KEY: str = ""  # bypassa RLS/policies de storage -- nunca expor ao frontend
     SUPABASE_STORAGE_BUCKET: str = "importacoes"
 
+    # OpenAI -- classificação automática de categoria/subcategoria
+    OPENAI_API_KEY: str = ""
+
     # Regras de negócio (centralizadas aqui para não espalhar "números mágicos" no código)
     CLIENTES_INCLUSOS_PLANO_BASE: int = 4
     PRAZO_EXCLUSAO_SEM_COBRANCA_DIAS: int = 35
