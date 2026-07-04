@@ -1,23 +1,37 @@
-import { useEffect } from "react"
+import { Fragment, useEffect, useState } from "react"
 import { useParams } from "react-router-dom"
-import { useQuery } from "@tanstack/react-query"
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Stage from "../../components/layout/Stage"
 import Card from "../../components/ui/Card"
 import Pill from "../../components/ui/Pill"
+import Field from "../../components/ui/Field"
+import Button from "../../components/ui/Button"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import { useNegocio } from "../../context/NegocioContext"
-import { listarClientesDoPlanejador, listarPlanejadores } from "../../api/negocio"
+import { atualizarCredenciaisCliente, listarClientesDoPlanejador, listarPlanejadores } from "../../api/negocio"
 import { formatarData, formatarMoeda, iniciais } from "../../lib/format"
 
 export default function CarteiraPlanejadorPage() {
   const { planejadorId } = useParams()
   const { planejador, entrarCliente, sincronizarPlanejador } = useNegocio()
+  const qc = useQueryClient()
 
   const { data: planejadores } = useQuery({ queryKey: ["negocio-planejadores"], queryFn: listarPlanejadores })
   const { data: clientes, isLoading, error } = useQuery({
     queryKey: ["negocio-clientes", planejadorId],
     queryFn: () => listarClientesDoPlanejador(planejadorId),
     enabled: !!planejadorId,
+  })
+
+  const [editandoId, setEditandoId] = useState(null)
+  const [form, setForm] = useState({ nickname: "", senha: "" })
+
+  const atualizar = useMutation({
+    mutationFn: ({ id, dados }) => atualizarCredenciaisCliente(id, dados),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["negocio-clientes", planejadorId] })
+      setEditandoId(null)
+    },
   })
 
   // Deep-link/refresh: se o contexto não bate com a URL, backfill do nome a
@@ -29,11 +43,28 @@ export default function CarteiraPlanejadorPage() {
 
   const nome = planejador?.nome || p?.nome || "Planejador"
 
+  function onEditar(e, c) {
+    e.stopPropagation()
+    setEditandoId((atual) => (atual === c.id ? null : c.id))
+    setForm({ nickname: c.nickname || "", senha: "" })
+    atualizar.reset()
+  }
+
+  function onSalvar(e, id) {
+    e.preventDefault()
+    e.stopPropagation()
+    const dados = {}
+    if (form.nickname) dados.nickname = form.nickname
+    if (form.senha) dados.senha = form.senha
+    if (Object.keys(dados).length === 0) return
+    atualizar.mutate({ id, dados })
+  }
+
   return (
     <Stage
       eyebrow="Nível Negócio → Planejador"
       title={`Carteira de ${nome}`}
-      description="Clientes desse planejador, vistos pelo admin via bypass de RLS. Clique num cliente pra ver os lançamentos dele."
+      description="Clientes desse planejador, vistos pelo admin via bypass de RLS. Clique num cliente pra ver os lançamentos dele, ou em 'Editar login' pra resetar nickname/senha."
     >
       <Card>
         {isLoading && <p className="text-text-faint text-sm">Carregando…</p>}
@@ -50,25 +81,63 @@ export default function CarteiraPlanejadorPage() {
             </Thead>
             <tbody>
               {clientes?.map((c) => (
-                <Tr key={c.id} className="cursor-pointer hover:bg-panel" onClick={() => entrarCliente({ id: c.id, nome: c.nome })}>
-                  <Td>
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-panel border border-line flex items-center justify-center text-[11px] font-mono">
-                        {iniciais(c.nome)}
+                <Fragment key={c.id}>
+                  <Tr className="cursor-pointer hover:bg-panel" onClick={() => entrarCliente({ id: c.id, nome: c.nome })}>
+                    <Td>
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full bg-panel border border-line flex items-center justify-center text-[11px] font-mono">
+                          {iniciais(c.nome)}
+                        </div>
+                        {c.nome}
                       </div>
-                      {c.nome}
-                    </div>
-                  </Td>
-                  <Td>{c.tipo}</Td>
-                  <Td className="font-mono text-text-dim">{formatarData(c.data_cadastro)}</Td>
-                  <Td className="font-mono text-text-dim">{formatarMoeda(c.valor_honorario_mensal)}</Td>
-                  <Td>
-                    <Pill variant={c.status === "ativo" ? "on" : "off"}>{c.status}</Pill>
-                  </Td>
-                  <Td className="text-right">
-                    <span className="text-accent text-[12px]">ver lançamentos →</span>
-                  </Td>
-                </Tr>
+                    </Td>
+                    <Td>{c.tipo}</Td>
+                    <Td className="font-mono text-text-dim">{formatarData(c.data_cadastro)}</Td>
+                    <Td className="font-mono text-text-dim">{formatarMoeda(c.valor_honorario_mensal)}</Td>
+                    <Td>
+                      <Pill variant={c.status === "ativo" ? "on" : "off"}>{c.status}</Pill>
+                    </Td>
+                    <Td className="text-right whitespace-nowrap">
+                      <button onClick={(e) => onEditar(e, c)} className="text-blue text-[12px] hover:underline mr-3">
+                        Editar login
+                      </button>
+                      <span className="text-accent text-[12px]">ver lançamentos →</span>
+                    </Td>
+                  </Tr>
+                  {editandoId === c.id && (
+                    <Tr onClick={(e) => e.stopPropagation()} className="cursor-default bg-panel/40">
+                      <Td colSpan={6}>
+                        <form onSubmit={(e) => onSalvar(e, c.id)} className="flex items-end gap-3 py-1">
+                          <div className="w-56">
+                            <Field
+                              label="Nickname (login)"
+                              value={form.nickname}
+                              onChange={(e) => setForm((f) => ({ ...f, nickname: e.target.value }))}
+                            />
+                          </div>
+                          <div className="w-52">
+                            <Field
+                              label="Nova senha"
+                              type="password"
+                              value={form.senha}
+                              onChange={(e) => setForm((f) => ({ ...f, senha: e.target.value }))}
+                              placeholder="deixe em branco pra manter"
+                            />
+                          </div>
+                          <Button type="submit" disabled={atualizar.isPending} className="mb-3">
+                            {atualizar.isPending ? "Salvando…" : "Salvar"}
+                          </Button>
+                          <Button type="button" variant="ghost" className="mb-3" onClick={() => setEditandoId(null)}>
+                            Cancelar
+                          </Button>
+                          {atualizar.isError && (
+                            <p className="text-red text-[12.5px] mb-3">{atualizar.error.message}</p>
+                          )}
+                        </form>
+                      </Td>
+                    </Tr>
+                  )}
+                </Fragment>
               ))}
               {!clientes?.length && (
                 <Tr>

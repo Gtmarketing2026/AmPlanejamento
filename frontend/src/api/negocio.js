@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, ApiError } from "./client"
+import { apiDelete, apiGet, apiPatch, apiPost, ApiError } from "./client"
 
 // Token do admin (nível Negócio) — chave própria, separada da do profissional
 // (fluxo_token) e da do cliente final (fluxo_cliente_token).
@@ -48,3 +48,13 @@ export const listarDespesas = () => comToken(apiGet("/negocio/despesas", auth())
 export const criarDespesa = (dados) => comToken(apiPost("/negocio/despesas", dados, auth()))
 
 export const excluirDespesa = (id) => comToken(apiDelete(`/negocio/despesas/${id}`, undefined, auth()))
+
+export const buscarPerfilAdmin = () => comToken(apiGet("/negocio/perfil", auth()))
+
+export const atualizarPerfilAdmin = (dados) => comToken(apiPatch("/negocio/perfil", dados, auth()))
+
+export const atualizarCredenciaisPlanejador = (id, dados) =>
+  comToken(apiPatch(`/negocio/planejadores/${id}/credenciais`, dados, auth()))
+
+export const atualizarCredenciaisCliente = (id, dados) =>
+  comToken(apiPatch(`/negocio/clientes/${id}/credenciais`, dados, auth()))

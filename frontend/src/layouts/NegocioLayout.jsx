@@ -56,12 +56,17 @@ export default function NegocioLayout() {
                 </NavLink>
               ))}
             </nav>
-            <button
-              onClick={sair}
-              className="ml-auto px-3 py-2 rounded-[7px] text-[12.5px] text-text-faint hover:text-text-dim"
-            >
-              Sair
-            </button>
+            <div className="ml-auto flex items-center gap-1">
+              <NavLink to="/negocio/perfil" className={linkClasse}>
+                Minha conta
+              </NavLink>
+              <button
+                onClick={sair}
+                className="px-3 py-2 rounded-[7px] text-[12.5px] text-text-faint hover:text-text-dim"
+              >
+                Sair
+              </button>
+            </div>
           </div>
         </div>
 
