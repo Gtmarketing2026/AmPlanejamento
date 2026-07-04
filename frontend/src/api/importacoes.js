@@ -1,4 +1,4 @@
-import { apiDelete, apiGet } from "./client"
+import { apiDelete, apiGet, apiPatch } from "./client"
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL
 
@@ -29,3 +29,5 @@ export const listarImportacoes = (clienteId) => apiGet(`/importacoes?cliente_id=
 export const excluirImportacao = (id) => apiDelete(`/importacoes/${id}`)
 
 export const listarTransacoes = (clienteId) => apiGet(`/transacoes?cliente_id=${clienteId}`)
+
+export const atualizarTransacao = (id, dados) => apiPatch(`/transacoes/${id}`, dados)

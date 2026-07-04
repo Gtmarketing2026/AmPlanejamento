@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { criarImportacao, excluirImportacao, listarImportacoes, listarTransacoes } from "../api/importacoes"
+import {
+  atualizarTransacao,
+  criarImportacao,
+  excluirImportacao,
+  listarImportacoes,
+  listarTransacoes,
+} from "../api/importacoes"
 
 export function useImportacoes(clienteId) {
   return useQuery({
@@ -34,6 +40,16 @@ export function useExcluirImportacao(clienteId) {
     mutationFn: excluirImportacao,
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["importacoes", clienteId] })
+      qc.invalidateQueries({ queryKey: ["transacoes", clienteId] })
+    },
+  })
+}
+
+export function useAtualizarTransacao(clienteId) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, dados }) => atualizarTransacao(id, dados),
+    onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transacoes", clienteId] })
     },
   })
