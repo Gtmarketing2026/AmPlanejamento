@@ -8,12 +8,14 @@ import Field from "../../components/ui/Field"
 import Button from "../../components/ui/Button"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import { useNegocio } from "../../context/NegocioContext"
+import { useEntrarComo } from "../../hooks/useEntrarComo"
 import { atualizarCredenciaisCliente, listarClientesDoPlanejador, listarPlanejadores } from "../../api/negocio"
 import { formatarData, formatarMoeda, iniciais } from "../../lib/format"
 
 export default function CarteiraPlanejadorPage() {
   const { planejadorId } = useParams()
-  const { planejador, entrarCliente, sincronizarPlanejador } = useNegocio()
+  const { planejador, sincronizarPlanejador } = useNegocio()
+  const { entrarPlanejador, entrarCliente, carregando } = useEntrarComo()
   const qc = useQueryClient()
 
   const { data: planejadores } = useQuery({ queryKey: ["negocio-planejadores"], queryFn: listarPlanejadores })
@@ -64,8 +66,13 @@ export default function CarteiraPlanejadorPage() {
     <Stage
       eyebrow="Nível Negócio → Planejador"
       title={`Carteira de ${nome}`}
-      description="Clientes desse planejador, vistos pelo admin via bypass de RLS. Clique num cliente pra ver os lançamentos dele, ou em 'Editar login' pra resetar nickname/senha."
+      description="Clientes desse planejador, vistos pelo admin. 'Entrar como cliente' abre o painel de verdade dele; 'Editar login' reseta nickname/senha."
     >
+      <div className="flex justify-end mb-4">
+        <Button onClick={() => entrarPlanejador(planejadorId)} disabled={carregando}>
+          Entrar como {nome} →
+        </Button>
+      </div>
       <Card>
         {isLoading && <p className="text-text-faint text-sm">Carregando…</p>}
         {error && <p className="text-red text-sm">Não foi possível carregar a carteira.</p>}
@@ -82,7 +89,7 @@ export default function CarteiraPlanejadorPage() {
             <tbody>
               {clientes?.map((c) => (
                 <Fragment key={c.id}>
-                  <Tr className="cursor-pointer hover:bg-panel" onClick={() => entrarCliente({ id: c.id, nome: c.nome })}>
+                  <Tr className="cursor-pointer hover:bg-panel" onClick={() => entrarCliente(c.id)}>
                     <Td>
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-full bg-panel border border-line flex items-center justify-center text-[11px] font-mono">
@@ -101,7 +108,7 @@ export default function CarteiraPlanejadorPage() {
                       <button onClick={(e) => onEditar(e, c)} className="text-blue text-[12px] hover:underline mr-3">
                         Editar login
                       </button>
-                      <span className="text-accent text-[12px]">ver lançamentos →</span>
+                      <span className="text-accent text-[12px]">Entrar como cliente →</span>
                     </Td>
                   </Tr>
                   {editandoId === c.id && (

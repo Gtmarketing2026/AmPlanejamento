@@ -1,56 +1,37 @@
 import { createContext, useCallback, useContext, useState } from "react"
 import { useNavigate } from "react-router-dom"
 
-// Guarda o contexto de navegação do admin: qual planejador e qual cliente ele
-// está "visualizando" no momento (a barra de contexto Negócio → Planejador →
-// Cliente do wireframe). Setar o contexto também navega — mantém a URL e a
-// barra sempre em sincronia.
+// Guarda só qual planejador o admin está "navegando" (pra breadcrumb da
+// ContextBar) enquanto ele browsa a lista de clientes -- não confundir com
+// "entrar como" (useEntrarComo), que emite token real e leva pra SPA de
+// verdade do planejador/cliente. Isso aqui é só pra Carteira do planejador
+// (visão administrativa da lista de clientes dele).
 const NegocioContext = createContext(null)
 
 export function NegocioProvider({ children }) {
   const navigate = useNavigate()
   const [planejador, setPlanejador] = useState(null) // { id, nome } | null
-  const [cliente, setCliente] = useState(null) // { id, nome } | null
 
-  const entrarPlanejador = useCallback(
+  const verCarteiraDoPlanejador = useCallback(
     (p) => {
       setPlanejador(p)
-      setCliente(null)
       navigate(`/negocio/planejadores/${p.id}`)
-    },
-    [navigate]
-  )
-
-  const entrarCliente = useCallback(
-    (c) => {
-      setCliente(c)
-      navigate(`/negocio/clientes/${c.id}`)
     },
     [navigate]
   )
 
   const voltarNegocio = useCallback(() => {
     setPlanejador(null)
-    setCliente(null)
     navigate("/negocio")
   }, [navigate])
 
   // Backfill silencioso quando o admin abre um link direto (refresh numa rota
   // profunda): a página carrega o dado e sincroniza o contexto sem navegar.
   const sincronizarPlanejador = useCallback((p) => setPlanejador(p), [])
-  const sincronizarCliente = useCallback((c) => setCliente(c), [])
 
   return (
     <NegocioContext.Provider
-      value={{
-        planejador,
-        cliente,
-        entrarPlanejador,
-        entrarCliente,
-        voltarNegocio,
-        sincronizarPlanejador,
-        sincronizarCliente,
-      }}
+      value={{ planejador, verCarteiraDoPlanejador, voltarNegocio, sincronizarPlanejador }}
     >
       {children}
     </NegocioContext.Provider>

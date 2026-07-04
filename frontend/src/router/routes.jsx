@@ -26,7 +26,6 @@ import NegocioLoginPage from "../pages/negocio/NegocioLoginPage"
 import PainelNegocioPage from "../pages/negocio/PainelNegocioPage"
 import PlanejadoresPage from "../pages/negocio/PlanejadoresPage"
 import CarteiraPlanejadorPage from "../pages/negocio/CarteiraPlanejadorPage"
-import ClienteNegocioPage from "../pages/negocio/ClienteNegocioPage"
 import FinanceiroPlataformaPage from "../pages/negocio/FinanceiroPlataformaPage"
 import MeuPerfilNegocioPage from "../pages/negocio/MeuPerfilNegocioPage"
 
@@ -47,7 +46,6 @@ export const router = createBrowserRouter([
       { path: "/negocio", element: <PainelNegocioPage /> },
       { path: "/negocio/planejadores", element: <PlanejadoresPage /> },
       { path: "/negocio/planejadores/:planejadorId", element: <CarteiraPlanejadorPage /> },
-      { path: "/negocio/clientes/:clienteId", element: <ClienteNegocioPage /> },
       { path: "/negocio/financeiro", element: <FinanceiroPlataformaPage /> },
       { path: "/negocio/perfil", element: <MeuPerfilNegocioPage /> },
     ],

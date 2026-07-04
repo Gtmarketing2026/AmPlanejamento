@@ -47,6 +47,16 @@ export function AuthProvider({ children }) {
     await carregarPerfil()
   }
 
+  // Usado pelo nível Negócio (useEntrarComo): já tem o token pronto (emitido
+  // por POST /negocio/planejadores/{id}/entrar), só precisa aplicar e buscar
+  // o perfil -- sem isso, o AuthContext (que só busca o perfil uma vez, no
+  // carregamento inicial da página) nunca saberia que um token novo foi
+  // setado depois, e o ProtectedRoute mandaria de volta pro login.
+  async function entrarComToken(token) {
+    setToken(token)
+    await carregarPerfil()
+  }
+
   function sair() {
     setToken(null)
     setProfissional(null)
@@ -54,7 +64,7 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ profissional, loading, autenticado: !!profissional, entrar, cadastrar, sair }}
+      value={{ profissional, loading, autenticado: !!profissional, entrar, cadastrar, entrarComToken, sair }}
     >
       {children}
     </AuthContext.Provider>

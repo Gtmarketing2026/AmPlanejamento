@@ -3,6 +3,9 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { NegocioProvider } from "../context/NegocioContext"
 import ContextBar from "../components/negocio/ContextBar"
 import { getTokenAdmin, setTokenAdmin } from "../api/negocio"
+import { setToken } from "../api/client"
+import { setTokenCliente } from "../pages/clienteFinal/ClienteLoginPage"
+import { getImpersonacao, encerrarImpersonacao } from "../lib/impersonacao"
 
 const NAV = [
   { to: "/negocio", label: "Painel do Negócio", end: true },
@@ -24,6 +27,18 @@ export default function NegocioLayout() {
     window.addEventListener("fluxo:negocio-unauthorized", onUnauthorized)
     return () => window.removeEventListener("fluxo:negocio-unauthorized", onUnauthorized)
   }, [navigate])
+
+  // Limpeza do token impersonado (planejador/cliente): feita AQUI, só depois
+  // que já aterrissamos de verdade nessa tela -- se limpasse no clique do
+  // botão "Voltar" (antes da navegação terminar), o ProtectedRoute ainda
+  // montado reagiria ao perfil virando null e competiria com a navegação.
+  useEffect(() => {
+    if (getImpersonacao()) {
+      encerrarImpersonacao()
+      setToken(null)
+      setTokenCliente(null)
+    }
+  }, [])
 
   function sair() {
     setTokenAdmin(null)

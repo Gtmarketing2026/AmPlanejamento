@@ -15,7 +15,9 @@ import {
   minhasTransacoes,
 } from "../../api/clientes"
 import { ApiError } from "../../api/client"
+import BannerImpersonacao from "../../components/negocio/BannerImpersonacao"
 import { formatarData, formatarMoeda } from "../../lib/format"
+import { getImpersonacao } from "../../lib/impersonacao"
 import { dashboardMock as m } from "../../mocks/dashboard.mock"
 import { getTokenCliente, setTokenCliente } from "./ClienteLoginPage"
 
@@ -63,12 +65,15 @@ export default function ClienteDashboardPage() {
     navigate("/cliente/login")
   }
 
+  const impersonando = getImpersonacao() === "cliente"
+
   if (!token || !perfil) {
     return <div className="min-h-screen bg-bg flex items-center justify-center text-text-dim">Carregando…</div>
   }
 
   return (
     <div className="min-h-screen bg-bg text-text">
+      {impersonando && <BannerImpersonacao nome={perfil.nome} />}
       <div className="sticky top-0 z-40 bg-bg/92 backdrop-blur border-b border-line px-8 py-[18px] flex items-center justify-between">
         <div>
           <div className="text-[15px] font-semibold">Olá, {perfil.nome.split(" ")[0]}</div>

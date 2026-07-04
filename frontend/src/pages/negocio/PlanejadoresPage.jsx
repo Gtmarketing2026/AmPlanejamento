@@ -1,4 +1,5 @@
 import { Fragment, useState } from "react"
+import { Link } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Stage from "../../components/layout/Stage"
 import Card from "../../components/ui/Card"
@@ -6,14 +7,14 @@ import Pill from "../../components/ui/Pill"
 import Field from "../../components/ui/Field"
 import Button from "../../components/ui/Button"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
-import { useNegocio } from "../../context/NegocioContext"
+import { useEntrarComo } from "../../hooks/useEntrarComo"
 import { atualizarCredenciaisPlanejador, listarPlanejadores } from "../../api/negocio"
 import { formatarMoeda } from "../../lib/format"
 
 const STATUS_VARIANT = { ativa: "on", congelada: "warn", cancelada: "off" }
 
 export default function PlanejadoresPage() {
-  const { entrarPlanejador } = useNegocio()
+  const { entrarPlanejador, carregando } = useEntrarComo()
   const qc = useQueryClient()
   const { data: planejadores, isLoading, error } = useQuery({
     queryKey: ["negocio-planejadores"],
@@ -50,7 +51,7 @@ export default function PlanejadoresPage() {
     <Stage
       eyebrow="Nível Negócio · Admin"
       title="Planejadores"
-      description="Todos os profissionais da plataforma. O admin pode ver a carteira de qualquer um, sem precisar da senha dele — 'Ver carteira' troca o contexto no topo, e 'Editar login' reseta e-mail/senha sem precisar da senha antiga."
+      description="Todos os profissionais da plataforma. 'Entrar como' abre o app de verdade do planejador (sem precisar da senha dele), e 'Editar login' reseta e-mail/senha."
     >
       <Card>
         {isLoading && <p className="text-text-faint text-sm">Carregando…</p>}
@@ -86,12 +87,15 @@ export default function PlanejadoresPage() {
                       >
                         Editar login
                       </button>
+                      <Link to={`/negocio/planejadores/${p.id}`} className="text-text-dim text-[12px] hover:underline mr-3">
+                        Ver clientes
+                      </Link>
                       <button
-                        onClick={() => entrarPlanejador({ id: p.id, nome: p.nome })}
-                        disabled={p.status === "cancelada"}
+                        onClick={() => entrarPlanejador(p.id)}
+                        disabled={p.status === "cancelada" || carregando}
                         className="text-accent text-[12px] hover:underline disabled:text-text-faint disabled:no-underline disabled:cursor-not-allowed"
                       >
-                        Ver carteira →
+                        Entrar como →
                       </button>
                     </Td>
                   </Tr>

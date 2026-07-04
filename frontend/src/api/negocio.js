@@ -38,9 +38,6 @@ export const listarPlanejadores = () => comToken(apiGet("/negocio/planejadores",
 export const listarClientesDoPlanejador = (id) =>
   comToken(apiGet(`/negocio/planejadores/${id}/clientes`, auth()))
 
-export const listarTransacoesDoCliente = (id) =>
-  comToken(apiGet(`/negocio/clientes/${id}/transacoes`, auth()))
-
 export const listarFaturasPlataforma = () => comToken(apiGet("/negocio/financeiro/faturas", auth()))
 
 export const listarDespesas = () => comToken(apiGet("/negocio/despesas", auth()))
@@ -58,3 +55,7 @@ export const atualizarCredenciaisPlanejador = (id, dados) =>
 
 export const atualizarCredenciaisCliente = (id, dados) =>
   comToken(apiPatch(`/negocio/clientes/${id}/credenciais`, dados, auth()))
+
+export const entrarComoPlanejador = (id) => comToken(apiPost(`/negocio/planejadores/${id}/entrar`, {}, auth()))
+
+export const entrarComoCliente = (id) => comToken(apiPost(`/negocio/clientes/${id}/entrar`, {}, auth()))

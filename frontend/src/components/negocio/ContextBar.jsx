@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import { useNegocio } from "../../context/NegocioContext"
+import { useEntrarComo } from "../../hooks/useEntrarComo"
 import { listarClientesDoPlanejador, listarPlanejadores } from "../../api/negocio"
 
 function CrumbButton({ children, onClick, locked }) {
@@ -35,7 +36,8 @@ function Dropdown({ itens, onEscolher, vazio }) {
 }
 
 export default function ContextBar() {
-  const { planejador, cliente, entrarPlanejador, entrarCliente, voltarNegocio } = useNegocio()
+  const { planejador, verCarteiraDoPlanejador, voltarNegocio } = useNegocio()
+  const { entrarCliente } = useEntrarComo()
   const [aberto, setAberto] = useState(null) // 'planejador' | 'cliente' | null
 
   const { data: planejadores = [] } = useQuery({
@@ -71,7 +73,7 @@ export default function ContextBar() {
               vazio="Nenhum planejador ainda."
               onEscolher={(p) => {
                 setAberto(null)
-                entrarPlanejador({ id: p.id, nome: p.nome })
+                verCarteiraDoPlanejador({ id: p.id, nome: p.nome })
               }}
             />
           )}
@@ -81,16 +83,14 @@ export default function ContextBar() {
           <>
             <span className="text-text-faint">→</span>
             <div className="relative">
-              <CrumbButton onClick={() => toggle("cliente")}>
-                {cliente ? `👤 ${cliente.nome}` : "Selecionar cliente"} ▾
-              </CrumbButton>
+              <CrumbButton onClick={() => toggle("cliente")}>Selecionar cliente ▾</CrumbButton>
               {aberto === "cliente" && (
                 <Dropdown
                   itens={clientes}
                   vazio="Esse planejador não tem clientes."
                   onEscolher={(c) => {
                     setAberto(null)
-                    entrarCliente({ id: c.id, nome: c.nome })
+                    entrarCliente(c.id)
                   }}
                 />
               )}
