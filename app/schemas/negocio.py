@@ -34,3 +34,42 @@ class ClienteDoPlanejadorResposta(BaseModel):
     status: str
     data_cadastro: date
     valor_honorario_mensal: float | None
+
+
+class FaturaPlataformaResposta(BaseModel):
+    id: uuid.UUID
+    profissional_id: uuid.UUID
+    planejador_nome: str
+    ciclo_referencia: date
+    valor_total: float
+    status: str
+
+
+class DespesaResposta(BaseModel):
+    id: uuid.UUID
+    descricao: str
+    categoria: str
+    valor: float
+    data: date
+
+    model_config = {"from_attributes": True}
+
+
+class DespesaCriar(BaseModel):
+    descricao: str
+    categoria: str  # infraestrutura | gateway_pagamento | open_finance | marketing | ferramentas | pessoal | outro
+    valor: float
+    data: date | None = None
+
+
+class TransacaoNegocioResposta(BaseModel):
+    id: uuid.UUID
+    data: date
+    descricao: str
+    valor: float
+    tipo: str
+    origem: str
+    categoria_id: uuid.UUID | None
+    subcategoria_id: uuid.UUID | None
+
+    model_config = {"from_attributes": True}

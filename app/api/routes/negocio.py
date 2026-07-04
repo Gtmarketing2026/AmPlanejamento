@@ -8,6 +8,7 @@ tipo="admin", nunca aceito nas rotas dos outros dois níveis e vice-versa.
 """
 
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, text
@@ -17,9 +18,19 @@ from app.api.deps import get_db_negocio, get_db_sem_rls
 from app.core.security import criar_access_token, verificar_senha
 from app.models.admin import Admin
 from app.models.cliente import Cliente
+from app.models.despesa_operacional import DespesaOperacional
 from app.models.profissional import Profissional
+from app.models.transacao import Transacao
 from app.schemas.cliente import LoginRequest, TokenResponse
-from app.schemas.negocio import ClienteDoPlanejadorResposta, MetricasNegocioResposta, PlanejadorResposta
+from app.schemas.negocio import (
+    ClienteDoPlanejadorResposta,
+    DespesaCriar,
+    DespesaResposta,
+    FaturaPlataformaResposta,
+    MetricasNegocioResposta,
+    PlanejadorResposta,
+    TransacaoNegocioResposta,
+)
 
 router = APIRouter(prefix="/negocio", tags=["negocio"])
 
@@ -82,3 +93,72 @@ def listar_clientes_do_planejador(profissional_id: uuid.UUID, db: Session = Depe
 
     clientes = db.scalars(select(Cliente).where(Cliente.profissional_id == profissional_id)).all()
     return clientes
+
+
+@router.get("/clientes/{cliente_id}/transacoes", response_model=list[TransacaoNegocioResposta])
+def transacoes_do_cliente(cliente_id: uuid.UUID, db: Session = Depends(get_db_negocio)):
+    """Drill-down do nível Negócio até um cliente específico — o admin vê os
+    lançamentos dele (só leitura) via bypass de RLS, sem precisar do login do
+    planejador nem do cliente."""
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    return db.scalars(
+        select(Transacao).where(Transacao.cliente_id == cliente_id).order_by(Transacao.data.desc())
+    ).all()
+
+
+# ---------------------------------------------------------------------------
+# Financeiro da Plataforma — cobrança recebida dos planejadores + custos do
+# próprio negócio Fluxo (despesas_operacionais).
+# ---------------------------------------------------------------------------
+
+
+@router.get("/financeiro/faturas", response_model=list[FaturaPlataformaResposta])
+def faturas_da_plataforma(db: Session = Depends(get_db_negocio)):
+    linhas = db.execute(
+        text("""
+            SELECT f.id, f.profissional_id, p.nome AS planejador_nome,
+                   f.ciclo_referencia, (f.valor_base + f.valor_extras) AS valor_total, f.status
+            FROM faturas f
+            JOIN profissionais p ON p.id = f.profissional_id
+            ORDER BY f.ciclo_referencia DESC, p.nome
+        """)
+    ).mappings().all()
+    return [dict(linha) for linha in linhas]
+
+
+@router.get("/despesas", response_model=list[DespesaResposta])
+def listar_despesas(db: Session = Depends(get_db_negocio)):
+    return db.scalars(select(DespesaOperacional).order_by(DespesaOperacional.data.desc())).all()
+
+
+@router.post("/despesas", response_model=DespesaResposta, status_code=status.HTTP_201_CREATED)
+def criar_despesa(dados: DespesaCriar, db: Session = Depends(get_db_negocio)):
+    categorias_validas = {
+        "infraestrutura", "gateway_pagamento", "open_finance",
+        "marketing", "ferramentas", "pessoal", "outro",
+    }
+    if dados.categoria not in categorias_validas:
+        raise HTTPException(status_code=422, detail="categoria inválida")
+
+    despesa = DespesaOperacional(
+        descricao=dados.descricao,
+        categoria=dados.categoria,
+        valor=dados.valor,
+        data=dados.data or date.today(),
+    )
+    db.add(despesa)
+    db.flush()
+    db.refresh(despesa)
+    return despesa
+
+
+@router.delete("/despesas/{despesa_id}", status_code=status.HTTP_200_OK)
+def excluir_despesa(despesa_id: uuid.UUID, db: Session = Depends(get_db_negocio)):
+    despesa = db.get(DespesaOperacional, despesa_id)
+    if not despesa:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Despesa não encontrada")
+    db.delete(despesa)
+    db.flush()
+    return {"ok": True}
