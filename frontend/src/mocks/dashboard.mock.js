@@ -23,15 +23,7 @@ export const dashboardMock = {
     { label: "Transf. não identificada", valor: "R$ 210" },
     { label: "Mercado", valor: "R$ 486" },
   ],
-  filtros: {
-    tipos: ["Entradas e saídas", "Só entradas", "Só saídas"],
-    instituicoes: ["Todas", "Nubank", "Itaú", "Mercado Pago"],
-    categorias: ["Todas", "Despesas obrigatórias", "Despesas não obrigatórias", "Renda"],
-    subcategorias: ["Todas", "Mercado", "Transporte"],
-    cartoes: ["Todos", "Nubank •••• 4471", "Itaú •••• 2290"],
-  },
-  // transacoes agora vem de mocks/importacoesStore.js (useTransacoes), pra
-  // poder ser afetada pela exclusão de importação (efeito cascata).
+  // Lançamentos (LancamentosTab) agora usa dado real de GET /transacoes.
   patrimonio: { atual: "R$ 184.200", delta: "↑ 3,1% no mês", metaAposentadoriaPct: "42%", anoProjecao: "projeção: 2049", reservaMeses: "6,2 meses" },
   curvaProjecao: [40, 55, 68, 90, 130, 184],
   curvaProjecaoLabels: ["hoje", "", "", "+5 anos", "", "+15 anos"],

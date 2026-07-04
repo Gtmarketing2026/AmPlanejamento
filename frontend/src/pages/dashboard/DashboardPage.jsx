@@ -86,7 +86,7 @@ export default function DashboardPage() {
       </div>
 
       {subtab === "fluxo" && <FluxoCaixaTab />}
-      {subtab === "lancamentos" && <LancamentosTab />}
+      {subtab === "lancamentos" && <LancamentosTab clienteId={clienteAtual?.id} />}
       {subtab === "patrimonio" && <PatrimonioMetasTab />}
     </Stage>
   )

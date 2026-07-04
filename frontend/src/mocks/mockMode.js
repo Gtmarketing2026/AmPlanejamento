@@ -7,6 +7,6 @@ export const MOCK_MODE = {
   crm: true,
   whiteLabel: true,
   painelAnalitico: true,
-  importExtrato: true,
+  importExtrato: false, // real: POST/GET /importacoes, GET /transacoes
   cadastros: true,
 }

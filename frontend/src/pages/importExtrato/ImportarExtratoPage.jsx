@@ -1,138 +1,184 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import Stage from "../../components/layout/Stage"
 import Card from "../../components/ui/Card"
-import Field from "../../components/ui/Field"
+import Field, { Select } from "../../components/ui/Field"
 import Button from "../../components/ui/Button"
 import Pill from "../../components/ui/Pill"
 import Tabs from "../../components/ui/Tabs"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
-import {
-  adicionarImportacao,
-  excluirImportacao,
-  marcarProcessada,
-  useImportacoes,
-} from "../../mocks/importacoesStore"
+import { useClientes } from "../../hooks/useClientes"
+import { useCriarImportacao, useExcluirImportacao, useImportacoes } from "../../hooks/useImportacoes"
+import { formatarData } from "../../lib/format"
 
 const STATUS_VARIANT = { processado: "on", processando: "warn", erro: "off" }
 
 export default function ImportarExtratoPage() {
-  const [tipoDoc, setTipoDoc] = useState("extrato")
-  const historico = useImportacoes()
-  const [processando, setProcessando] = useState(false)
+  const { data: clientes } = useClientes()
+  const [clienteId, setClienteId] = useState("")
+  const clienteAtual = clientes?.find((c) => c.id === clienteId) || clientes?.[0]
+  const clienteIdEfetivo = clienteAtual?.id
 
-  function onProcessar(e) {
+  const [tipoDoc, setTipoDoc] = useState("extrato")
+  const [periodoInicio, setPeriodoInicio] = useState("")
+  const [periodoFim, setPeriodoFim] = useState("")
+  const [erro, setErro] = useState(null)
+  const fileInputRef = useRef(null)
+
+  const { data: historico, isLoading } = useImportacoes(clienteIdEfetivo)
+  const criar = useCriarImportacao(clienteIdEfetivo)
+  const excluir = useExcluirImportacao(clienteIdEfetivo)
+
+  async function onProcessar(e) {
     e.preventDefault()
-    setProcessando(true)
-    // MOCK: nao existe endpoint de upload/parse ainda -- simula o ciclo
-    // pendente -> processado, so pra ilustrar o fluxo esperado.
-    const id = `imp-${Date.now()}`
-    adicionarImportacao({
-      id,
-      arquivo: tipoDoc === "extrato" ? "novo_extrato.ofx" : "nova_fatura.pdf",
-      periodo: "jul/2026",
-      transacoesCount: 0,
-      status: "processando",
-    })
-    setTimeout(() => {
-      marcarProcessada(id, 51)
-      setProcessando(false)
-    }, 1500)
+    setErro(null)
+    const arquivo = fileInputRef.current?.files?.[0]
+    if (!arquivo) {
+      setErro("Selecione um arquivo.")
+      return
+    }
+    try {
+      await criar.mutateAsync({
+        clienteId: clienteIdEfetivo,
+        tipoDocumento: tipoDoc,
+        periodoInicio: periodoInicio || null,
+        periodoFim: periodoFim || null,
+        arquivo,
+      })
+      fileInputRef.current.value = ""
+    } catch (err) {
+      setErro(err.message)
+    }
   }
 
-  function onExcluir(id, arquivo) {
+  async function onExcluir(id, arquivo) {
     if (!confirm(`Excluir a importação "${arquivo}"? Isso remove também todos os lançamentos dela.`)) return
-    excluirImportacao(id)
+    await excluir.mutateAsync(id)
   }
 
   return (
     <Stage
       eyebrow="Plano Essencial · também disponível no Completo"
       title="Importar extrato e fatura"
-      description="Upload manual — o sistema lê o arquivo e organiza as transações, com a mesma lógica de dedup do Open Finance. Processamento abaixo é ilustrativo, sem parser real ainda."
+      description="Upload manual — o sistema lê o arquivo e organiza as transações, com a mesma lógica de dedup do Open Finance."
     >
-      <div className="grid grid-cols-[1fr_1.1fr] gap-6">
+      <Card className="mb-5">
+        <Select
+          label="Cliente"
+          value={clienteIdEfetivo || ""}
+          onChange={(e) => setClienteId(e.target.value)}
+        >
+          {clientes?.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.nome}
+            </option>
+          ))}
+        </Select>
+      </Card>
+
+      {!clienteIdEfetivo && (
         <Card>
-          <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">Novo upload</div>
-          <div className="border-2 border-dashed border-line rounded-xl bg-panel-2 p-8 text-center mb-4">
-            <div className="text-2xl mb-2">📄</div>
-            <div className="font-medium text-[13px] mb-1">Arraste o arquivo aqui</div>
-            <div className="text-text-faint text-[11.5px]">ou clique para selecionar — OFX, CSV ou PDF</div>
-          </div>
+          <p className="text-text-faint text-sm">Cadastre um cliente primeiro em Cadastros → Cliente.</p>
+        </Card>
+      )}
 
-          <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-2">Tipo de documento</div>
-          <div className="mb-4">
-            <Tabs
-              options={[
-                { value: "extrato", label: "Extrato de conta" },
-                { value: "fatura", label: "Fatura de cartão" },
-              ]}
-              active={tipoDoc}
-              onChange={setTipoDoc}
-            />
-          </div>
+      {clienteIdEfetivo && (
+        <div className="grid grid-cols-[1fr_1.1fr] gap-6">
+          <Card>
+            <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">Novo upload</div>
+            <form onSubmit={onProcessar}>
+              <div className="border-2 border-dashed border-line rounded-xl bg-panel-2 p-8 text-center mb-4">
+                <div className="text-2xl mb-2">📄</div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".ofx,.csv,.pdf"
+                  className="text-[12px] text-text-dim mx-auto"
+                />
+                <div className="text-text-faint text-[11.5px] mt-2">OFX, CSV ou PDF</div>
+              </div>
 
-          <form onSubmit={onProcessar}>
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Período início" type="date" defaultValue="2026-06-01" />
-              <Field label="Período fim" type="date" defaultValue="2026-06-30" />
+              <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-2">Tipo de documento</div>
+              <div className="mb-4">
+                <Tabs
+                  options={[
+                    { value: "extrato", label: "Extrato de conta" },
+                    { value: "fatura_cartao", label: "Fatura de cartão" },
+                  ]}
+                  active={tipoDoc}
+                  onChange={setTipoDoc}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Período início" type="date" value={periodoInicio} onChange={(e) => setPeriodoInicio(e.target.value)} />
+                <Field label="Período fim" type="date" value={periodoFim} onChange={(e) => setPeriodoFim(e.target.value)} />
+              </div>
+              {erro && <p className="text-red text-[12.5px] mb-3">{erro}</p>}
+              <Button type="submit" block disabled={criar.isPending}>
+                {criar.isPending ? "Processando…" : "Processar arquivo"}
+              </Button>
+            </form>
+            <p className="text-text-faint text-[11px] font-mono mt-3">
+              Formatos aceitos: .ofx (recomendado) · .csv (data;descricao;valor) · .pdf (melhor esforço, sem OCR)
+            </p>
+          </Card>
+
+          <Card>
+            <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
+              Histórico de importações
             </div>
-            <Button type="submit" block disabled={processando}>
-              {processando ? "Processando…" : "Processar arquivo"}
-            </Button>
-          </form>
-          <p className="text-text-faint text-[11px] font-mono mt-3">
-            Formatos aceitos: .ofx (recomendado) · .csv (mapeamento) · .pdf (extração de texto, mais lento)
-          </p>
-        </Card>
-
-        <Card>
-          <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
-            Histórico de importações
-          </div>
-          <Table>
-            <Thead>
-              <Th>Arquivo</Th>
-              <Th>Período</Th>
-              <Th>Transações</Th>
-              <Th>Status</Th>
-              <Th></Th>
-            </Thead>
-            <tbody>
-              {historico.map((h) => (
-                <Tr key={h.id}>
-                  <Td>{h.arquivo}</Td>
-                  <Td className="font-mono text-text-dim">{h.periodo}</Td>
-                  <Td className="font-mono">{h.status === "processando" ? "—" : `${h.transacoesCount} lançamentos`}</Td>
-                  <Td>
-                    <Pill variant={STATUS_VARIANT[h.status]} pulse={h.status === "processando"}>
-                      {h.status}
-                    </Pill>
-                  </Td>
-                  <Td className="text-right">
-                    <button
-                      onClick={() => onExcluir(h.id, h.arquivo)}
-                      className="text-red text-[12px] hover:underline"
-                    >
-                      Excluir
-                    </button>
-                  </Td>
-                </Tr>
-              ))}
-              {!historico.length && (
-                <Tr>
-                  <Td colSpan={5} className="text-text-faint text-center py-6">
-                    Nenhuma importação ainda.
-                  </Td>
-                </Tr>
-              )}
-            </tbody>
-          </Table>
-          <p className="text-text-faint text-[11px] mt-3 leading-relaxed">
-            Transações duplicadas (já importadas antes) são identificadas automaticamente e não entram de
-            novo na conciliação. Excluir uma importação remove também os lançamentos gerados por ela.
-          </p>
-        </Card>
-      </div>
+            {isLoading && <p className="text-text-faint text-sm">Carregando…</p>}
+            {!isLoading && (
+              <Table>
+                <Thead>
+                  <Th>Arquivo</Th>
+                  <Th>Formato</Th>
+                  <Th>Transações</Th>
+                  <Th>Status</Th>
+                  <Th></Th>
+                </Thead>
+                <tbody>
+                  {historico?.map((h) => (
+                    <Tr key={h.id}>
+                      <Td className="font-mono text-text-dim">{formatarData(h.criado_em)}</Td>
+                      <Td className="uppercase">{h.formato_arquivo}</Td>
+                      <Td className="font-mono">
+                        {h.status === "processado"
+                          ? `${h.transacoes_importadas} novas${h.transacoes_duplicadas ? ` · ${h.transacoes_duplicadas} dup.` : ""}`
+                          : h.erro_detalhe || "—"}
+                      </Td>
+                      <Td>
+                        <Pill variant={STATUS_VARIANT[h.status]} pulse={h.status === "processando"}>
+                          {h.status}
+                        </Pill>
+                      </Td>
+                      <Td className="text-right">
+                        <button
+                          onClick={() => onExcluir(h.id, h.formato_arquivo)}
+                          className="text-red text-[12px] hover:underline"
+                        >
+                          Excluir
+                        </button>
+                      </Td>
+                    </Tr>
+                  ))}
+                  {!historico?.length && (
+                    <Tr>
+                      <Td colSpan={5} className="text-text-faint text-center py-6">
+                        Nenhuma importação ainda.
+                      </Td>
+                    </Tr>
+                  )}
+                </tbody>
+              </Table>
+            )}
+            <p className="text-text-faint text-[11px] mt-3 leading-relaxed">
+              Transações duplicadas são identificadas automaticamente e não entram de novo na conciliação.
+              Excluir uma importação remove também os lançamentos gerados por ela.
+            </p>
+          </Card>
+        </div>
+      )}
     </Stage>
   )
 }
