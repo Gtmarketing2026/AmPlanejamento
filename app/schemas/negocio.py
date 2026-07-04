@@ -31,6 +31,7 @@ class ClienteDoPlanejadorResposta(BaseModel):
     nome: str
     tipo: str
     documento: str
+    nickname: str | None
     status: str
     data_cadastro: date
     valor_honorario_mensal: float | None
