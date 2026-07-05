@@ -52,15 +52,6 @@ export default function Topbar() {
             { to: "/marca", label: "Marca", completoOnly: true },
           ]}
         />
-        {profissional?.is_admin && (
-          <NavGroup
-            label="Admin"
-            items={[
-              { to: "/admin/metricas", label: "Métricas" },
-              { to: "/admin/profissionais", label: "Profissionais" },
-            ]}
-          />
-        )}
       </div>
 
       <div className="flex items-center gap-2">

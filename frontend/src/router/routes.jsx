@@ -2,7 +2,6 @@ import { createBrowserRouter, Navigate } from "react-router-dom"
 import AppLayout from "../layouts/AppLayout"
 import AuthLayout from "../layouts/AuthLayout"
 import ProtectedRoute from "./ProtectedRoute"
-import AdminRoute from "./AdminRoute"
 
 import LoginPage from "../pages/auth/LoginPage"
 import CadastroPage from "../pages/auth/CadastroPage"
@@ -17,8 +16,6 @@ import MarcaPage from "../pages/marca/MarcaPage"
 import PainelAnaliticoPage from "../pages/painelAnalitico/PainelAnaliticoPage"
 import ImportarExtratoPage from "../pages/importExtrato/ImportarExtratoPage"
 import CadastrosPage from "../pages/cadastros/CadastrosPage"
-import AdminMetricasPage from "../pages/admin/AdminMetricasPage"
-import AdminProfissionaisPage from "../pages/admin/AdminProfissionaisPage"
 import ClienteLoginPage from "../pages/clienteFinal/ClienteLoginPage"
 import ClienteDashboardPage from "../pages/clienteFinal/ClienteDashboardPage"
 import NegocioLayout from "../layouts/NegocioLayout"
@@ -70,13 +67,6 @@ export const router = createBrowserRouter([
           { path: "/importar-extrato", element: <ImportarExtratoPage /> },
           { path: "/cadastros", element: <CadastrosPage /> },
           { path: "/cadastros/:subtab", element: <CadastrosPage /> },
-          {
-            element: <AdminRoute />,
-            children: [
-              { path: "/admin/metricas", element: <AdminMetricasPage /> },
-              { path: "/admin/profissionais", element: <AdminProfissionaisPage /> },
-            ],
-          },
         ],
       },
     ],

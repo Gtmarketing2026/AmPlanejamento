@@ -3,15 +3,17 @@ import { Link } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Stage from "../../components/layout/Stage"
 import Card from "../../components/ui/Card"
-import Pill from "../../components/ui/Pill"
 import Field from "../../components/ui/Field"
 import Button from "../../components/ui/Button"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import { useEntrarComo } from "../../hooks/useEntrarComo"
-import { atualizarCredenciaisPlanejador, listarPlanejadores } from "../../api/negocio"
-import { formatarMoeda } from "../../lib/format"
-
-const STATUS_VARIANT = { ativa: "on", congelada: "warn", cancelada: "off" }
+import {
+  atualizarCredenciaisPlanejador,
+  atualizarStatusPlanejador,
+  concederTrial,
+  listarPlanejadores,
+} from "../../api/negocio"
+import { formatarData, formatarMoeda } from "../../lib/format"
 
 export default function PlanejadoresPage() {
   const { entrarPlanejador, carregando } = useEntrarComo()
@@ -23,8 +25,9 @@ export default function PlanejadoresPage() {
 
   const [editandoId, setEditandoId] = useState(null)
   const [form, setForm] = useState({ email: "", senha: "" })
+  const [trialInputs, setTrialInputs] = useState({})
 
-  const atualizar = useMutation({
+  const atualizarCredenciais = useMutation({
     mutationFn: ({ id, dados }) => atualizarCredenciaisPlanejador(id, dados),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["negocio-planejadores"] })
@@ -32,10 +35,20 @@ export default function PlanejadoresPage() {
     },
   })
 
+  const atualizarStatus = useMutation({
+    mutationFn: ({ id, status: novoStatus }) => atualizarStatusPlanejador(id, { status: novoStatus }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["negocio-planejadores"] }),
+  })
+
+  const trial = useMutation({
+    mutationFn: ({ id, trial_ate }) => concederTrial(id, { trial_ate }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["negocio-planejadores"] }),
+  })
+
   function onEditar(p) {
     setEditandoId((atual) => (atual === p.id ? null : p.id))
     setForm({ email: p.email, senha: "" })
-    atualizar.reset()
+    atualizarCredenciais.reset()
   }
 
   function onSalvar(e, id) {
@@ -44,14 +57,20 @@ export default function PlanejadoresPage() {
     if (form.email) dados.email = form.email
     if (form.senha) dados.senha = form.senha
     if (Object.keys(dados).length === 0) return
-    atualizar.mutate({ id, dados })
+    atualizarCredenciais.mutate({ id, dados })
+  }
+
+  function onConcederTrial(id) {
+    const data = trialInputs[id]
+    if (!data) return
+    trial.mutate({ id, trial_ate: data })
   }
 
   return (
     <Stage
       eyebrow="Nível Negócio · Admin"
       title="Planejadores"
-      description="Todos os profissionais da plataforma. 'Entrar como' abre o app de verdade do planejador (sem precisar da senha dele), e 'Editar login' reseta e-mail/senha."
+      description="Todos os profissionais da plataforma — ativar, congelar, cancelar acesso, conceder período de teste. 'Entrar como' abre o app de verdade dele, sem precisar da senha."
     >
       <Card>
         {isLoading && <p className="text-text-faint text-sm">Carregando…</p>}
@@ -60,11 +79,12 @@ export default function PlanejadoresPage() {
           <Table>
             <Thead>
               <Th>Planejador</Th>
+              <Th>Status</Th>
               <Th>Plano</Th>
               <Th>Clientes</Th>
-              <Th>MRR contribuído</Th>
-              <Th>Status</Th>
-              <Th></Th>
+              <Th>MRR</Th>
+              <Th>Teste</Th>
+              <Th>Ações</Th>
             </Thead>
             <tbody>
               {planejadores?.map((p) => (
@@ -74,11 +94,59 @@ export default function PlanejadoresPage() {
                       <div className="font-medium">{p.nome}</div>
                       <div className="text-text-faint text-[11.5px] font-mono">{p.email}</div>
                     </Td>
+                    <Td>
+                      <div className="flex gap-1">
+                        {["ativa", "congelada", "cancelada"].map((s) => (
+                          <button
+                            key={s}
+                            disabled={p.status === s || atualizarStatus.isPending}
+                            onClick={() => atualizarStatus.mutate({ id: p.id, status: s })}
+                            className={`px-2 py-1 rounded text-[10.5px] font-mono border ${
+                              p.status === s
+                                ? "border-line text-text-faint opacity-40 cursor-default"
+                                : "border-line text-text-dim hover:text-text hover:border-text-faint"
+                            }`}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </Td>
                     <Td className="text-text-dim">{p.tipo_plano_atual || "—"}</Td>
                     <Td className="font-mono">{p.clientes_ativos}</Td>
                     <Td className="font-mono text-accent">{formatarMoeda(p.mrr_contribuido)}</Td>
                     <Td>
-                      <Pill variant={STATUS_VARIANT[p.status] || "neutral"}>{p.status}</Pill>
+                      <div className="flex flex-col gap-1.5 min-w-[190px]">
+                        {p.em_trial ? (
+                          <span className="text-accent text-[12px]">até {formatarData(p.trial_ate)}</span>
+                        ) : (
+                          <span className="text-text-faint text-[12px]">—</span>
+                        )}
+                        <div className="flex gap-1 items-center">
+                          <input
+                            type="date"
+                            className="bg-bg border border-line rounded px-2 py-1 text-[11px] text-text w-[130px]"
+                            value={trialInputs[p.id] || ""}
+                            onChange={(e) => setTrialInputs((f) => ({ ...f, [p.id]: e.target.value }))}
+                          />
+                          <button
+                            onClick={() => onConcederTrial(p.id)}
+                            disabled={trial.isPending}
+                            className="px-2 py-1 rounded text-[10.5px] font-mono border border-accent/40 text-accent hover:bg-accent/10"
+                          >
+                            conceder
+                          </button>
+                          {p.em_trial && (
+                            <button
+                              onClick={() => trial.mutate({ id: p.id, trial_ate: null })}
+                              disabled={trial.isPending}
+                              className="px-2 py-1 rounded text-[10.5px] font-mono border border-red/40 text-red hover:bg-red/10"
+                            >
+                              encerrar
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </Td>
                     <Td className="text-right whitespace-nowrap">
                       <button
@@ -101,7 +169,7 @@ export default function PlanejadoresPage() {
                   </Tr>
                   {editandoId === p.id && (
                     <Tr className="bg-panel/40">
-                      <Td colSpan={6}>
+                      <Td colSpan={7}>
                         <form onSubmit={(e) => onSalvar(e, p.id)} className="flex items-end gap-3 py-1">
                           <div className="w-64">
                             <Field
@@ -120,14 +188,14 @@ export default function PlanejadoresPage() {
                               placeholder="deixe em branco pra manter"
                             />
                           </div>
-                          <Button type="submit" disabled={atualizar.isPending} className="mb-3">
-                            {atualizar.isPending ? "Salvando…" : "Salvar"}
+                          <Button type="submit" disabled={atualizarCredenciais.isPending} className="mb-3">
+                            {atualizarCredenciais.isPending ? "Salvando…" : "Salvar"}
                           </Button>
                           <Button type="button" variant="ghost" className="mb-3" onClick={() => setEditandoId(null)}>
                             Cancelar
                           </Button>
-                          {atualizar.isError && (
-                            <p className="text-red text-[12.5px] mb-3">{atualizar.error.message}</p>
+                          {atualizarCredenciais.isError && (
+                            <p className="text-red text-[12.5px] mb-3">{atualizarCredenciais.error.message}</p>
                           )}
                         </form>
                       </Td>
@@ -137,7 +205,7 @@ export default function PlanejadoresPage() {
               ))}
               {!planejadores?.length && (
                 <Tr>
-                  <Td colSpan={6} className="text-text-faint text-center py-6">
+                  <Td colSpan={7} className="text-text-faint text-center py-6">
                     Nenhum planejador cadastrado ainda.
                   </Td>
                 </Tr>

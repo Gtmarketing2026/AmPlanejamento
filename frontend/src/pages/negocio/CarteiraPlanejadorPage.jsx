@@ -3,13 +3,17 @@ import { useParams } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Stage from "../../components/layout/Stage"
 import Card from "../../components/ui/Card"
-import Pill from "../../components/ui/Pill"
 import Field from "../../components/ui/Field"
 import Button from "../../components/ui/Button"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import { useNegocio } from "../../context/NegocioContext"
 import { useEntrarComo } from "../../hooks/useEntrarComo"
-import { atualizarCredenciaisCliente, listarClientesDoPlanejador, listarPlanejadores } from "../../api/negocio"
+import {
+  atualizarCredenciaisCliente,
+  atualizarStatusCliente,
+  listarClientesDoPlanejador,
+  listarPlanejadores,
+} from "../../api/negocio"
 import { formatarData, formatarMoeda, iniciais } from "../../lib/format"
 
 export default function CarteiraPlanejadorPage() {
@@ -28,12 +32,17 @@ export default function CarteiraPlanejadorPage() {
   const [editandoId, setEditandoId] = useState(null)
   const [form, setForm] = useState({ nickname: "", senha: "" })
 
-  const atualizar = useMutation({
+  const atualizarCredenciais = useMutation({
     mutationFn: ({ id, dados }) => atualizarCredenciaisCliente(id, dados),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["negocio-clientes", planejadorId] })
       setEditandoId(null)
     },
+  })
+
+  const atualizarStatus = useMutation({
+    mutationFn: ({ id, status: novoStatus }) => atualizarStatusCliente(id, { status: novoStatus }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["negocio-clientes", planejadorId] }),
   })
 
   // Deep-link/refresh: se o contexto não bate com a URL, backfill do nome a
@@ -49,7 +58,7 @@ export default function CarteiraPlanejadorPage() {
     e.stopPropagation()
     setEditandoId((atual) => (atual === c.id ? null : c.id))
     setForm({ nickname: c.nickname || "", senha: "" })
-    atualizar.reset()
+    atualizarCredenciais.reset()
   }
 
   function onSalvar(e, id) {
@@ -59,14 +68,14 @@ export default function CarteiraPlanejadorPage() {
     if (form.nickname) dados.nickname = form.nickname
     if (form.senha) dados.senha = form.senha
     if (Object.keys(dados).length === 0) return
-    atualizar.mutate({ id, dados })
+    atualizarCredenciais.mutate({ id, dados })
   }
 
   return (
     <Stage
       eyebrow="Nível Negócio → Planejador"
       title={`Carteira de ${nome}`}
-      description="Clientes desse planejador, vistos pelo admin. 'Entrar como cliente' abre o painel de verdade dele; 'Editar login' reseta nickname/senha."
+      description="Clientes desse planejador, vistos pelo admin — status ativo/excluído, editar login e 'Entrar como cliente' (abre o painel de verdade dele)."
     >
       <div className="flex justify-end mb-4">
         <Button onClick={() => entrarPlanejador(planejadorId)} disabled={carregando}>
@@ -102,7 +111,22 @@ export default function CarteiraPlanejadorPage() {
                     <Td className="font-mono text-text-dim">{formatarData(c.data_cadastro)}</Td>
                     <Td className="font-mono text-text-dim">{formatarMoeda(c.valor_honorario_mensal)}</Td>
                     <Td>
-                      <Pill variant={c.status === "ativo" ? "on" : "off"}>{c.status}</Pill>
+                      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
+                        {["ativo", "excluido"].map((s) => (
+                          <button
+                            key={s}
+                            disabled={c.status === s || atualizarStatus.isPending}
+                            onClick={() => atualizarStatus.mutate({ id: c.id, status: s })}
+                            className={`px-2 py-1 rounded text-[10.5px] font-mono border ${
+                              c.status === s
+                                ? "border-line text-text-faint opacity-40 cursor-default"
+                                : "border-line text-text-dim hover:text-text hover:border-text-faint"
+                            }`}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                      </div>
                     </Td>
                     <Td className="text-right whitespace-nowrap">
                       <button onClick={(e) => onEditar(e, c)} className="text-blue text-[12px] hover:underline mr-3">
@@ -131,14 +155,14 @@ export default function CarteiraPlanejadorPage() {
                               placeholder="deixe em branco pra manter"
                             />
                           </div>
-                          <Button type="submit" disabled={atualizar.isPending} className="mb-3">
-                            {atualizar.isPending ? "Salvando…" : "Salvar"}
+                          <Button type="submit" disabled={atualizarCredenciais.isPending} className="mb-3">
+                            {atualizarCredenciais.isPending ? "Salvando…" : "Salvar"}
                           </Button>
                           <Button type="button" variant="ghost" className="mb-3" onClick={() => setEditandoId(null)}>
                             Cancelar
                           </Button>
-                          {atualizar.isError && (
-                            <p className="text-red text-[12.5px] mb-3">{atualizar.error.message}</p>
+                          {atualizarCredenciais.isError && (
+                            <p className="text-red text-[12.5px] mb-3">{atualizarCredenciais.error.message}</p>
                           )}
                         </form>
                       </Td>

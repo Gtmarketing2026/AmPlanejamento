@@ -59,3 +59,11 @@ export const atualizarCredenciaisCliente = (id, dados) =>
 export const entrarComoPlanejador = (id) => comToken(apiPost(`/negocio/planejadores/${id}/entrar`, {}, auth()))
 
 export const entrarComoCliente = (id) => comToken(apiPost(`/negocio/clientes/${id}/entrar`, {}, auth()))
+
+export const atualizarStatusPlanejador = (id, dados) =>
+  comToken(apiPatch(`/negocio/planejadores/${id}/status`, dados, auth()))
+
+export const concederTrial = (id, dados) => comToken(apiPatch(`/negocio/planejadores/${id}/trial`, dados, auth()))
+
+export const atualizarStatusCliente = (id, dados) =>
+  comToken(apiPatch(`/negocio/clientes/${id}/status`, dados, auth()))
