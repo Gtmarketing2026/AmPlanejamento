@@ -70,18 +70,27 @@ Bacen, API REST, sem mensalidade fixa). Pontos importantes:
 
 ## Três níveis de acesso (Admin / Planejador / Cliente)
 
-Implementado. Existem **DOIS mecanismos de admin distintos e independentes**,
-coexistindo de propósito (o segundo foi adicionado depois, sem quebrar o
-primeiro que já estava em produção):
+Implementado. O admin é a tabela `admins` (separada de `profissionais`) —
+**nível mais alto**, dono/operador da plataforma. Não é um profissional com
+flag: sem cota, sem assinatura, sem cobrança. Toda a gestão administrativa
+(ativar/congelar/cancelar planejador, conceder trial, ativar/excluir
+cliente, ver métricas, editar login de qualquer nível) vive **só** no Painel
+do Negócio (`/negocio/*`) — nunca dentro do app do próprio planejador.
 
-1. **Suporte interno** (`profissionais.is_admin = true`) — mecanismo mais
-   antigo. Um profissional comum promovido a admin via essa flag. Bypass de
-   RLS via uma SEGUNDA conexão privilegiada (`DATABASE_URL_ADMIN`, role
-   `postgres`), usada em `get_db_admin`/`get_profissional_admin_atual`
-   (`app/api/deps.py`), só depois de confirmar `is_admin=true` na própria
-   linha do profissional (checado pela conexão restrita). Rotas: `/admin/*`
-   (`app/api/routes/admin.py`) — listagem de profissionais, ativar/desativar,
-   conceder trial, métricas de negócio (formato próprio, não usa a view).
+Existiu um mecanismo mais antigo (`profissionais.is_admin = true` — um
+profissional comum promovido a admin via flag, com um painel `/admin/*`
+acessível de dentro do próprio app dele) que foi **removido**: a gestão que
+ele oferecia (status do planejador, trial) foi migrada pra dentro do nível
+Negócio de verdade (`PATCH /negocio/planejadores/{id}/status` e `/trial`,
+ver abaixo) e estendida também pra clientes finais
+(`PATCH /negocio/clientes/{id}/status`). Não recriar esse painel dentro do
+`AppLayout` do planejador — se precisar de uma ação administrativa nova,
+ela entra em `/negocio/*`.
+
+1. ~~**Suporte interno**~~ (removido — não usar mais). O que restou dele:
+   `get_db_admin` em `app/api/deps.py` continua existindo, mas hoje só serve
+   pras rotas do cliente final (`GET /clientes/eu` e afins), que também
+   precisam de uma conexão sem contexto de RLS por profissional_id.
 
 2. **Negócio** (tabela `admins`, separada de `profissionais`) — nível mais
    alto, dono/operador da plataforma. Não é um profissional com flag: sem
@@ -101,6 +110,19 @@ primeiro que já estava em produção):
    `GET /negocio/financeiro/faturas` (faturas de todos os planejadores) e
    `GET/POST/DELETE /negocio/despesas` (custos operacionais do próprio
    negócio, tabela `despesas_operacionais`).
+
+   **Status e trial** (migrado do antigo `/admin/*`, agora estendido pra
+   clientes): `PATCH /negocio/planejadores/{id}/status` (ativa/congelada/
+   cancelada — congelar ou cancelar também pausa as conexões Open Finance
+   dos clientes dele), `PATCH /negocio/planejadores/{id}/trial` (concede/
+   encerra período de teste), `PATCH /negocio/clientes/{id}/status` (ativo/
+   excluido, com override direto — não passa pelo fluxo normal de motivo de
+   churn do planejador). `auditoria_log.ator_tipo` não tem um valor "admin"
+   (só `profissional`/`cliente_final`/`sistema`) — essas rotas gravam com
+   `ator_tipo='sistema'` e guardam o `admin_id` dentro do `detalhe` (JSONB)
+   pra manter rastreabilidade sem precisar migrar o schema. Frontend:
+   colunas Status/Teste em `PlanejadoresPage.jsx`, coluna Status em
+   `CarteiraPlanejadorPage.jsx`.
 
    **"Entrar como" (impersonação real, não uma view bespoke)**:
    `POST /negocio/planejadores/{id}/entrar` e
