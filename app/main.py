@@ -1,7 +1,17 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, categorias, clientes, faturas, importacoes, negocio, webhooks
+from app.api.routes import (
+    analytics,
+    assinatura,
+    auth,
+    categorias,
+    clientes,
+    faturas,
+    importacoes,
+    negocio,
+    webhooks,
+)
 from app.core.config import settings
 
 app = FastAPI(title="Fluxo API", version="0.1.0")
@@ -25,6 +35,8 @@ app.include_router(webhooks.router)
 app.include_router(importacoes.router)
 app.include_router(categorias.router)
 app.include_router(negocio.router)
+app.include_router(analytics.router)
+app.include_router(assinatura.router)
 
 
 @app.get("/health")

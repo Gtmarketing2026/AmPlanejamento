@@ -50,5 +50,13 @@ class Settings(BaseSettings):
     PRAZO_CONGELAMENTO_APOS_INADIMPLENCIA_DIAS: int = 5
     PRAZO_CANCELAMENTO_APOS_CONGELAMENTO_DIAS: int = 30
 
+    # Planos (valores mensais em BRL) — placeholders, ajustar conforme a
+    # precificação real. Essencial = upload manual; Completo = Open Finance +
+    # marca própria. valor_por_extra é cobrado por cliente acima da cota base.
+    PLANO_ESSENCIAL_VALOR_BASE: float = 149.00
+    PLANO_ESSENCIAL_VALOR_EXTRA: float = 29.00
+    PLANO_COMPLETO_VALOR_BASE: float = 249.00
+    PLANO_COMPLETO_VALOR_EXTRA: float = 39.00
+
 
 settings = Settings()

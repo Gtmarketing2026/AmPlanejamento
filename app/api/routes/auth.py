@@ -5,7 +5,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db_com_rls, get_db_sem_rls, get_profissional_id_atual
+from app.core.planos import tem_plano_ativo
 from app.core.security import criar_access_token, hash_senha, verificar_senha
+from app.models.assinatura import Assinatura
 from app.models.profissional import Profissional
 from app.schemas.cliente import LoginRequest, ProfissionalCadastro, ProfissionalPerfil, TokenResponse
 
@@ -70,4 +72,17 @@ def perfil_atual(
     profissional = db.get(Profissional, profissional_id)
     if not profissional:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profissional não encontrado")
-    return profissional
+
+    assinatura = db.scalar(select(Assinatura).where(Assinatura.profissional_id == profissional_id))
+    return ProfissionalPerfil(
+        id=profissional.id,
+        nome=profissional.nome,
+        email=profissional.email,
+        subdominio=profissional.subdominio,
+        status=profissional.status,
+        is_admin=profissional.is_admin,
+        trial_ate=profissional.trial_ate,
+        plano_ativo=tem_plano_ativo(db, profissional),
+        tem_assinatura=assinatura is not None,
+        tipo_plano=assinatura.tipo_plano if assinatura else None,
+    )

@@ -127,6 +127,12 @@ def listar_payments_da_subscription(asaas_subscription_id: str) -> list[dict]:
     return data.get("data", [])
 
 
+def get_payment(asaas_payment_id: str) -> dict:
+    """Retorna a cobrança (payment) — inclui invoiceUrl (link de pagamento
+    Pix/Boleto/Cartão) e status atual."""
+    return _get(f"/payments/{asaas_payment_id}")
+
+
 # ---------------------------------------------------------------------------
 # Webhook
 # ---------------------------------------------------------------------------

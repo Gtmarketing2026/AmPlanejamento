@@ -30,6 +30,10 @@ class ProfissionalPerfil(BaseModel):
     status: str
     is_admin: bool
     trial_ate: date | None
+    # Gating de plano (o frontend usa pra decidir travar/liberar o app)
+    plano_ativo: bool = False
+    tem_assinatura: bool = False
+    tipo_plano: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -42,6 +46,9 @@ class ClienteCriar(BaseModel):
     cnpj: str | None = None  # contexto PJ opcional (ex: Marina PF + Castro Design PJ)
     nome_pj: str | None = None
     valor_honorario_mensal: float | None = None
+    # Contexto CRM (editável depois na aba CRM também)
+    perfil_comportamental: str | None = None  # ex: Cauteloso, Arrojado, Disciplinado
+    objetivo_principal: str | None = None
     nickname: str  # login do cliente final
     senha: str
 
@@ -57,6 +64,8 @@ class ClienteResposta(BaseModel):
     status: str
     data_cadastro: date
     valor_honorario_mensal: float | None
+    perfil_comportamental: str | None
+    objetivo_principal: str | None
     criado_em: datetime
 
     model_config = {"from_attributes": True}
@@ -69,6 +78,8 @@ class ClienteAtualizar(BaseModel):
     cnpj: str | None = None
     nome_pj: str | None = None
     valor_honorario_mensal: float | None = None
+    perfil_comportamental: str | None = None
+    objetivo_principal: str | None = None
     nickname: str | None = None
     senha: str | None = None  # só re-hash se enviado
 

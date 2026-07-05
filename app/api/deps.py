@@ -135,6 +135,33 @@ def get_admin_id_atual(token: str = Depends(oauth2_scheme)) -> uuid.UUID:
     return uuid.UUID(admin_id)
 
 
+def exigir_plano_ativo(
+    profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
+) -> uuid.UUID:
+    """Gate de plano: 402 se o profissional ainda não tem plano ativo (nem
+    trial nem fatura paga). Usar nas rotas que são "usar o produto" (ex:
+    cadastrar cliente) -- cadastrar/logar/escolher plano NÃO passam por aqui."""
+    from app.core.planos import tem_plano_ativo
+    from app.models.profissional import Profissional
+
+    db = SessionLocal()
+    try:
+        db.execute(text("SET LOCAL app.current_profissional_id = :pid"), {"pid": str(profissional_id)})
+        db.execute(text("SET LOCAL app.is_admin = 'false'"))
+        profissional = db.get(Profissional, profissional_id)
+        ativo = profissional is not None and tem_plano_ativo(db, profissional)
+        db.commit()
+    finally:
+        db.close()
+
+    if not ativo:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail="Escolha e pague um plano para usar o Fluxo.",
+        )
+    return profissional_id
+
+
 def get_db_negocio(
     admin_id: uuid.UUID = Depends(get_admin_id_atual),
 ) -> Generator[Session, None, None]:

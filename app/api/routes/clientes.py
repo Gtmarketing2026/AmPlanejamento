@@ -5,7 +5,14 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_cliente_id_atual, get_db_admin, get_db_com_rls, get_db_sem_rls, get_profissional_id_atual
+from app.api.deps import (
+    exigir_plano_ativo,
+    get_cliente_id_atual,
+    get_db_admin,
+    get_db_com_rls,
+    get_db_sem_rls,
+    get_profissional_id_atual,
+)
 from app.core.config import settings
 from app.core.security import criar_access_token, hash_senha, verificar_senha
 from app.db.base import SessionLocalAdmin
@@ -39,6 +46,7 @@ def criar_cliente(
     dados: ClienteCriar,
     db: Session = Depends(get_db_com_rls),
     profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
+    _plano: uuid.UUID = Depends(exigir_plano_ativo),  # 402 se não tem plano ativo
 ):
     # nickname é único globalmente (login do cliente final não sabe o
     # subdomínio do profissional antecipadamente) — checagem via conexão
@@ -63,6 +71,8 @@ def criar_cliente(
         nickname=dados.nickname,
         senha_hash=hash_senha(dados.senha),
         valor_honorario_mensal=dados.valor_honorario_mensal,
+        perfil_comportamental=dados.perfil_comportamental,
+        objetivo_principal=dados.objetivo_principal,
         data_cadastro=date.today(),
     )
     db.add(cliente)
