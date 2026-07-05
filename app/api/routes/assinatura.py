@@ -69,6 +69,22 @@ def _montar_resposta(db: Session, profissional: Profissional) -> AssinaturaRespo
     )
 
 
+@router.get("/planos")
+def catalogo_planos():
+    """Catálogo de planos (valores) — pra tela de escolha renderizar os cards
+    sem hardcodar preço no frontend."""
+    return [
+        {
+            "tipo_plano": p["tipo_plano"],
+            "nome": p["nome"],
+            "valor_base": p["valor_base"],
+            "valor_por_extra": p["valor_por_extra"],
+            "clientes_inclusos": p["clientes_inclusos"],
+        }
+        for p in PLANOS.values()
+    ]
+
+
 @router.get("/eu", response_model=AssinaturaResposta)
 def minha_assinatura(
     db: Session = Depends(get_db_com_rls),
