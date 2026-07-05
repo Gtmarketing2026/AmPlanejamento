@@ -64,7 +64,16 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider
-      value={{ profissional, loading, autenticado: !!profissional, entrar, cadastrar, entrarComToken, sair }}
+      value={{
+        profissional,
+        loading,
+        autenticado: !!profissional,
+        entrar,
+        cadastrar,
+        entrarComToken,
+        recarregar: carregarPerfil,
+        sair,
+      }}
     >
       {children}
     </AuthContext.Provider>

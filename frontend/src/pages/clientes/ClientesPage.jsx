@@ -17,6 +17,8 @@ const FORM_VAZIO = {
   cnpj: "",
   nome_pj: "",
   valor_honorario_mensal: "",
+  perfil_comportamental: "",
+  objetivo_principal: "",
   nickname: "",
   senha: "",
 }
@@ -67,6 +69,8 @@ export default function ClientesPage() {
       cnpj: c.cnpj || "",
       nome_pj: c.nome_pj || "",
       valor_honorario_mensal: c.valor_honorario_mensal ?? "",
+      perfil_comportamental: c.perfil_comportamental || "",
+      objetivo_principal: c.objetivo_principal || "",
       nickname: c.nickname || c.documento, // sugere o CPF se ainda não tem nickname
       senha: "",
     })
@@ -92,6 +96,8 @@ export default function ClientesPage() {
       cnpj: form.cnpj || null,
       nome_pj: form.nome_pj || null,
       valor_honorario_mensal: form.valor_honorario_mensal ? Number(form.valor_honorario_mensal) : null,
+      perfil_comportamental: form.perfil_comportamental || null,
+      objetivo_principal: form.objetivo_principal || null,
       nickname: form.nickname,
     }
     try {
@@ -167,6 +173,25 @@ export default function ClientesPage() {
             <div className="grid grid-cols-4 gap-3">
               <Field label="CNPJ" value={form.cnpj} onChange={set("cnpj")} placeholder="opcional" />
               <Field label="Nome da empresa" value={form.nome_pj} onChange={set("nome_pj")} placeholder="ex: Castro Design" />
+            </div>
+
+            <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mt-2 mb-2">
+              Perfil (CRM — também editável na aba CRM)
+            </div>
+            <div className="grid grid-cols-4 gap-3">
+              <Field
+                label="Perfil comportamental"
+                value={form.perfil_comportamental}
+                onChange={set("perfil_comportamental")}
+                placeholder="ex: Cauteloso, Arrojado"
+              />
+              <Field
+                label="Objetivo principal"
+                value={form.objetivo_principal}
+                onChange={set("objetivo_principal")}
+                placeholder="ex: Aposentadoria aos 55"
+                className="col-span-2"
+              />
             </div>
 
             <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mt-2 mb-2">

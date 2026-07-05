@@ -6,14 +6,12 @@ import Button from "../../components/ui/Button"
 import PhoneFrame from "../../components/ui/PhoneFrame"
 import LockedOverlay from "../../components/ui/LockedOverlay"
 import Pill from "../../components/ui/Pill"
-import { usePlan } from "../../context/PlanContext"
 import { useAuth } from "../../context/AuthContext"
 import { whiteLabelMock as m } from "../../mocks/whiteLabel.mock"
 
 export default function MarcaPage() {
-  const { plano } = usePlan()
   const { profissional } = useAuth()
-  const bloqueado = plano === "essencial"
+  const bloqueado = profissional?.tipo_plano !== "completo"
   const [nomeExibido, setNomeExibido] = useState(profissional?.nome || "")
   const [corSelecionada, setCorSelecionada] = useState(m.cores[0])
   const [salvo, setSalvo] = useState(false)

@@ -23,7 +23,8 @@ export default function CadastroPage() {
     setEnviando(true)
     try {
       await cadastrar(form.nome, form.email, form.senha, form.subdominio)
-      navigate("/onboarding")
+      // Recém-cadastrado ainda não tem plano -> vai direto escolher/pagar.
+      navigate("/assinatura")
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : "Não foi possível cadastrar.")
     } finally {

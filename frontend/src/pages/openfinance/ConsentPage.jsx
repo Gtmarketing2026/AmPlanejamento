@@ -3,12 +3,12 @@ import PhoneFrame from "../../components/ui/PhoneFrame"
 import Card from "../../components/ui/Card"
 import Button from "../../components/ui/Button"
 import LockedOverlay from "../../components/ui/LockedOverlay"
-import { usePlan } from "../../context/PlanContext"
+import { useAuth } from "../../context/AuthContext"
 import { openFinanceMock as m } from "../../mocks/openFinance.mock"
 
 export default function ConsentPage() {
-  const { plano } = usePlan()
-  const bloqueado = plano === "essencial"
+  const { profissional } = useAuth()
+  const bloqueado = profissional?.tipo_plano !== "completo"
 
   return (
     <Stage

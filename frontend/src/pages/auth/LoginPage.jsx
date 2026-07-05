@@ -20,7 +20,7 @@ export default function LoginPage() {
     setEnviando(true)
     try {
       await entrar(email, senha)
-      navigate("/dashboard")
+      navigate("/clientes")
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : "Não foi possível entrar.")
     } finally {

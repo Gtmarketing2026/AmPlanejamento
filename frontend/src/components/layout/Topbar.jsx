@@ -1,7 +1,5 @@
 import { NavLink } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
-import NavGroup from "./NavGroup"
-import PlanToggle from "./PlanToggle"
 
 const tabClass = ({ isActive }) =>
   `px-3.5 py-2 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
@@ -10,6 +8,7 @@ const tabClass = ({ isActive }) =>
 
 export default function Topbar() {
   const { profissional, sair } = useAuth()
+  const planoCompleto = profissional?.tipo_plano === "completo"
 
   return (
     <div className="sticky top-0 z-40 bg-bg/92 backdrop-blur border-b border-line px-8 py-[18px] flex items-center justify-between flex-wrap gap-3.5">
@@ -23,35 +22,11 @@ export default function Topbar() {
         </div>
       </div>
 
-      <PlanToggle />
-
       <div className="flex items-center gap-1 bg-panel border border-line rounded-[10px] p-1 flex-wrap">
-        <NavLink to="/dashboard" className={tabClass}>Dashboard</NavLink>
+        <NavLink to="/clientes" className={tabClass}>Clientes</NavLink>
         <NavLink to="/crm" className={tabClass}>CRM</NavLink>
         <NavLink to="/painel-analitico" className={tabClass}>Painel Analítico</NavLink>
-
-        <NavGroup
-          label="Cadastros"
-          items={[
-            { to: "/clientes", label: "Cliente" },
-            { to: "/consentimento", label: "Consentimento do cliente", completoOnly: true },
-            { to: "/cadastros", label: "Banco / Categoria / Tag" },
-          ]}
-        />
-        <NavGroup
-          label="Financeiro"
-          items={[
-            { to: "/importar-extrato", label: "Importar extrato" },
-            { to: "/faturas", label: "Faturas" },
-          ]}
-        />
-        <NavGroup
-          label="Configurações"
-          items={[
-            { to: "/onboarding", label: "Onboarding" },
-            { to: "/marca", label: "Marca", completoOnly: true },
-          ]}
-        />
+        {planoCompleto && <NavLink to="/marca" className={tabClass}>Marca</NavLink>}
       </div>
 
       <div className="flex items-center gap-2">
