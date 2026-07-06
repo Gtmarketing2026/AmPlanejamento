@@ -1,39 +1,26 @@
-import { useEffect } from "react"
-import { useNavigate } from "react-router-dom"
+import { useState } from "react"
+import { useOutletContext } from "react-router-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Card from "../../components/ui/Card"
-import Pill from "../../components/ui/Pill"
-import DonutChart from "../../components/ui/DonutChart"
+import KpiStat from "../../components/ui/KpiStat"
 import BarRow from "../../components/ui/BarRow"
+import Tabs from "../../components/ui/Tabs"
 import SeletorCategoria from "../../components/ui/SeletorCategoria"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import {
   atualizarMinhaTransacao,
-  meuPerfilCliente,
   minhasCategorias,
   minhasSubcategorias,
   minhasTransacoes,
 } from "../../api/clientes"
-import { ApiError } from "../../api/client"
-import BannerImpersonacao from "../../components/negocio/BannerImpersonacao"
 import { formatarData, formatarMoeda } from "../../lib/format"
-import { getImpersonacao } from "../../lib/impersonacao"
-import { dashboardMock as m } from "../../mocks/dashboard.mock"
-import { getTokenCliente, setTokenCliente } from "./ClienteLoginPage"
 
 export default function ClienteDashboardPage() {
-  const navigate = useNavigate()
-  const token = getTokenCliente()
+  const { token } = useOutletContext()
   const qc = useQueryClient()
+  const [tab, setTab] = useState("fluxo")
 
-  const { data: perfil, error } = useQuery({
-    queryKey: ["cliente-eu", token],
-    queryFn: () => meuPerfilCliente(token),
-    enabled: !!token,
-    retry: false,
-  })
-
-  const { data: transacoes } = useQuery({
+  const { data: transacoes = [] } = useQuery({
     queryKey: ["cliente-eu-transacoes", token],
     queryFn: () => minhasTransacoes(token),
     enabled: !!token,
@@ -53,65 +40,66 @@ export default function ClienteDashboardPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] }),
   })
 
-  useEffect(() => {
-    if (!token || (error instanceof ApiError && error.status === 401)) {
-      setTokenCliente(null)
-      navigate("/cliente/login")
-    }
-  }, [token, error, navigate])
-
-  function sair() {
-    setTokenCliente(null)
-    navigate("/cliente/login")
-  }
-
-  const impersonando = getImpersonacao() === "cliente"
-
-  if (!token || !perfil) {
-    return <div className="min-h-screen bg-bg flex items-center justify-center text-text-dim">Carregando…</div>
-  }
+  // Fluxo de caixa calculado dos lançamentos reais
+  const entradas = transacoes.filter((t) => t.tipo === "entrada").reduce((s, t) => s + Math.abs(Number(t.valor)), 0)
+  const saidas = transacoes.filter((t) => t.tipo === "saida").reduce((s, t) => s + Math.abs(Number(t.valor)), 0)
+  const nomePorCategoria = Object.fromEntries((categorias || []).map((c) => [c.id, c.nome]))
+  const gastoPorCategoria = Object.entries(
+    transacoes
+      .filter((t) => t.tipo === "saida")
+      .reduce((acc, t) => {
+        const nome = nomePorCategoria[t.categoria_id] || "Sem categoria"
+        acc[nome] = (acc[nome] || 0) + Math.abs(Number(t.valor))
+        return acc
+      }, {})
+  )
+    .map(([label, valor]) => ({ label, valor }))
+    .sort((a, b) => b.valor - a.valor)
+  const maxGasto = Math.max(1, ...gastoPorCategoria.map((g) => g.valor))
 
   return (
-    <div className="min-h-screen bg-bg text-text">
-      {impersonando && <BannerImpersonacao nome={perfil.nome} />}
-      <div className="sticky top-0 z-40 bg-bg/92 backdrop-blur border-b border-line px-8 py-[18px] flex items-center justify-between">
-        <div>
-          <div className="text-[15px] font-semibold">Olá, {perfil.nome.split(" ")[0]}</div>
-          <div className="text-[11px] text-text-faint font-mono">
-            visão só de leitura — fale com seu planejador pra fazer mudanças
-          </div>
-        </div>
-        <button onClick={sair} className="px-3 py-2 rounded-[7px] text-[12.5px] text-text-faint hover:text-text-dim">
-          Sair
-        </button>
+    <div className="max-w-[900px] mx-auto px-8 py-10">
+      <div className="mb-5">
+        <Tabs
+          options={[
+            { value: "fluxo", n: "A", label: "Fluxo de caixa" },
+            { value: "lancamentos", n: "B", label: "Lançamentos" },
+            { value: "patrimonio", n: "C", label: "Patrimônio & Metas" },
+          ]}
+          active={tab}
+          onChange={setTab}
+        />
       </div>
 
-      <div className="max-w-[900px] mx-auto px-8 py-10">
-        <Card accent className="mb-5">
-          <div className="flex items-center gap-4">
-            <DonutChart pct={m.saudeFinanceira.pct} />
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-display font-semibold">Saúde financeira: {m.saudeFinanceira.status}</span>
-                <Pill variant="on">reserva OK</Pill>
-              </div>
-              <p className="text-text-dim text-[12.5px] mt-1">
-                Reserva de emergência cobre {m.saudeFinanceira.reservaMeses} meses de gastos · taxa de
-                poupança de {m.saudeFinanceira.taxaPoupanca}% no mês
-              </p>
+      {tab === "fluxo" && (
+        <>
+          <div className="grid grid-cols-2 gap-4 mb-5">
+            <KpiStat label="Entradas" value={formatarMoeda(entradas)} deltaColor="accent" />
+            <KpiStat label="Saídas" value={formatarMoeda(saidas)} deltaColor="red" />
+          </div>
+          <Card>
+            <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
+              Gasto por categoria
             </div>
-          </div>
-        </Card>
+            {gastoPorCategoria.length ? (
+              gastoPorCategoria.map((c) => (
+                <BarRow
+                  key={c.label}
+                  label={c.label}
+                  pct={Math.round((c.valor / maxGasto) * 100)}
+                  value={formatarMoeda(c.valor)}
+                />
+              ))
+            ) : (
+              <p className="text-text-faint text-sm">
+                Sem lançamentos ainda — importe um extrato em <strong>Importar extrato</strong>.
+              </p>
+            )}
+          </Card>
+        </>
+      )}
 
-        <Card className="mb-5">
-          <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
-            Gasto por categoria (dado ilustrativo)
-          </div>
-          {m.gastoPorCategoria.map((c) => (
-            <BarRow key={c.label} label={c.label} pct={c.pct} value={c.valor} />
-          ))}
-        </Card>
-
+      {tab === "lancamentos" && (
         <Card>
           <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
             Lançamentos · você pode ajustar a categoria sugerida
@@ -124,7 +112,7 @@ export default function ClienteDashboardPage() {
               <Th className="text-right">Valor</Th>
             </Thead>
             <tbody>
-              {transacoes?.map((t) => (
+              {transacoes.map((t) => (
                 <Tr key={t.id}>
                   <Td className="font-mono text-text-dim">{formatarData(t.data)}</Td>
                   <Td>{t.descricao}</Td>
@@ -140,21 +128,33 @@ export default function ClienteDashboardPage() {
                   </Td>
                   <Td className={`text-right font-mono ${t.tipo === "entrada" ? "text-accent" : "text-red"}`}>
                     {t.tipo === "entrada" ? "+ " : "- "}
-                    {formatarMoeda(t.valor)}
+                    {formatarMoeda(Math.abs(Number(t.valor)))}
                   </Td>
                 </Tr>
               ))}
-              {!transacoes?.length && (
+              {!transacoes.length && (
                 <Tr>
                   <Td colSpan={4} className="text-text-faint text-center py-6">
-                    Nenhum lançamento ainda.
+                    Nenhum lançamento ainda — importe um extrato em Importar extrato.
                   </Td>
                 </Tr>
               )}
             </tbody>
           </Table>
         </Card>
-      </div>
+      )}
+
+      {tab === "patrimonio" && (
+        <Card>
+          <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
+            Patrimônio & Metas
+          </div>
+          <p className="text-text-dim text-sm">
+            Suas metas e projeção de patrimônio aparecem aqui — essa parte é montada junto com seu
+            planejador e entra numa próxima etapa.
+          </p>
+        </Card>
+      )}
     </div>
   )
 }

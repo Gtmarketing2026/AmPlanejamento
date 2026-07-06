@@ -21,3 +21,24 @@ export const minhasTransacoes = (token) => apiGet("/clientes/eu/transacoes", { t
 
 export const atualizarMinhaTransacao = (token, id, dados) =>
   apiPatch(`/clientes/eu/transacoes/${id}`, dados, { token })
+
+const BASE_URL = import.meta.env.VITE_API_BASE_URL
+
+export async function importarMeuExtrato(token, { tipoDocumento, arquivo }) {
+  const form = new FormData()
+  form.append("tipo_documento", tipoDocumento)
+  form.append("arquivo", arquivo)
+  const res = await fetch(`${BASE_URL}/clientes/eu/importacoes`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    body: form,
+  })
+  const data = await res.json()
+  if (!res.ok) throw new Error(data?.detail || `Erro ${res.status}`)
+  return data
+}
+
+export const listarMinhasImportacoes = (token) => apiGet("/clientes/eu/importacoes", { token })
+
+export const excluirMinhaImportacao = (token, id) =>
+  apiDelete(`/clientes/eu/importacoes/${id}`, undefined, { token })

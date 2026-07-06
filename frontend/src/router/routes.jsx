@@ -17,7 +17,9 @@ import PainelAnaliticoPage from "../pages/painelAnalitico/PainelAnaliticoPage"
 import ImportarExtratoPage from "../pages/importExtrato/ImportarExtratoPage"
 import CadastrosPage from "../pages/cadastros/CadastrosPage"
 import ClienteLoginPage from "../pages/clienteFinal/ClienteLoginPage"
+import ClienteLayout from "../layouts/ClienteLayout"
 import ClienteDashboardPage from "../pages/clienteFinal/ClienteDashboardPage"
+import ClienteImportarPage from "../pages/clienteFinal/ClienteImportarPage"
 import NegocioLayout from "../layouts/NegocioLayout"
 import NegocioLoginPage from "../pages/negocio/NegocioLoginPage"
 import PainelNegocioPage from "../pages/negocio/PainelNegocioPage"
@@ -36,7 +38,13 @@ export const router = createBrowserRouter([
       { path: "/negocio/login", element: <NegocioLoginPage /> },
     ],
   },
-  { path: "/cliente/dashboard", element: <ClienteDashboardPage /> },
+  {
+    element: <ClienteLayout />,
+    children: [
+      { path: "/cliente/dashboard", element: <ClienteDashboardPage /> },
+      { path: "/cliente/importar", element: <ClienteImportarPage /> },
+    ],
+  },
   {
     element: <NegocioLayout />,
     children: [
