@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,11 +13,14 @@ from app.api.deps import (
     get_db_sem_rls,
     get_profissional_id_atual,
 )
+from app.api.routes.importacoes import processar_upload
 from app.core.config import settings
 from app.core.security import criar_access_token, hash_senha, verificar_senha
 from app.db.base import SessionLocalAdmin
+from app.integrations.supabase_storage import excluir_arquivo
 from app.models.categoria import Categoria, Subcategoria
 from app.models.cliente import Cliente
+from app.models.importacao_extrato import ImportacaoExtrato
 from app.models.transacao import Transacao
 from app.schemas.categoria import CategoriaResposta, SubcategoriaResposta
 from app.schemas.cliente import (
@@ -28,7 +31,7 @@ from app.schemas.cliente import (
     ClienteResposta,
     TokenResponse,
 )
-from app.schemas.importacao import TransacaoAtualizar, TransacaoResposta
+from app.schemas.importacao import ImportacaoResposta, TransacaoAtualizar, TransacaoResposta
 
 router = APIRouter(prefix="/clientes", tags=["clientes"])
 
@@ -254,3 +257,70 @@ def atualizar_minha_transacao(
     db.flush()
     db.refresh(transacao)
     return transacao
+
+
+# ---------------------------------------------------------------------------
+# Importação de extrato/fatura PELO PRÓPRIO CLIENTE (função dele — o
+# planejador também pode importar pela rota /importacoes). Usa get_db_admin
+# (privilegiada) filtrando sempre pelo cliente_id do token, mesmo padrão dos
+# outros /clientes/eu/*.
+# ---------------------------------------------------------------------------
+
+
+@router.post("/eu/importacoes", response_model=ImportacaoResposta, status_code=status.HTTP_201_CREATED)
+async def importar_meu_extrato(
+    tipo_documento: str = Form(...),
+    periodo_inicio: date | None = Form(None),
+    periodo_fim: date | None = Form(None),
+    arquivo: UploadFile = File(...),
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+
+    conteudo = await arquivo.read()
+    return processar_upload(
+        db, cliente_id, cliente.profissional_id, tipo_documento,
+        arquivo.filename or "arquivo", conteudo, periodo_inicio, periodo_fim, "cliente_final",
+    )
+
+
+@router.get("/eu/importacoes", response_model=list[ImportacaoResposta])
+def listar_minhas_importacoes(
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    return db.scalars(
+        select(ImportacaoExtrato)
+        .where(ImportacaoExtrato.cliente_id == cliente_id)
+        .order_by(ImportacaoExtrato.criado_em.desc())
+    ).all()
+
+
+@router.delete("/eu/importacoes/{importacao_id}", status_code=status.HTTP_200_OK)
+def excluir_minha_importacao(
+    importacao_id: uuid.UUID,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    importacao = db.scalar(
+        select(ImportacaoExtrato).where(
+            ImportacaoExtrato.id == importacao_id, ImportacaoExtrato.cliente_id == cliente_id
+        )
+    )
+    if not importacao:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importação não encontrada")
+
+    transacoes = db.scalars(select(Transacao).where(Transacao.importacao_id == importacao_id)).all()
+    qtd = len(transacoes)
+    for t in transacoes:
+        db.delete(t)
+    try:
+        excluir_arquivo(importacao.arquivo_url)
+    except Exception:
+        pass
+    db.delete(importacao)
+    db.flush()
+    return {"transacoes_removidas": qtd}

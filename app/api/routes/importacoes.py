@@ -60,30 +60,27 @@ def _obter_ou_criar_conta_manual(
     return conta
 
 
-@router.post("/importacoes", response_model=ImportacaoResposta, status_code=status.HTTP_201_CREATED)
-async def criar_importacao(
-    cliente_id: uuid.UUID = Form(...),
-    tipo_documento: str = Form(...),
-    periodo_inicio: date | None = Form(None),
-    periodo_fim: date | None = Form(None),
-    arquivo: UploadFile = File(...),
-    db: Session = Depends(get_db_com_rls),
-    profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
-):
+def processar_upload(
+    db: Session,
+    cliente_id: uuid.UUID,
+    profissional_id: uuid.UUID,
+    tipo_documento: str,
+    nome_arquivo: str,
+    conteudo: bytes,
+    periodo_inicio: date | None,
+    periodo_fim: date | None,
+    enviado_por: str,  # 'profissional' | 'cliente_final'
+) -> ImportacaoExtrato:
+    """Núcleo do upload de extrato/fatura, compartilhado entre a rota do
+    planejador (/importacoes) e a do cliente final (/clientes/eu/importacoes):
+    valida formato, salva no storage, faz parse + dedup + classificação por IA.
+    O caller já validou o cliente e a permissão; aqui só processa."""
     if tipo_documento not in TIPOS_DOCUMENTO:
         raise HTTPException(status_code=422, detail="tipo_documento inválido")
 
-    # RLS garante que só clientes do próprio profissional são encontrados aqui.
-    cliente = db.get(Cliente, cliente_id)
-    if not cliente:
-        raise HTTPException(status_code=404, detail="Cliente não encontrado")
-
-    nome_arquivo = arquivo.filename or "arquivo"
     extensao = nome_arquivo.rsplit(".", 1)[-1].lower() if "." in nome_arquivo else ""
     if extensao not in FORMATOS_ACEITOS:
         raise HTTPException(status_code=422, detail="Formato aceito: OFX, CSV ou PDF")
-
-    conteudo = await arquivo.read()
     if len(conteudo) > TAMANHO_MAXIMO_BYTES:
         raise HTTPException(status_code=413, detail="Arquivo maior que 10MB")
 
@@ -100,7 +97,7 @@ async def criar_importacao(
         periodo_inicio=periodo_inicio,
         periodo_fim=periodo_fim,
         status="processando",
-        enviado_por="profissional",
+        enviado_por=enviado_por,
     )
     db.add(importacao)
     db.flush()
@@ -192,6 +189,28 @@ async def criar_importacao(
     db.flush()
     db.refresh(importacao)
     return importacao
+
+
+@router.post("/importacoes", response_model=ImportacaoResposta, status_code=status.HTTP_201_CREATED)
+async def criar_importacao(
+    cliente_id: uuid.UUID = Form(...),
+    tipo_documento: str = Form(...),
+    periodo_inicio: date | None = Form(None),
+    periodo_fim: date | None = Form(None),
+    arquivo: UploadFile = File(...),
+    db: Session = Depends(get_db_com_rls),
+    profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
+):
+    # RLS garante que só clientes do próprio profissional são encontrados aqui.
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+
+    conteudo = await arquivo.read()
+    return processar_upload(
+        db, cliente_id, profissional_id, tipo_documento,
+        arquivo.filename or "arquivo", conteudo, periodo_inicio, periodo_fim, "profissional",
+    )
 
 
 @router.get("/importacoes", response_model=list[ImportacaoResposta])
