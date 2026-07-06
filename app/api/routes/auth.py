@@ -38,14 +38,11 @@ def cadastrar_profissional(dados: ProfissionalCadastro, db: Session = Depends(ge
 
     token = criar_access_token(str(profissional.id))
 
-    # TODO: neste ponto também é necessário:
-    #   1. Criar o customer no Asaas: asaas.criar_customer(nome, email, cpf_cnpj)
-    #   2. Criar o registro de Assinatura (ainda não existe nesta rota — hoje
-    #      só o Profissional é criado) com asaas_customer_id preenchido
-    #   3. Só então redirecionar pro checkout/coleta de forma de pagamento
-    # Não implementado neste esqueleto porque depende de decidir o fluxo de
-    # seleção de plano (Essencial/Completo) na tela de cadastro — ver
-    # fluxo-app.html tela 1 e 7 (Onboarding) pra referência de UX.
+    # O cadastro só cria o Profissional (captura a lead) — sem plano ativo ele
+    # não consegue usar o produto (ver core/planos.py e exigir_plano_ativo).
+    # A criação do customer/subscription no Asaas + Assinatura + primeira
+    # Fatura acontece quando ele ESCOLHE um plano em
+    # POST /assinatura/escolher-plano (app/api/routes/assinatura.py), não aqui.
     return TokenResponse(access_token=token)
 
 

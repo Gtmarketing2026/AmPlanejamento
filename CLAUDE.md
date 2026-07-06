@@ -30,10 +30,10 @@ Completo) ou upload manual de extrato/fatura (Plano Essencial).
 - Frontend real (React/Vue/etc.) consumindo a API — hoje só há o wireframe estático
 - Maioria dos endpoints da API (categorias, subcategorias, instituições, tags,
   transações, metas, CRM, importação de extrato, painel analítico)
-- **Fluxo de cadastro completo com Asaas**: a rota de signup hoje só cria o
-  Profissional — falta criar o customer no Asaas, criar o registro de
-  Assinatura, e coletar a forma de pagamento (checkout). Ver TODO em
-  `app/api/routes/auth.py`.
+- ~~Fluxo de cadastro completo com Asaas~~ — **construído (sandbox)**. Ver a
+  seção "Planos, checkout e gating de plano" abaixo. Falta só o go-live de
+  produção (`ASAAS_ENV=production` + API key real — confirmar com a usuária
+  antes) e a régua de inadimplência automatizada (próximo item).
 - **Régua de inadimplência automatizada**: o webhook já marca fatura como
   "atrasada" no evento PAYMENT_OVERDUE, mas ainda não dispara o congelamento
   D+5 / cancelamento D+35 — isso precisa de um job (`jobs/inadimplencia.py`,
@@ -67,6 +67,41 @@ Bacen, API REST, sem mensalidade fixa). Pontos importantes:
 - **Atualizar valor da subscription só afeta cobranças futuras** — se
   precisar corrigir uma fatura já gerada, é outro endpoint (não implementado
   aqui ainda).
+
+## Planos, checkout e gating de plano
+
+Implementado (Asaas **sandbox**). O cadastro (`POST /auth/cadastro`) só cria o
+Profissional — captura a lead, mas **sem plano ativo nada funciona**. O gating
+está em `app/core/planos.py::tem_plano_ativo` (plano ativo = `trial_ate` no
+futuro OU pelo menos uma `fatura` com `status='paga'`) e na dependência
+`app/api/deps.py::exigir_plano_ativo` (retorna **402** — aplicada em
+`POST /clientes`, a ação central de "usar o produto"). `GET /auth/me` devolve
+`plano_ativo`/`tem_assinatura`/`tipo_plano` pro frontend travar/liberar.
+
+Checkout: `POST /assinatura/escolher-plano` (`app/api/routes/assinatura.py`)
+cria customer + subscription no Asaas, registra `Assinatura` + primeira
+`Fatura` (pendente) e devolve o `invoice_url` (link Pix/Boleto/Cartão).
+`GET /assinatura/eu` busca o link ao vivo; `GET /assinatura/planos` é o
+catálogo (valores em `settings.PLANO_*`). O webhook Asaas já existente marca a
+fatura como `paga` → destrava o app. Frontend: `AssinaturaPage` (escolha →
+pagamento → "aguardando pagamento" → plano ativo + upgrade), banner de paywall
+no `AppLayout` enquanto `plano_ativo === false`.
+
+**Grandfathering**: quando o gating subiu, os planejadores reais que já
+existiam (`contato@cursosonlinevrrj.com.br`, `afiliado.0793@gmail.com`)
+ficariam travados — foram liberados via `trial_ate = 2027-12-31` (mecanismo de
+trial, não pagamento forjado). A usuária/admin pode revogar isso no Painel do
+Negócio quando quiser. Qualquer planejador NOVO passa pelo fluxo de plano.
+
+**Não confundir** a nav do planejador com a do cliente: hoje o planejador só
+tem **Clientes / CRM / Painel Analítico / Marca** (Marca só no plano completo)
++ Assinatura. Dashboard de conciliação é por-cliente (entra via listagem de
+clientes ou "entrar como"); importar extrato/fatura e consentimento Open
+Finance são função do cliente final, não menus do planejador.
+
+**Pendente**: go-live de produção (`ASAAS_ENV=production` + API key real —
+confirmar com a usuária antes, envolve dinheiro real) e a régua de
+inadimplência automatizada (job D+5/D+35).
 
 ## Três níveis de acesso (Admin / Planejador / Cliente)
 
