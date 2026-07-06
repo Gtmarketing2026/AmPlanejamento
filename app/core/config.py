@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     # Google Calendar
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
+    # URL de callback registrada no Google Cloud Console (ex:
+    # https://fluxo-backend.vercel.app/crm/google/callback). Vazio = OAuth
+    # desativado (a UI mostra "integração não configurada").
+    GOOGLE_REDIRECT_URI: str = ""
 
     # Pagamento
     PAYMENT_GATEWAY_SECRET_KEY: str = ""

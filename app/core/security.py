@@ -47,6 +47,26 @@ def decodificar_token_cliente(token: str) -> str | None:
         return None
 
 
+def criar_state_oauth_google(profissional_id: str) -> str:
+    """Token curto (10 min) que viaja no parâmetro `state` do OAuth do Google.
+    A callback do Google chega sem Authorization header, então é esse state
+    assinado que diz — de forma não-forjável — qual profissional está
+    conectando a conta."""
+    expira_em = datetime.now(timezone.utc) + timedelta(minutes=10)
+    payload = {"sub": profissional_id, "tipo": "google_oauth_state", "exp": expira_em}
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+
+
+def decodificar_state_oauth_google(token: str) -> str | None:
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("tipo") != "google_oauth_state":
+            return None
+        return payload.get("sub")
+    except JWTError:
+        return None
+
+
 def decodificar_token_admin(token: str) -> str | None:
     """Retorna o admin_id do token, ou None se inválido/expirado/de outro tipo.
     Nível "Negócio" — nunca aceitar aqui um token de profissional ou de
