@@ -55,8 +55,18 @@ export default function PainelAnaliticoPage() {
         <KpiStat label="Clientes ativos" value={m.clientes_ativos} />
         <KpiStat label="Clientes que saíram" value={m.clientes_churned} delta={`churn ${pct(m.taxa_churn_pct)}`} deltaColor="red" />
         <KpiStat label="Ticket médio" value={formatarMoeda(m.ticket_medio)} delta="honorário mensal / cliente ativo" />
-        <KpiStat label="LTV médio realizado" value={formatarMoeda(m.ltv_medio_realizado)} deltaColor="accent" />
-        <KpiStat label="LTV projetado" value={formatarMoeda(m.ltv_projetado)} delta="ticket × retenção observada" />
+        <KpiStat
+          label="LTV médio realizado"
+          value={formatarMoeda(m.ltv_medio_realizado)}
+          deltaColor="accent"
+          info="Honorário mensal × meses desde o cadastro de cada cliente (média da carteira). Cresce com o tempo e assume o honorário fixo — só considera o que você cadastra em cada cliente."
+        />
+        <KpiStat
+          label="LTV projetado"
+          value={formatarMoeda(m.ltv_projetado)}
+          delta="ticket × retenção observada"
+          info="Ticket médio × retenção média dos clientes que já saíram. Enquanto não há churn, usa um fallback de 12 meses."
+        />
       </div>
 
       <Card>

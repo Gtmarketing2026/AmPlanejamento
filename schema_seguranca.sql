@@ -598,10 +598,10 @@ SELECT
     ROUND(AVG(meses_relacionamento) FILTER (WHERE status = 'excluido'), 1) AS retencao_media_churn_meses,
     ROUND(AVG(ltv_realizado), 2)                                AS ltv_medio_realizado,
     -- LTV projetado: ticket médio × retenção média observada nos clientes que já saíram.
-    -- Se ainda não há churn suficiente pra ser confiável, cai no fallback de 24 meses.
+    -- Se ainda não há churn suficiente pra ser confiável, cai no fallback de 12 meses.
     ROUND(
         AVG(valor_honorario_mensal) FILTER (WHERE status = 'ativo')
-        * COALESCE(NULLIF(AVG(meses_relacionamento) FILTER (WHERE status = 'excluido'), 0), 24)
+        * COALESCE(NULLIF(AVG(meses_relacionamento) FILTER (WHERE status = 'excluido'), 0), 12)
     , 2)                                                         AS ltv_projetado
 FROM vw_retencao_clientes
 GROUP BY profissional_id;
