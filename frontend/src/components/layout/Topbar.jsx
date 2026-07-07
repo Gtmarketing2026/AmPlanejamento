@@ -8,7 +8,7 @@ const tabClass = ({ isActive }) =>
 
 export default function Topbar() {
   const { profissional, sair } = useAuth()
-  const planoCompleto = profissional?.tipo_plano === "completo"
+  const podeMarca = !!profissional?.pode_editar_marca
 
   return (
     <div className="sticky top-0 z-40 bg-bg/92 backdrop-blur border-b border-line px-8 py-[18px] flex items-center justify-between flex-wrap gap-3.5">
@@ -23,10 +23,11 @@ export default function Topbar() {
       </div>
 
       <div className="flex items-center gap-1 bg-panel border border-line rounded-[10px] p-1 flex-wrap">
+        <NavLink to="/inicio" className={tabClass}>Início</NavLink>
         <NavLink to="/clientes" className={tabClass}>Clientes</NavLink>
         <NavLink to="/crm" className={tabClass}>CRM</NavLink>
         <NavLink to="/painel-analitico" className={tabClass}>Painel Analítico</NavLink>
-        {planoCompleto && <NavLink to="/marca" className={tabClass}>Marca</NavLink>}
+        {podeMarca && <NavLink to="/marca" className={tabClass}>Marca</NavLink>}
       </div>
 
       <div className="flex items-center gap-2">

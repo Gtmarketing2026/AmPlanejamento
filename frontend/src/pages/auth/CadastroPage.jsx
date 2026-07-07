@@ -42,7 +42,7 @@ export default function CadastroPage() {
         whatsapp: form.whatsapp ? form.whatsapp.replace(/\D/g, "") : null,
       })
       // Recém-cadastrado entra em trial de 7 dias -> já consegue usar o produto.
-      navigate("/clientes")
+      navigate("/inicio")
     } catch (err) {
       setErro(err instanceof ApiError ? err.message : "Não foi possível cadastrar.")
     } finally {

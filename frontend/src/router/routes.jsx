@@ -5,6 +5,7 @@ import ProtectedRoute from "./ProtectedRoute"
 
 import LoginPage from "../pages/auth/LoginPage"
 import CadastroPage from "../pages/auth/CadastroPage"
+import InicioPage from "../pages/inicio/InicioPage"
 import ClientesPage from "../pages/clientes/ClientesPage"
 import ConsentPage from "../pages/openfinance/ConsentPage"
 import DashboardPage from "../pages/dashboard/DashboardPage"
@@ -61,7 +62,8 @@ export const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
-          { path: "/", element: <Navigate to="/clientes" replace /> },
+          { path: "/", element: <Navigate to="/inicio" replace /> },
+          { path: "/inicio", element: <InicioPage /> },
           { path: "/dashboard/:clienteId", element: <DashboardPage /> },
           { path: "/clientes", element: <ClientesPage /> },
           { path: "/consentimento", element: <ConsentPage /> },
@@ -78,5 +80,5 @@ export const router = createBrowserRouter([
       },
     ],
   },
-  { path: "*", element: <Navigate to="/clientes" replace /> },
+  { path: "*", element: <Navigate to="/inicio" replace /> },
 ])
