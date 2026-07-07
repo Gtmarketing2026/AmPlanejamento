@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Card from "../../../components/ui/Card"
 import Button from "../../../components/ui/Button"
@@ -174,6 +174,24 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
   const subcategoriasDaCategoria = (subcategorias || []).filter(
     (s) => !f.categoria_id || s.categoria_id === f.categoria_id
   )
+
+  // Totais da lista filtrada (respeitando busca/filtros/mês/previstos) --
+  // classificação neutra não soma, mesmo padrão do resto do app.
+  const neutras = useMemo(
+    () => new Set((categorias || []).filter((c) => c.tipo === "neutra").map((c) => c.id)),
+    [categorias]
+  )
+  const totais = useMemo(() => {
+    let entradas = 0
+    let saidas = 0
+    for (const t of transacoes) {
+      if (neutras.has(t.categoria_id)) continue
+      const valor = Math.abs(Number(t.valor))
+      if (t.tipo === "entrada") entradas += valor
+      else saidas += valor
+    }
+    return { entradas, saidas, resultado: entradas - saidas }
+  }, [transacoes, neutras])
 
   const [mensagemReclassificacao, setMensagemReclassificacao] = useState(null)
   const [promptEmpresa, setPromptEmpresa] = useState(null) // id da transação a mandar pro PJ
@@ -459,6 +477,19 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
       {mensagemReclassificacao && (
         <div className="bg-accent/10 text-accent text-[12.5px] rounded-[9px] px-3.5 py-2 mb-3">
           {mensagemReclassificacao}
+        </div>
+      )}
+
+      {!!transacoes.length && (
+        <div className="flex items-center gap-4 flex-wrap text-[12.5px] mb-3 px-0.5">
+          <span className="text-text-faint">
+            {transacoes.length} lançamento{transacoes.length === 1 ? "" : "s"}
+          </span>
+          <span className="font-mono text-accent">Entradas: {formatarMoeda(totais.entradas)}</span>
+          <span className="font-mono text-red">Saídas: {formatarMoeda(totais.saidas)}</span>
+          <span className={`font-mono ${totais.resultado >= 0 ? "text-accent" : "text-red"}`}>
+            Resultado: {formatarMoeda(totais.resultado)}
+          </span>
         </div>
       )}
 
