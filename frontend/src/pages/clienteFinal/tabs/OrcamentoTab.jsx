@@ -81,6 +81,14 @@ export default function OrcamentoTab({ token, contexto = "PF" }) {
   // reserva de emergência = 6x os gastos médios do mês.
   const reservaIdeal = gastosReais * 6
 
+  // % dos gastos reais em relação à renda -- excesso (ou economia) do mês.
+  const pctGastoVsRenda = renda > 0 ? Math.round((gastosReais / renda) * 100) : 0
+  const pctExcesso = renda > 0 ? Math.round(((gastosReais - renda) / renda) * 100) : 0
+
+  // Se cumprir as metas (gastar só o orçado), sobra mensal e total no ano.
+  const economiaMensalComMetas = sobraPlano
+  const economiaAnualComMetas = sobraPlano * 12
+
   // Categoria continua disponível mesmo com uma meta já criada -- só não
   // deixa repetir exatamente o mesmo par categoria+subcategoria (o backend
   // também garante isso, aqui é só pra já vir com a subcategoria zerada).
@@ -229,6 +237,21 @@ export default function OrcamentoTab({ token, contexto = "PF" }) {
           </div>
 
           <div className="flex flex-col gap-2 mt-4">
+            {renda > 0 && (
+              <div className="bg-panel-2 rounded-[9px] px-4 py-3 text-[12.5px]">
+                {gastosReais > renda ? (
+                  <>
+                    Você gasta <strong className="text-red">{formatarMoeda(gastosReais - renda)}</strong> (
+                    <strong className="text-red">{pctExcesso}%</strong>) a mais do que ganha este mês.
+                  </>
+                ) : (
+                  <>
+                    Você está gastando <strong className="text-accent">{pctGastoVsRenda}%</strong> da sua renda este mês
+                    — economizando {formatarMoeda(sobraAtual)} ({100 - pctGastoVsRenda}%).
+                  </>
+                )}
+              </div>
+            )}
             <div className="bg-panel-2 rounded-[9px] px-4 py-3 text-[12.5px]">
               {economia > 0 ? (
                 <>
@@ -244,6 +267,13 @@ export default function OrcamentoTab({ token, contexto = "PF" }) {
                 <>Seus gastos reais estão batendo com o plano. 👏</>
               )}
             </div>
+            {economiaMensalComMetas > 0 && (
+              <div className="bg-panel-2 rounded-[9px] px-4 py-3 text-[12.5px]">
+                Ao cumprir as metas estipuladas, você economiza{" "}
+                <strong className="text-accent">{formatarMoeda(economiaMensalComMetas)}</strong> todos os meses —{" "}
+                <strong className="text-accent">{formatarMoeda(economiaAnualComMetas)}</strong> no ano.
+              </div>
+            )}
             {gastosReais > 0 && (
               <div className="bg-panel-2 rounded-[9px] px-4 py-3 text-[12.5px]">
                 De acordo com seus gastos médios atuais, a reserva de emergência ideal pra sua segurança é de{" "}
@@ -319,7 +349,8 @@ export default function OrcamentoTab({ token, contexto = "PF" }) {
 
         <div className="flex flex-col gap-3">
           {segmentos.map((o) => {
-            const pct = o.valor_orcado ? Math.min(100, Math.round((o.valor_realizado / o.valor_orcado) * 100)) : 0
+            const pctReal = o.valor_orcado ? Math.round((o.valor_realizado / o.valor_orcado) * 100) : 0
+            const pct = Math.min(100, pctReal)
             const estourou = Number(o.valor_realizado) > Number(o.valor_orcado)
             const restante = Number(o.valor_orcado) - Number(o.valor_realizado)
             return (
@@ -355,11 +386,17 @@ export default function OrcamentoTab({ token, contexto = "PF" }) {
                     <button onClick={() => excluir.mutate(o.id)} className="text-text-faint hover:text-red text-[11.5px]">✕</button>
                   </div>
                 </div>
-                <div className="h-2 rounded-full bg-panel-2 overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${pct}%`, background: estourou ? "var(--color-red)" : o.cor }} />
+                <div className="h-2.5 rounded-full bg-panel-2 overflow-hidden">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width: `${pct}%`, background: estourou ? "var(--color-red)" : o.cor }}
+                  />
                 </div>
                 <div className="flex items-center justify-between text-[11px] font-mono text-text-faint mt-1.5">
-                  <span>{formatarMoeda(o.valor_realizado)} de {formatarMoeda(o.valor_orcado)}</span>
+                  <span>
+                    {formatarMoeda(o.valor_realizado)} de {formatarMoeda(o.valor_orcado)}{" "}
+                    <strong className={estourou ? "text-red" : "text-text-dim"}>({pctReal}%)</strong>
+                  </span>
                   <span className={estourou ? "text-red" : "text-text-dim"}>
                     {estourou ? `${formatarMoeda(-restante)} acima` : `Restam ${formatarMoeda(restante)}`}
                   </span>
