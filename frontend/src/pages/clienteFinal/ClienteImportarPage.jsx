@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Card from "../../components/ui/Card"
 import Button from "../../components/ui/Button"
 import Pill from "../../components/ui/Pill"
-import { Select } from "../../components/ui/Field"
+import Field, { Select } from "../../components/ui/Field"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import {
   excluirMinhaImportacao,
@@ -21,7 +21,9 @@ export default function ClienteImportarPage() {
   const inputRef = useRef(null)
   const [tipoDocumento, setTipoDocumento] = useState("extrato")
   const [arquivo, setArquivo] = useState(null)
+  const [senhaPdf, setSenhaPdf] = useState("")
   const [erro, setErro] = useState(null)
+  const ehPdf = arquivo?.name?.toLowerCase().endsWith(".pdf")
 
   const { data: importacoes = [] } = useQuery({
     queryKey: ["cliente-eu-importacoes", token],
@@ -30,11 +32,12 @@ export default function ClienteImportarPage() {
   })
 
   const importar = useMutation({
-    mutationFn: () => importarMeuExtrato(token, { tipoDocumento, arquivo }),
+    mutationFn: () => importarMeuExtrato(token, { tipoDocumento, senhaPdf: senhaPdf || null, arquivo }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cliente-eu-importacoes", token] })
       qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] })
       setArquivo(null)
+      setSenhaPdf("")
       if (inputRef.current) inputRef.current.value = ""
     },
     onError: (e) => setErro(e.message),
@@ -79,10 +82,26 @@ export default function ClienteImportarPage() {
               className="text-[12.5px] text-text-dim file:mr-3 file:py-2 file:px-3 file:rounded-[7px] file:border file:border-line file:bg-panel-2 file:text-text-dim"
             />
           </div>
+          {ehPdf && (
+            <div className="mb-3 w-48">
+              <Field
+                label="Senha do PDF (se houver)"
+                type="password"
+                value={senhaPdf}
+                onChange={(e) => setSenhaPdf(e.target.value)}
+                placeholder="opcional"
+              />
+            </div>
+          )}
           <Button type="submit" className="mb-3" disabled={!arquivo || importar.isPending}>
             {importar.isPending ? "Enviando…" : "Enviar"}
           </Button>
         </form>
+        {ehPdf && (
+          <p className="text-text-faint text-[11.5px] -mt-2 mb-1">
+            Faturas de cartão às vezes vêm protegidas por senha (geralmente dígitos do CPF ou nascimento do titular).
+          </p>
+        )}
         {erro && <p className="text-red text-[12.5px] mt-1">{erro}</p>}
       </Card>
 
@@ -106,8 +125,10 @@ export default function ClienteImportarPage() {
                 <Td>{imp.tipo_documento === "fatura_cartao" ? "Fatura" : "Extrato"}</Td>
                 <Td className="uppercase text-text-dim">{imp.formato_arquivo}</Td>
                 <Td className="font-mono">
-                  {imp.transacoes_importadas}
-                  {imp.transacoes_duplicadas > 0 && (
+                  {imp.status === "erro"
+                    ? imp.erro_detalhe || "—"
+                    : imp.transacoes_importadas}
+                  {imp.status !== "erro" && imp.transacoes_duplicadas > 0 && (
                     <span className="text-text-faint"> (+{imp.transacoes_duplicadas} dup.)</span>
                   )}
                 </Td>

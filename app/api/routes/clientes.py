@@ -373,6 +373,7 @@ async def importar_meu_extrato(
     tipo_documento: str = Form(...),
     periodo_inicio: date | None = Form(None),
     periodo_fim: date | None = Form(None),
+    senha_pdf: str | None = Form(None),
     arquivo: UploadFile = File(...),
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
     db: Session = Depends(get_db_admin),
@@ -385,6 +386,7 @@ async def importar_meu_extrato(
     return processar_upload(
         db, cliente_id, cliente.profissional_id, tipo_documento,
         arquivo.filename or "arquivo", conteudo, periodo_inicio, periodo_fim, "cliente_final",
+        senha_pdf=senha_pdf or None,
     )
 
 

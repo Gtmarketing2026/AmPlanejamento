@@ -21,8 +21,11 @@ export default function ImportarExtratoPage() {
   const [tipoDoc, setTipoDoc] = useState("extrato")
   const [periodoInicio, setPeriodoInicio] = useState("")
   const [periodoFim, setPeriodoFim] = useState("")
+  const [senhaPdf, setSenhaPdf] = useState("")
+  const [nomeArquivo, setNomeArquivo] = useState("")
   const [erro, setErro] = useState(null)
   const fileInputRef = useRef(null)
+  const ehPdf = nomeArquivo.toLowerCase().endsWith(".pdf")
 
   const { data: historico, isLoading } = useImportacoes(clienteIdEfetivo)
   const criar = useCriarImportacao(clienteIdEfetivo)
@@ -42,9 +45,12 @@ export default function ImportarExtratoPage() {
         tipoDocumento: tipoDoc,
         periodoInicio: periodoInicio || null,
         periodoFim: periodoFim || null,
+        senhaPdf: senhaPdf || null,
         arquivo,
       })
       fileInputRef.current.value = ""
+      setNomeArquivo("")
+      setSenhaPdf("")
     } catch (err) {
       setErro(err.message)
     }
@@ -92,10 +98,26 @@ export default function ImportarExtratoPage() {
                   ref={fileInputRef}
                   type="file"
                   accept=".ofx,.csv,.pdf"
+                  onChange={(e) => setNomeArquivo(e.target.files?.[0]?.name || "")}
                   className="text-[12px] text-text-dim mx-auto"
                 />
                 <div className="text-text-faint text-[11.5px] mt-2">OFX, CSV ou PDF</div>
               </div>
+
+              {ehPdf && (
+                <div className="mb-4">
+                  <Field
+                    label="Senha do PDF (se houver)"
+                    type="password"
+                    value={senhaPdf}
+                    onChange={(e) => setSenhaPdf(e.target.value)}
+                    placeholder="opcional"
+                  />
+                  <p className="text-text-faint text-[11px] -mt-2">
+                    Faturas de cartão às vezes vêm protegidas por senha (geralmente dígitos do CPF/nascimento do titular).
+                  </p>
+                </div>
+              )}
 
               <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-2">Tipo de documento</div>
               <div className="mb-4">

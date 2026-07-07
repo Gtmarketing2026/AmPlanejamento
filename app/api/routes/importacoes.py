@@ -27,7 +27,7 @@ from app.models.transacao import Transacao
 from app.parsers.csv_parser import CsvFormatoInvalido, parse_csv
 from app.parsers.dedup import calcular_hash_dedup
 from app.parsers.ofx_parser import parse_ofx
-from app.parsers.pdf_parser import parse_pdf
+from app.parsers.pdf_parser import PdfProtegido, parse_pdf
 from app.schemas.importacao import ImportacaoResposta, TransacaoAtualizar, TransacaoResposta
 
 router = APIRouter(tags=["importacoes"])
@@ -36,13 +36,17 @@ TAMANHO_MAXIMO_BYTES = 10 * 1024 * 1024  # 10MB
 FORMATOS_ACEITOS = {"ofx", "csv", "pdf"}
 TIPOS_DOCUMENTO = {"extrato", "fatura_cartao"}
 
-# Linhas de resumo/total que o parser de PDF/CSV pode confundir com uma
-# transação de verdade (têm data + valor na mesma linha, igual uma transação
-# real) -- ex: "Total de compras a 25/06 ... R$463,73" num extrato de cartão.
-# Melhor esforço (regex, não é possível cobrir 100% dos formatos de banco).
+# Linhas de resumo/total/saldo transportado que o parser de PDF/CSV pode
+# confundir com uma transação de verdade (têm data + valor na mesma linha,
+# igual uma transação real) -- ex: "Total de compras a 25/06 ... R$463,73"
+# ou "Fatura anterior R$3.046,34" num extrato de cartão. O objetivo é manter
+# só compras e parcelamentos de verdade. Melhor esforço (regex, não é
+# possível cobrir 100% dos formatos de banco).
 _PADRAO_LINHA_AGREGADA = re.compile(
-    r"\b(total( de compras| da fatura| geral)?|subtotal|saldo (anterior|atual|final|dispon[ií]vel)|"
-    r"valor total|limite (dispon[ií]vel|total|de cr[eé]dito))\b",
+    r"\b(total(?:\s+(?:de\s+compras(?:\s+parceladas)?|da\s+fatura|geral|a\s+pagar(?:\s+do\s+cart[aã]o)?))?|"
+    r"subtotal|saldo\s+(?:anterior|atual|final|dispon[ií]vel)|valor\s+total|"
+    r"limite\s+(?:dispon[ií]vel|total|de\s+cr[eé]dito)|fatura\s+anterior|"
+    r"pagamentos?\s+(?:efetuados?|recebidos?)|tarifa|anuidade)\b",
     re.IGNORECASE,
 )
 
@@ -85,6 +89,7 @@ def processar_upload(
     periodo_inicio: date | None,
     periodo_fim: date | None,
     enviado_por: str,  # 'profissional' | 'cliente_final'
+    senha_pdf: str | None = None,
 ) -> ImportacaoExtrato:
     """Núcleo do upload de extrato/fatura, compartilhado entre a rota do
     planejador (/importacoes) e a do cliente final (/clientes/eu/importacoes):
@@ -123,8 +128,14 @@ def processar_upload(
         elif extensao == "csv":
             transacoes_parseadas = parse_csv(conteudo)
         else:
-            transacoes_parseadas = parse_pdf(conteudo)
+            transacoes_parseadas = parse_pdf(conteudo, senha=senha_pdf)
     except CsvFormatoInvalido as e:
+        importacao.status = "erro"
+        importacao.erro_detalhe = str(e)
+        db.flush()
+        db.refresh(importacao)
+        return importacao
+    except PdfProtegido as e:
         importacao.status = "erro"
         importacao.erro_detalhe = str(e)
         db.flush()
@@ -142,6 +153,15 @@ def processar_upload(
     # Descarta linhas de resumo/total (ver _e_linha_agregada) -- não são
     # lançamentos de verdade, só apareceriam duplicando o gasto do período.
     transacoes_parseadas = [t for t in transacoes_parseadas if not _e_linha_agregada(t["descricao"])]
+
+    if tipo_documento == "fatura_cartao":
+        # Os parsers assumem a convenção de extrato bancário (valor positivo
+        # = entrada/crédito). Numa fatura de cartão é o oposto: cada linha
+        # positiva é uma compra (gasto), e só um valor negativo no documento
+        # (ex: um estorno) representa um crédito de volta -- por isso inverte
+        # o tipo aqui em vez de nos parsers, que continuam genéricos.
+        for t in transacoes_parseadas:
+            t["tipo"] = "saida" if t["tipo"] == "entrada" else "entrada"
 
     origem = "cartao" if tipo_documento == "fatura_cartao" else "conta"
     importadas = 0
@@ -216,6 +236,7 @@ async def criar_importacao(
     tipo_documento: str = Form(...),
     periodo_inicio: date | None = Form(None),
     periodo_fim: date | None = Form(None),
+    senha_pdf: str | None = Form(None),
     arquivo: UploadFile = File(...),
     db: Session = Depends(get_db_com_rls),
     profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
@@ -229,6 +250,7 @@ async def criar_importacao(
     return processar_upload(
         db, cliente_id, profissional_id, tipo_documento,
         arquivo.filename or "arquivo", conteudo, periodo_inicio, periodo_fim, "profissional",
+        senha_pdf=senha_pdf or None,
     )
 
 
