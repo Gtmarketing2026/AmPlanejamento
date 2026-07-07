@@ -9,6 +9,7 @@ import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import { useClientes } from "../../hooks/useClientes"
 import { useCriarImportacao, useExcluirImportacao, useImportacoes } from "../../hooks/useImportacoes"
 import { listarContasDoCliente } from "../../api/contas"
+import { gerarParcelasImportacao } from "../../api/importacoes"
 import { useQuery } from "@tanstack/react-query"
 import { formatarData } from "../../lib/format"
 
@@ -50,7 +51,7 @@ export default function ImportarExtratoPage() {
       return
     }
     try {
-      await criar.mutateAsync({
+      const imp = await criar.mutateAsync({
         clienteId: clienteIdEfetivo,
         tipoDocumento: tipoDoc,
         periodoInicio: periodoInicio || null,
@@ -59,6 +60,14 @@ export default function ImportarExtratoPage() {
         contaConectadaId: contaId || null,
         arquivo,
       })
+      if (imp?.parcelamentos_detectados > 0) {
+        const ok = confirm(
+          `Encontramos ${imp.parcelamentos_detectados} compra(s) parcelada(s). ` +
+            `Deseja gerar as parcelas futuras nos próximos meses pra o cliente ter a visão completa dos gastos? ` +
+            `(Aparecem como "previstas" e são substituídas automaticamente quando a fatura real chega.)`
+        )
+        if (ok) await gerarParcelasImportacao(imp.id)
+      }
       fileInputRef.current.value = ""
       setNomeArquivo("")
       setSenhaPdf("")

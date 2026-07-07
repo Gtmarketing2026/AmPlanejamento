@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPatch } from "./client"
+import { apiDelete, apiGet, apiPatch, apiPost } from "./client"
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL
 
@@ -27,6 +27,8 @@ export async function criarImportacao({ clienteId, tipoDocumento, periodoInicio,
 }
 
 export const listarImportacoes = (clienteId) => apiGet(`/importacoes?cliente_id=${clienteId}`)
+
+export const gerarParcelasImportacao = (id) => apiPost(`/importacoes/${id}/gerar-parcelas`, {})
 
 export const excluirImportacao = (id) => apiDelete(`/importacoes/${id}`)
 

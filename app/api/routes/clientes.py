@@ -13,7 +13,12 @@ from app.api.deps import (
     get_db_sem_rls,
     get_profissional_id_atual,
 )
-from app.api.routes.importacoes import _calcular_mes_referencia, _obter_conta_do_upload, processar_upload
+from app.api.routes.importacoes import (
+    _calcular_mes_referencia,
+    _obter_conta_do_upload,
+    gerar_parcelas_futuras,
+    processar_upload,
+)
 from app.core.config import settings
 from app.core.security import criar_access_token, hash_senha, verificar_senha
 from app.db.base import SessionLocalAdmin
@@ -236,12 +241,19 @@ def listar_minhas_transacoes(
     tipo: str | None = None,
     data_inicio: date | None = None,
     data_fim: date | None = None,
+    mes_referencia: date | None = None,
+    incluir_previstos: bool = False,
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
     db: Session = Depends(get_db_admin),
 ):
     # Mesmo padrão de /clientes/eu: sem policy de RLS por cliente_id, então a
     # conexão privilegiada é filtrada explicitamente pelo cliente_id do token.
     query = select(Transacao).where(Transacao.cliente_id == cliente_id)
+    # Parcelas futuras (previsto=True) ficam de fora por padrão pra não poluir
+    # os totais do "agora"; só entram quando pedido explicitamente (ex: visão
+    # por mês no Fluxo de caixa).
+    if not incluir_previstos:
+        query = query.where(Transacao.previsto.is_(False))
     if busca:
         query = query.where(Transacao.descricao.ilike(f"%{busca}%"))
     if categoria_id:
@@ -252,6 +264,8 @@ def listar_minhas_transacoes(
         query = query.where(Transacao.data >= data_inicio)
     if data_fim:
         query = query.where(Transacao.data <= data_fim)
+    if mes_referencia:
+        query = query.where(Transacao.mes_referencia == mes_referencia)
     transacoes = db.scalars(query.order_by(Transacao.data.desc())).all()
     return transacoes
 
@@ -395,6 +409,23 @@ async def importar_meu_extrato(
         arquivo.filename or "arquivo", conteudo, periodo_inicio, periodo_fim, "cliente_final",
         senha_pdf=senha_pdf or None, conta_conectada_id=conta_conectada_id,
     )
+
+
+@router.post("/eu/importacoes/{importacao_id}/gerar-parcelas")
+def gerar_minhas_parcelas(
+    importacao_id: uuid.UUID,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    importacao = db.scalar(
+        select(ImportacaoExtrato).where(
+            ImportacaoExtrato.id == importacao_id, ImportacaoExtrato.cliente_id == cliente_id
+        )
+    )
+    if not importacao:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Importação não encontrada")
+    criadas = gerar_parcelas_futuras(db, importacao_id, cliente_id)
+    return {"parcelas_criadas": criadas}
 
 
 @router.get("/eu/importacoes", response_model=list[ImportacaoResposta])

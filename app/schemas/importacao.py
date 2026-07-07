@@ -17,6 +17,9 @@ class ImportacaoResposta(BaseModel):
     erro_detalhe: str | None
     criado_em: datetime
     processado_em: datetime | None
+    # Só na resposta do upload: quantas compras parceladas têm parcelas futuras
+    # que podem ser geradas (o frontend pergunta se o usuário quer gerá-las).
+    parcelamentos_detectados: int = 0
 
     model_config = {"from_attributes": True}
 
@@ -56,6 +59,9 @@ class TransacaoResposta(BaseModel):
     importacao_id: uuid.UUID | None
     conta_conectada_id: uuid.UUID | None = None
     mes_referencia: date | None = None
+    parcela_atual: int | None = None
+    parcela_total: int | None = None
+    previsto: bool = False
     criado_em: datetime
     # Só preenchido quando a reclassificação usou aplicar_a_todos_iguais --
     # quantos outros lançamentos também foram atualizados junto.

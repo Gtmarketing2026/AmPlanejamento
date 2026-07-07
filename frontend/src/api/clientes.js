@@ -54,5 +54,8 @@ export async function importarMeuExtrato(token, { tipoDocumento, senhaPdf, conta
 
 export const listarMinhasImportacoes = (token) => apiGet("/clientes/eu/importacoes", { token })
 
+export const gerarMinhasParcelas = (token, importacaoId) =>
+  apiPost(`/clientes/eu/importacoes/${importacaoId}/gerar-parcelas`, {}, { token })
+
 export const excluirMinhaImportacao = (token, id) =>
   apiDelete(`/clientes/eu/importacoes/${id}`, undefined, { token })

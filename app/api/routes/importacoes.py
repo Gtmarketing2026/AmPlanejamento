@@ -7,12 +7,13 @@ as transações com dedup (mesma lógica que a sincronização automática via
 Open Finance vai usar no futuro, ver hash_dedup em app/parsers/dedup.py).
 """
 
+import hashlib
 import re
 import uuid
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -108,6 +109,115 @@ def _calcular_mes_referencia(data_transacao: date, natureza: str, dia_virada: in
     return date(data_transacao.year, data_transacao.month + 1, 1)
 
 
+# ---------------------------------------------------------------------------
+# Parcelamento -- detecção e projeção de parcelas futuras
+# ---------------------------------------------------------------------------
+# Marcador de parcela na descrição, ex: "(5/6)", "(12/12)", "(1/12)".
+_PADRAO_PARCELA = re.compile(r"\((\d{1,2})\s*/\s*(\d{1,2})\)")
+
+
+def _detectar_parcela(descricao: str) -> tuple[int, int] | None:
+    """Extrai (parcela_atual, parcela_total) de uma descrição parcelada, ou
+    None se não for parcelada. Ignora casos degenerados (total < 2, atual fora
+    do intervalo)."""
+    m = _PADRAO_PARCELA.search(descricao)
+    if not m:
+        return None
+    atual, total = int(m.group(1)), int(m.group(2))
+    if total < 2 or atual < 1 or atual > total:
+        return None
+    return atual, total
+
+
+def _estabelecimento(descricao: str) -> str:
+    """Parte estável da descrição pra identificar o mesmo parcelamento entre
+    a projeção e a parcela real (que pode vir com prefixo diferente, ex:
+    'COMPRA NO PAR' vs 'COMPRA NO PARCELADO'). Usa o texto após a última '/'
+    quando existe (o nome do estabelecimento), senão a descrição sem o
+    marcador de parcela."""
+    sem_parcela = _PADRAO_PARCELA.sub("", descricao)
+    if "/" in sem_parcela:
+        return sem_parcela.rsplit("/", 1)[-1].strip().lower()
+    return sem_parcela.strip().lower()
+
+
+def _hash_parcela(conta_id: uuid.UUID, estabelecimento: str, total: int, valor: float, numero: int) -> str:
+    base = f"{conta_id}|{estabelecimento}|{total}|{abs(valor):.2f}|{numero}"
+    return hashlib.sha256(base.encode("utf-8")).hexdigest()
+
+
+def _somar_meses(d: date, meses: int) -> date:
+    """Soma `meses` a uma data, mantendo o dia (limitado ao último dia do mês
+    de destino, ex: 31/01 + 1 mês -> 28/02)."""
+    total = d.month - 1 + meses
+    ano = d.year + total // 12
+    mes = total % 12 + 1
+    ultimo_dia = [31, 29 if ano % 4 == 0 and (ano % 100 != 0 or ano % 400 == 0) else 28,
+                  31, 30, 31, 30, 31, 31, 30, 31, 30, 31][mes - 1]
+    return date(ano, mes, min(d.day, ultimo_dia))
+
+
+def gerar_parcelas_futuras(db: Session, importacao_id: uuid.UUID, cliente_id: uuid.UUID) -> int:
+    """Cria as parcelas futuras (previsto=True) das compras parceladas de uma
+    importação. Idempotente: pula qualquer parcela que já exista (real ou
+    prevista) pelo hash_parcela, então re-chamar ou re-importar não duplica.
+    Retorna quantas parcelas foram criadas."""
+    origens = db.scalars(
+        select(Transacao).where(
+            Transacao.importacao_id == importacao_id,
+            Transacao.previsto.is_(False),
+            Transacao.parcela_total.is_not(None),
+            Transacao.parcela_atual < Transacao.parcela_total,
+        )
+    ).all()
+    if not origens:
+        return 0
+
+    conta = db.get(ContaConectada, origens[0].conta_conectada_id)
+    preferencia = db.get(PreferenciaCliente, cliente_id)
+    modo_visualizacao = preferencia.visualizacao_lancamento if preferencia else "data_compra"
+
+    criadas = 0
+    for origem in origens:
+        estab = _estabelecimento(origem.descricao)
+        valor = float(origem.valor)
+        for numero in range(origem.parcela_atual + 1, origem.parcela_total + 1):
+            hp = _hash_parcela(conta.id, estab, origem.parcela_total, valor, numero)
+            ja_existe = db.scalar(
+                select(Transacao.id).where(
+                    Transacao.conta_conectada_id == conta.id, Transacao.hash_parcela == hp
+                )
+            )
+            if ja_existe:
+                continue
+            data_proj = _somar_meses(origem.data, numero - origem.parcela_atual)
+            desc_proj = _PADRAO_PARCELA.sub(f"({numero}/{origem.parcela_total})", origem.descricao)
+            mes_ref = _calcular_mes_referencia(data_proj, conta.natureza, conta.dia_virada, modo_visualizacao)
+            db.add(
+                Transacao(
+                    conta_conectada_id=conta.id,
+                    cliente_id=cliente_id,
+                    profissional_id=origem.profissional_id,
+                    data=data_proj,
+                    descricao=desc_proj,
+                    valor=origem.valor,
+                    tipo=origem.tipo,
+                    origem=origem.origem,
+                    categoria_id=origem.categoria_id,
+                    subcategoria_id=origem.subcategoria_id,
+                    parcela_atual=numero,
+                    parcela_total=origem.parcela_total,
+                    previsto=True,
+                    hash_parcela=hp,
+                    hash_dedup=calcular_hash_dedup(conta.id, data_proj, valor, desc_proj),
+                    mes_referencia=mes_ref,
+                )
+            )
+            criadas += 1
+    db.flush()
+    return criadas
+
+
 def processar_upload(
     db: Session,
     cliente_id: uuid.UUID,
@@ -198,10 +308,32 @@ def processar_upload(
     modo_visualizacao = preferencia.visualizacao_lancamento if preferencia else "data_compra"
     importadas = 0
     duplicadas = 0
+    parcelamentos_detectados = 0  # compras parceladas c/ parcelas futuras a gerar
     inseridas = []  # [{"id", "descricao", "tipo"}] -- só as que entraram de fato (não duplicadas)
     for t in transacoes_parseadas:
         hash_dedup = calcular_hash_dedup(conta.id, t["data"], t["valor"], t["descricao"])
         mes_referencia = _calcular_mes_referencia(t["data"], conta.natureza, conta.dia_virada, modo_visualizacao)
+
+        parcela = _detectar_parcela(t["descricao"])
+        parcela_atual = parcela_total = hash_parcela = None
+        if parcela:
+            parcela_atual, parcela_total = parcela
+            hash_parcela = _hash_parcela(
+                conta.id, _estabelecimento(t["descricao"]), parcela_total, t["valor"], parcela_atual
+            )
+            # Se essa parcela real já existia como projeção (previsto), remove a
+            # projeção antes de inserir a real -- é o que evita duplicar quando a
+            # fatura do mês seguinte chega com a parcela que a gente tinha previsto.
+            db.execute(
+                delete(Transacao).where(
+                    Transacao.conta_conectada_id == conta.id,
+                    Transacao.hash_parcela == hash_parcela,
+                    Transacao.previsto.is_(True),
+                )
+            )
+            if parcela_total > parcela_atual:
+                parcelamentos_detectados += 1
+
         stmt = (
             pg_insert(Transacao)
             .values(
@@ -216,6 +348,9 @@ def processar_upload(
                 importacao_id=importacao.id,
                 hash_dedup=hash_dedup,
                 mes_referencia=mes_referencia,
+                parcela_atual=parcela_atual,
+                parcela_total=parcela_total,
+                hash_parcela=hash_parcela,
             )
             .on_conflict_do_nothing(index_elements=["conta_conectada_id", "hash_dedup"])
             .returning(Transacao.id)
@@ -261,6 +396,9 @@ def processar_upload(
     importacao.processado_em = datetime.now(timezone.utc)
     db.flush()
     db.refresh(importacao)
+    # Atributo transiente (não persiste) -- só pra resposta saber se vale
+    # perguntar ao usuário se quer gerar as parcelas futuras.
+    importacao.parcelamentos_detectados = parcelamentos_detectados
     return importacao
 
 
@@ -287,6 +425,15 @@ async def criar_importacao(
         arquivo.filename or "arquivo", conteudo, periodo_inicio, periodo_fim, "profissional",
         senha_pdf=senha_pdf or None, conta_conectada_id=conta_conectada_id,
     )
+
+
+@router.post("/importacoes/{importacao_id}/gerar-parcelas")
+def gerar_parcelas_importacao(importacao_id: uuid.UUID, db: Session = Depends(get_db_com_rls)):
+    importacao = db.get(ImportacaoExtrato, importacao_id)
+    if not importacao:
+        raise HTTPException(status_code=404, detail="Importação não encontrada")
+    criadas = gerar_parcelas_futuras(db, importacao_id, importacao.cliente_id)
+    return {"parcelas_criadas": criadas}
 
 
 @router.get("/importacoes", response_model=list[ImportacaoResposta])
@@ -323,10 +470,15 @@ def excluir_importacao(importacao_id: uuid.UUID, db: Session = Depends(get_db_co
 
 
 @router.get("/transacoes", response_model=list[TransacaoResposta])
-def listar_transacoes(cliente_id: uuid.UUID, db: Session = Depends(get_db_com_rls)):
-    transacoes = db.scalars(
-        select(Transacao).where(Transacao.cliente_id == cliente_id).order_by(Transacao.data.desc())
-    ).all()
+def listar_transacoes(
+    cliente_id: uuid.UUID,
+    incluir_previstos: bool = False,
+    db: Session = Depends(get_db_com_rls),
+):
+    q = select(Transacao).where(Transacao.cliente_id == cliente_id)
+    if not incluir_previstos:
+        q = q.where(Transacao.previsto.is_(False))
+    transacoes = db.scalars(q.order_by(Transacao.data.desc())).all()
     return transacoes
 
 

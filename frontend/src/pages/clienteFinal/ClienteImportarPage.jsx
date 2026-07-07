@@ -8,6 +8,7 @@ import Field, { Select } from "../../components/ui/Field"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import {
   excluirMinhaImportacao,
+  gerarMinhasParcelas,
   importarMeuExtrato,
   listarMinhasImportacoes,
 } from "../../api/clientes"
@@ -43,7 +44,16 @@ export default function ClienteImportarPage() {
   const importar = useMutation({
     mutationFn: () =>
       importarMeuExtrato(token, { tipoDocumento, senhaPdf: senhaPdf || null, contaId: contaId || null, arquivo }),
-    onSuccess: () => {
+    onSuccess: async (imp) => {
+      // Compras parceladas: pergunta se quer projetar as parcelas futuras.
+      if (imp?.parcelamentos_detectados > 0) {
+        const ok = confirm(
+          `Encontramos ${imp.parcelamentos_detectados} compra(s) parcelada(s). ` +
+            `Deseja gerar as parcelas futuras nos próximos meses pra ter a visão completa dos gastos? ` +
+            `(Elas aparecem como "previstas" e são substituídas automaticamente quando a fatura real chega.)`
+        )
+        if (ok) await gerarMinhasParcelas(token, imp.id)
+      }
       qc.invalidateQueries({ queryKey: ["cliente-eu-importacoes", token] })
       qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] })
       qc.invalidateQueries({ queryKey: ["cliente-eu-contas", token] })

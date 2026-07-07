@@ -38,6 +38,14 @@ class Transacao(Base):
     cartao_ultimos_digitos: Mapped[str | None] = mapped_column(String, nullable=True)
     parcela_atual: Mapped[int | None] = mapped_column(Integer, nullable=True)
     parcela_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Parcela futura projetada (ainda não caiu numa fatura real) -- gerada
+    # sob demanda quando o cliente importa uma compra parcelada e pede pra ver
+    # as parcelas dos próximos meses. Substituída pela real quando ela chega.
+    previsto: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Identidade do parcelamento (conta + estabelecimento + total + valor +
+    # número da parcela) usada pra reconciliar previsto x real sem depender da
+    # data/formatação exata. Ver _hash_parcela em app/api/routes/importacoes.py.
+    hash_parcela: Mapped[str | None] = mapped_column(String, nullable=True)
     conciliado: Mapped[bool] = mapped_column(Boolean, default=False)
     # Mês em que o gasto "conta" pro cliente (1º dia do mês) -- por padrão é
     # o mês calendário de `data`; quando a preferência é "virada do cartão" e

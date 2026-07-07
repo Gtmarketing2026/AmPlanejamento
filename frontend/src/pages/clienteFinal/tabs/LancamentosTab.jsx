@@ -4,6 +4,7 @@ import Card from "../../../components/ui/Card"
 import Button from "../../../components/ui/Button"
 import Field, { Select } from "../../../components/ui/Field"
 import EditorCategoria from "../../../components/ui/EditorCategoria"
+import Pill from "../../../components/ui/Pill"
 import { Table, Thead, Th, Tr, Td } from "../../../components/ui/Table"
 import {
   atualizarMinhaTransacao,
@@ -20,6 +21,7 @@ export default function LancamentosTab({ token }) {
   const qc = useQueryClient()
   const [busca, setBusca] = useState("")
   const [tipoFiltro, setTipoFiltro] = useState("")
+  const [verPrevistos, setVerPrevistos] = useState(false)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [erro, setErro] = useState(null)
   const [novo, setNovo] = useState({
@@ -30,7 +32,11 @@ export default function LancamentosTab({ token }) {
     categoria_id: "",
   })
 
-  const filtros = { busca: busca || undefined, tipo: tipoFiltro || undefined }
+  const filtros = {
+    busca: busca || undefined,
+    tipo: tipoFiltro || undefined,
+    incluir_previstos: verPrevistos ? "true" : undefined,
+  }
 
   const { data: transacoes = [] } = useQuery({
     queryKey: ["cliente-eu-transacoes", token, filtros],
@@ -128,6 +134,15 @@ export default function LancamentosTab({ token }) {
           <option value="entrada">Entradas</option>
           <option value="saida">Saídas</option>
         </select>
+        <label className="flex items-center gap-2 text-[12.5px] text-text-dim cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={verPrevistos}
+            onChange={(e) => setVerPrevistos(e.target.checked)}
+            className="accent-accent"
+          />
+          Mostrar parcelas futuras (previstas)
+        </label>
       </div>
 
       {mostrarForm && (
@@ -213,30 +228,41 @@ export default function LancamentosTab({ token }) {
         </Thead>
         <tbody>
           {transacoes.map((t) => (
-            <Tr key={t.id}>
+            <Tr key={t.id} className={t.previsto ? "opacity-60" : ""}>
               <Td className="font-mono text-text-dim">{formatarData(t.data)}</Td>
-              <Td>{t.descricao}</Td>
               <Td>
-                <EditorCategoria
-                  categoriaId={t.categoria_id}
-                  subcategoriaId={t.subcategoria_id}
-                  categorias={categorias}
-                  subcategorias={subcategorias}
-                  disabled={atualizarTransacao.isPending}
-                  onChange={(dados) => atualizarTransacao.mutate({ id: t.id, dados })}
-                />
+                <span className="flex items-center gap-2">
+                  {t.descricao}
+                  {t.previsto && <Pill variant="neutral">Previsto</Pill>}
+                </span>
+              </Td>
+              <Td>
+                {t.previsto ? (
+                  <span className="text-text-faint text-[12px]">—</span>
+                ) : (
+                  <EditorCategoria
+                    categoriaId={t.categoria_id}
+                    subcategoriaId={t.subcategoria_id}
+                    categorias={categorias}
+                    subcategorias={subcategorias}
+                    disabled={atualizarTransacao.isPending}
+                    onChange={(dados) => atualizarTransacao.mutate({ id: t.id, dados })}
+                  />
+                )}
               </Td>
               <Td className={`text-right font-mono ${t.tipo === "entrada" ? "text-accent" : "text-red"}`}>
                 {t.tipo === "entrada" ? "+ " : "- "}
                 {formatarMoeda(Math.abs(Number(t.valor)))}
               </Td>
               <Td className="text-right">
-                <button
-                  onClick={() => confirm("Excluir este lançamento?") && excluir.mutate(t.id)}
-                  className="text-text-faint hover:text-red text-[12px]"
-                >
-                  Excluir
-                </button>
+                {!t.previsto && (
+                  <button
+                    onClick={() => confirm("Excluir este lançamento?") && excluir.mutate(t.id)}
+                    className="text-text-faint hover:text-red text-[12px]"
+                  >
+                    Excluir
+                  </button>
+                )}
               </Td>
             </Tr>
           ))}
