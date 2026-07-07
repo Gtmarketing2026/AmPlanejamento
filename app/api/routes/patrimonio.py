@@ -15,7 +15,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_cliente_id_atual, get_db_admin
-from app.models.categoria import Categoria
+from app.models.categoria import Categoria, Subcategoria
 from app.models.cliente import Cliente
 from app.models.patrimonio import (
     ApoliceSeguro,
@@ -646,18 +646,40 @@ def excluir_bem(
 # ============================================================================
 
 
-def _calcular_realizado(db: Session, cliente_id: uuid.UUID, categoria_id: uuid.UUID, ano: int, mes: int) -> float:
-    realizado = db.scalar(
-        select(func.coalesce(func.sum(func.abs(Transacao.valor)), 0)).where(
-            Transacao.cliente_id == cliente_id,
-            Transacao.categoria_id == categoria_id,
-            Transacao.tipo == "saida",
-            Transacao.previsto.is_(False),  # parcela prevista não é gasto realizado
-            func.extract("year", Transacao.data) == ano,
-            func.extract("month", Transacao.data) == mes,
-        )
-    )
+def _calcular_realizado(
+    db: Session,
+    cliente_id: uuid.UUID,
+    categoria_id: uuid.UUID,
+    ano: int,
+    mes: int,
+    subcategoria_id: uuid.UUID | None = None,
+) -> float:
+    condicoes = [
+        Transacao.cliente_id == cliente_id,
+        Transacao.categoria_id == categoria_id,
+        Transacao.tipo == "saida",
+        Transacao.previsto.is_(False),  # parcela prevista não é gasto realizado
+        func.extract("year", Transacao.data) == ano,
+        func.extract("month", Transacao.data) == mes,
+    ]
+    if subcategoria_id is not None:
+        condicoes.append(Transacao.subcategoria_id == subcategoria_id)
+    realizado = db.scalar(select(func.coalesce(func.sum(func.abs(Transacao.valor)), 0)).where(*condicoes))
     return float(realizado or 0)
+
+
+def _orcamento_resposta(db: Session, orc: OrcamentoCategoria, categoria_nome: str | None, subcategoria_nome: str | None) -> OrcamentoResposta:
+    return OrcamentoResposta(
+        id=orc.id,
+        categoria_id=orc.categoria_id,
+        categoria_nome=categoria_nome,
+        subcategoria_id=orc.subcategoria_id,
+        subcategoria_nome=subcategoria_nome,
+        ano=orc.ano,
+        mes=orc.mes,
+        valor_orcado=orc.valor_orcado,
+        valor_realizado=_calcular_realizado(db, orc.cliente_id, orc.categoria_id, orc.ano, orc.mes, orc.subcategoria_id),
+    )
 
 
 @router.get("/orcamentos", response_model=list[OrcamentoResposta])
@@ -668,25 +690,12 @@ def listar_orcamentos(
     db: Session = Depends(get_db_admin),
 ):
     linhas = db.execute(
-        select(OrcamentoCategoria, Categoria.nome)
+        select(OrcamentoCategoria, Categoria.nome, Subcategoria.nome)
         .join(Categoria, Categoria.id == OrcamentoCategoria.categoria_id)
+        .outerjoin(Subcategoria, Subcategoria.id == OrcamentoCategoria.subcategoria_id)
         .where(OrcamentoCategoria.cliente_id == cliente_id, OrcamentoCategoria.ano == ano, OrcamentoCategoria.mes == mes)
     ).all()
-
-    resultado = []
-    for orc, nome in linhas:
-        resultado.append(
-            OrcamentoResposta(
-                id=orc.id,
-                categoria_id=orc.categoria_id,
-                categoria_nome=nome,
-                ano=orc.ano,
-                mes=orc.mes,
-                valor_orcado=orc.valor_orcado,
-                valor_realizado=_calcular_realizado(db, cliente_id, orc.categoria_id, orc.ano, orc.mes),
-            )
-        )
-    return resultado
+    return [_orcamento_resposta(db, orc, cat_nome, sub_nome) for orc, cat_nome, sub_nome in linhas]
 
 
 @router.post("/orcamentos", response_model=OrcamentoResposta, status_code=status.HTTP_201_CREATED)
@@ -700,21 +709,29 @@ def criar_orcamento(
     if categoria is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria não encontrada")
 
+    subcategoria = None
+    if dados.subcategoria_id is not None:
+        subcategoria = db.get(Subcategoria, dados.subcategoria_id)
+        if subcategoria is None or subcategoria.categoria_id != dados.categoria_id:
+            raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Subcategoria inválida pra essa categoria")
+
     existente = db.scalar(
         select(OrcamentoCategoria).where(
             OrcamentoCategoria.cliente_id == cliente_id,
             OrcamentoCategoria.categoria_id == dados.categoria_id,
+            OrcamentoCategoria.subcategoria_id == dados.subcategoria_id,
             OrcamentoCategoria.ano == dados.ano,
             OrcamentoCategoria.mes == dados.mes,
         )
     )
     if existente:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Já existe orçamento pra essa categoria neste mês.")
+        raise HTTPException(status.HTTP_409_CONFLICT, "Já existe uma meta igual (mesma categoria/subcategoria) neste mês.")
 
     orcamento = OrcamentoCategoria(
         cliente_id=cliente_id,
         profissional_id=cliente.profissional_id,
         categoria_id=dados.categoria_id,
+        subcategoria_id=dados.subcategoria_id,
         ano=dados.ano,
         mes=dados.mes,
         valor_orcado=dados.valor_orcado,
@@ -722,15 +739,7 @@ def criar_orcamento(
     db.add(orcamento)
     db.flush()
     db.refresh(orcamento)
-    return OrcamentoResposta(
-        id=orcamento.id,
-        categoria_id=orcamento.categoria_id,
-        categoria_nome=categoria.nome,
-        ano=orcamento.ano,
-        mes=orcamento.mes,
-        valor_orcado=orcamento.valor_orcado,
-        valor_realizado=_calcular_realizado(db, cliente_id, orcamento.categoria_id, orcamento.ano, orcamento.mes),
-    )
+    return _orcamento_resposta(db, orcamento, categoria.nome, subcategoria.nome if subcategoria else None)
 
 
 @router.patch("/orcamentos/{orcamento_id}", response_model=OrcamentoResposta)
@@ -748,15 +757,8 @@ def atualizar_orcamento(
     db.flush()
     db.refresh(orcamento)
     categoria = db.get(Categoria, orcamento.categoria_id)
-    return OrcamentoResposta(
-        id=orcamento.id,
-        categoria_id=orcamento.categoria_id,
-        categoria_nome=categoria.nome if categoria else None,
-        ano=orcamento.ano,
-        mes=orcamento.mes,
-        valor_orcado=orcamento.valor_orcado,
-        valor_realizado=_calcular_realizado(db, cliente_id, orcamento.categoria_id, orcamento.ano, orcamento.mes),
-    )
+    subcategoria = db.get(Subcategoria, orcamento.subcategoria_id) if orcamento.subcategoria_id else None
+    return _orcamento_resposta(db, orcamento, categoria.nome if categoria else None, subcategoria.nome if subcategoria else None)
 
 
 @router.delete("/orcamentos/{orcamento_id}", status_code=status.HTTP_204_NO_CONTENT)

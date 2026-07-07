@@ -31,10 +31,12 @@ class ContaResposta(BaseModel):
     banco: str | None
     modo: str
     status: str
-    saldo_manual: float | None
+    saldo_manual: float | None  # natureza=conta: ajuste/correção somado ao saldo automático
     limite_total: float | None
     dia_virada: int | None
     valor_usado: float = 0  # calculado (natureza=cartao): gasto no mês de referência atual
+    saldo_automatico: float = 0  # natureza=conta: soma automática dos lançamentos vinculados
+    saldo_atual: float = 0  # natureza=conta: saldo_automatico + ajuste manual (saldo_manual)
     atualizado_em: datetime
 
     model_config = {"from_attributes": True}

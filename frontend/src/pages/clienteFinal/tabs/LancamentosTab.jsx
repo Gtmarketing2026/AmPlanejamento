@@ -29,6 +29,57 @@ const FILTROS_VAZIO = {
   data_fim: "",
 }
 
+const MESES_EXTENSO = [
+  "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+  "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+]
+
+// Substitui o <input type="month"> nativo -- em alguns navegadores/idiomas
+// ele renderiza como "-------- de ----" quando vazio, escondendo o nome do
+// mês em vez de mostrá-lo. Aqui o nome do mês (ou "Todos os meses") fica
+// sempre visível, com setas pra navegar mês a mês.
+function SeletorMesRapido({ valor, onChange }) {
+  const hoje = new Date()
+  const [ano, mes] = valor ? valor.split("-").map(Number) : [hoje.getFullYear(), hoje.getMonth() + 1]
+
+  function ir(delta) {
+    const d = new Date(ano, mes - 1 + delta, 1)
+    onChange(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`)
+  }
+
+  return (
+    <div className="inline-flex items-center gap-0.5 bg-bg border border-line rounded-[9px] px-1 py-1">
+      <button
+        type="button"
+        onClick={() => ir(-1)}
+        className="w-6 h-6 flex items-center justify-center rounded-[6px] text-text-dim hover:text-text hover:bg-panel-2"
+      >
+        ‹
+      </button>
+      <span className="text-[13px] text-text px-1.5 min-w-[128px] text-center capitalize">
+        {valor ? `${MESES_EXTENSO[mes - 1]} de ${ano}` : "Todos os meses"}
+      </span>
+      <button
+        type="button"
+        onClick={() => ir(1)}
+        className="w-6 h-6 flex items-center justify-center rounded-[6px] text-text-dim hover:text-text hover:bg-panel-2"
+      >
+        ›
+      </button>
+      {valor && (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          title="Ver todos os meses"
+          className="ml-1 w-6 h-6 flex items-center justify-center rounded-[6px] text-text-faint hover:text-text hover:bg-panel-2"
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  )
+}
+
 function IconeFunil({ className = "" }) {
   return (
     <svg
@@ -266,20 +317,7 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
       </div>
 
       <div className="mb-4">
-        <input
-          type="month"
-          value={mesFiltro}
-          onChange={(e) => aplicarMesFiltro(e.target.value)}
-          className="bg-bg border border-line rounded-[9px] px-3.5 py-2 text-[13px] text-text outline-none focus:border-accent/60"
-        />
-        {mesFiltro && (
-          <button
-            onClick={() => aplicarMesFiltro("")}
-            className="ml-2 text-text-faint hover:text-text text-[12px]"
-          >
-            Limpar mês
-          </button>
-        )}
+        <SeletorMesRapido valor={mesFiltro} onChange={aplicarMesFiltro} />
       </div>
 
       {mostrarFiltros && (

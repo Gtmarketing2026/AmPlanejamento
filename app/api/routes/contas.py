@@ -12,6 +12,7 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import case
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -35,8 +36,31 @@ router = APIRouter(prefix="/clientes/eu", tags=["contas"])
 router_profissional = APIRouter(prefix="/clientes", tags=["contas"])
 
 
-def _montar_resposta(conta: ContaConectada, valor_usado: float) -> ContaResposta:
-    return ContaResposta.model_validate(conta).model_copy(update={"valor_usado": valor_usado})
+def _montar_resposta(conta: ContaConectada, valor_usado: float, saldo_automatico: float = 0.0) -> ContaResposta:
+    saldo_atual = saldo_automatico + float(conta.saldo_manual or 0) if conta.natureza == "conta" else 0.0
+    return ContaResposta.model_validate(conta).model_copy(
+        update={"valor_usado": valor_usado, "saldo_automatico": saldo_automatico, "saldo_atual": saldo_atual}
+    )
+
+
+def _somas_automaticas_por_conta(db: Session, conta_ids: list[uuid.UUID]) -> dict:
+    """Soma automática (entradas - saídas) de todos os lançamentos reais
+    (não previstos) vinculados a cada conta -- usada como base do saldo das
+    contas bancárias (natureza='conta'). O `saldo_manual` guardado passa a
+    ser só o AJUSTE/correção somado em cima disso (ver `_montar_resposta`),
+    então editar o saldo na tela não perde a ligação com os lançamentos: o
+    saldo continua sendo atualizado sozinho conforme mais lançamentos entram,
+    e o ajuste apenas corrige um desvio pontual (ex: lançamentos antigos que
+    não foram importados)."""
+    if not conta_ids:
+        return {}
+    delta = case((Transacao.tipo == "entrada", sa_func.abs(Transacao.valor)), else_=-sa_func.abs(Transacao.valor))
+    linhas = db.execute(
+        select(Transacao.conta_conectada_id, sa_func.coalesce(sa_func.sum(delta), 0))
+        .where(Transacao.conta_conectada_id.in_(conta_ids), Transacao.previsto.is_(False))
+        .group_by(Transacao.conta_conectada_id)
+    ).all()
+    return {conta_id: float(soma) for conta_id, soma in linhas}
 
 
 @router_profissional.get("/{cliente_id}/contas", response_model=list[ContaResposta])
@@ -54,7 +78,8 @@ def listar_contas_do_cliente(
         .where(ContaConectada.cliente_id == cliente_id, ContaConectada.nome_exibicao.is_not(None))
         .order_by(ContaConectada.natureza, ContaConectada.criado_em)
     ).all()
-    return [_montar_resposta(c, 0.0) for c in contas]
+    somas = _somas_automaticas_por_conta(db, [c.id for c in contas if c.natureza == "conta"])
+    return [_montar_resposta(c, 0.0, somas.get(c.id, 0.0)) for c in contas]
 
 
 def _mes_atual() -> date:
@@ -88,7 +113,10 @@ def listar_minhas_contas(
             .group_by(Transacao.conta_conectada_id)
         ).all()
     )
-    return [_montar_resposta(c, float(usados_por_conta.get(c.id) or 0)) for c in contas]
+    somas_automaticas = _somas_automaticas_por_conta(db, [c.id for c in contas if c.natureza == "conta"])
+    return [
+        _montar_resposta(c, float(usados_por_conta.get(c.id) or 0), somas_automaticas.get(c.id, 0.0)) for c in contas
+    ]
 
 
 @router.post("/contas", response_model=ContaResposta, status_code=status.HTTP_201_CREATED)
@@ -174,7 +202,8 @@ def _conta_para_resposta_agregada(db: Session, conta: ContaConectada) -> ContaRe
             Transacao.mes_referencia == _mes_atual(),
         )
     )
-    return _montar_resposta(conta, float(valor_usado or 0))
+    somas = _somas_automaticas_por_conta(db, [conta.id]) if conta.natureza == "conta" else {}
+    return _montar_resposta(conta, float(valor_usado or 0), somas.get(conta.id, 0.0))
 
 
 def _recalcular_mes_referencia_da_conta(db: Session, conta: ContaConectada) -> None:

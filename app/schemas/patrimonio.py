@@ -209,6 +209,7 @@ class BemResposta(BaseModel):
 # ---------- Orçamento por categoria ----------
 class OrcamentoCriar(BaseModel):
     categoria_id: uuid.UUID
+    subcategoria_id: uuid.UUID | None = None  # opcional: meta mais específica
     ano: int
     mes: int
     valor_orcado: float
@@ -222,6 +223,8 @@ class OrcamentoResposta(BaseModel):
     id: uuid.UUID
     categoria_id: uuid.UUID
     categoria_nome: str | None = None
+    subcategoria_id: uuid.UUID | None = None
+    subcategoria_nome: str | None = None
     ano: int
     mes: int
     valor_orcado: float

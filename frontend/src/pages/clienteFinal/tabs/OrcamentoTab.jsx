@@ -4,7 +4,7 @@ import Card from "../../../components/ui/Card"
 import KpiStat from "../../../components/ui/KpiStat"
 import Button from "../../../components/ui/Button"
 import { Select } from "../../../components/ui/Field"
-import { minhasCategorias, minhasTransacoes } from "../../../api/clientes"
+import { minhasCategorias, minhasSubcategorias, minhasTransacoes } from "../../../api/clientes"
 import {
   atualizarMeuOrcamento,
   criarMeuOrcamento,
@@ -27,15 +27,23 @@ export default function OrcamentoTab({ token, contexto = "PF" }) {
   const [mes, setMes] = useState(hoje.getMonth() + 1)
   const [cenario, setCenario] = useState("com_metas") // atual | com_metas (destaque do resumo)
   const [categoriaId, setCategoriaId] = useState("")
+  const [subcategoriaId, setSubcategoriaId] = useState("")
   const [valorOrcado, setValorOrcado] = useState("")
   const [editandoId, setEditandoId] = useState(null)
   const [valorEdicao, setValorEdicao] = useState("")
+  const [erro, setErro] = useState(null)
 
   const { data: categorias } = useQuery({
     queryKey: ["cliente-eu-categorias", token],
     queryFn: () => minhasCategorias(token),
     enabled: !!token,
   })
+  const { data: subcategorias } = useQuery({
+    queryKey: ["cliente-eu-subcategorias", token],
+    queryFn: () => minhasSubcategorias(token),
+    enabled: !!token,
+  })
+  const subcategoriasDaCategoria = (subcategorias || []).filter((s) => s.categoria_id === categoriaId)
   const { data: transacoes = [] } = useQuery({
     queryKey: ["cliente-eu-transacoes", token, { contexto }],
     queryFn: () => minhasTransacoes(token, { contexto }),
@@ -61,27 +69,40 @@ export default function OrcamentoTab({ token, contexto = "PF" }) {
   const gastosReais = doMes.filter((t) => t.tipo === "saida").reduce((s, t) => s + Math.abs(Number(t.valor)), 0)
 
   const totalOrcado = orcamentos.reduce((s, o) => s + Number(o.valor_orcado), 0)
-  const totalRealizado = orcamentos.reduce((s, o) => s + Number(o.valor_realizado), 0)
 
   // Segmentos coloridos por categoria orçada (pra barra empilhada).
   const segmentos = orcamentos.map((o, i) => ({ ...o, cor: CORES[i % CORES.length] }))
-  const escala = Math.max(1, renda, gastosReais, totalOrcado)
 
   const sobraAtual = renda - gastosReais
   const sobraPlano = renda - totalOrcado
   const economia = gastosReais - totalOrcado // >0 = plano gasta menos que hoje
 
-  const categoriasDisponiveis = (categorias || []).filter(
-    (c) => c.tipo === "saida" && !orcamentos.some((o) => o.categoria_id === c.id)
-  )
+  // Regra de bolso (estimativa, igual à cobertura de vida na Proteção):
+  // reserva de emergência = 6x os gastos médios do mês.
+  const reservaIdeal = gastosReais * 6
+
+  // Categoria continua disponível mesmo com uma meta já criada -- só não
+  // deixa repetir exatamente o mesmo par categoria+subcategoria (o backend
+  // também garante isso, aqui é só pra já vir com a subcategoria zerada).
+  const categoriasDisponiveis = (categorias || []).filter((c) => c.tipo === "saida")
 
   const criar = useMutation({
-    mutationFn: () => criarMeuOrcamento(token, { categoria_id: categoriaId, ano, mes, valor_orcado: Number(valorOrcado) }),
+    mutationFn: () =>
+      criarMeuOrcamento(token, {
+        categoria_id: categoriaId,
+        subcategoria_id: subcategoriaId || null,
+        ano,
+        mes,
+        valor_orcado: Number(valorOrcado),
+      }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cliente-eu-orcamentos", token, ano, mes] })
       setCategoriaId("")
+      setSubcategoriaId("")
       setValorOrcado("")
+      setErro(null)
     },
+    onError: (e) => setErro(e.message || "Não foi possível criar essa meta."),
   })
   const editar = useMutation({
     mutationFn: (id) => atualizarMeuOrcamento(token, id, { valor_orcado: Number(valorEdicao) }),
@@ -95,19 +116,48 @@ export default function OrcamentoTab({ token, contexto = "PF" }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cliente-eu-orcamentos", token, ano, mes] }),
   })
 
-  function BarraEmpilhada({ valorTotalLabel, itens }) {
+  // Coluna Renda (sólida) x coluna Despesas (empilhada por categoria/
+  // subcategoria, com % de cada segmento) lado a lado -- mostra visualmente
+  // do que o gasto é composto em relação à renda.
+  function GraficoComposicao() {
+    const totalDespesas = cenario === "atual" ? gastosReais : totalOrcado
+    const escalaMax = Math.max(1, renda, totalDespesas)
+    const alturaMax = 260
+
     return (
-      <div>
-        <div className="flex h-6 rounded-[6px] overflow-hidden bg-panel-2 border border-line">
-          {itens.map((it) => (
-            <div
-              key={it.categoria_id}
-              style={{ width: `${(it.valor / escala) * 100}%`, background: it.cor }}
-              title={`${it.categoria_nome}: ${formatarMoeda(it.valor)}`}
-            />
-          ))}
+      <div className="flex items-end gap-10 justify-center py-2">
+        <div className="flex flex-col items-center gap-2">
+          <div
+            className="w-20 rounded-t-[6px] bg-accent flex items-start justify-center pt-1.5"
+            style={{ height: `${Math.max(4, (renda / escalaMax) * alturaMax)}px` }}
+          >
+            <span className="text-[11px] font-mono text-[#062019] font-semibold">{formatarMoeda(renda)}</span>
+          </div>
+          <span className="text-[11.5px] text-text-dim">Renda</span>
         </div>
-        <div className="text-[11px] text-text-faint font-mono mt-1">{valorTotalLabel}</div>
+        <div className="flex flex-col items-center gap-2">
+          <div
+            className="w-20 rounded-t-[6px] overflow-hidden flex flex-col-reverse"
+            style={{ height: `${Math.max(4, (totalDespesas / escalaMax) * alturaMax)}px` }}
+          >
+            {segmentos.map((s) => {
+              const valor = Number(cenario === "atual" ? s.valor_realizado : s.valor_orcado)
+              if (!valor) return null
+              const pct = totalDespesas ? Math.round((valor / totalDespesas) * 100) : 0
+              return (
+                <div
+                  key={s.id}
+                  title={`${s.categoria_nome}${s.subcategoria_nome ? " · " + s.subcategoria_nome : ""}: ${formatarMoeda(valor)} (${pct}%)`}
+                  style={{ height: `${(valor / totalDespesas) * 100}%`, background: s.cor }}
+                  className="flex items-center justify-center"
+                >
+                  {pct >= 8 && <span className="text-[10px] text-white/90 font-mono">{pct}%</span>}
+                </div>
+              )
+            })}
+          </div>
+          <span className="text-[11.5px] text-text-dim">{cenario === "atual" ? "Gastos reais" : "Gastos planejados"}</span>
+        </div>
       </div>
     )
   }
@@ -159,57 +209,47 @@ export default function OrcamentoTab({ token, contexto = "PF" }) {
         />
       </div>
 
-      {/* Comparação Atual x Com metas */}
+      {/* Composição: Renda x Gastos, mostrando do que o gasto é feito */}
       {orcamentos.length > 0 && (
         <Card>
-          <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-4">
-            Atual × Com metas · {MESES[mes - 1]}/{ano}
-          </div>
-          <div className="flex flex-col gap-4">
-            <div>
-              <div className="text-[12px] text-text-dim mb-1.5">Renda</div>
-              <div className="h-6 rounded-[6px] bg-accent/25 border border-accent/40 flex items-center px-2" style={{ width: `${(renda / escala) * 100}%`, minWidth: 60 }}>
-                <span className="text-[11px] font-mono text-text">{formatarMoeda(renda)}</span>
-              </div>
-            </div>
-            <div>
-              <div className="text-[12px] text-text-dim mb-1.5">Gastos hoje (real)</div>
-              <BarraEmpilhada
-                valorTotalLabel={`Total gasto nas metas: ${formatarMoeda(totalRealizado)}`}
-                itens={segmentos.map((s) => ({ ...s, valor: Number(s.valor_realizado) }))}
-              />
-            </div>
-            <div>
-              <div className="text-[12px] text-text-dim mb-1.5">Gastos planejados (com metas)</div>
-              <BarraEmpilhada
-                valorTotalLabel={`Total planejado: ${formatarMoeda(totalOrcado)}`}
-                itens={segmentos.map((s) => ({ ...s, valor: Number(s.valor_orcado) }))}
-              />
-            </div>
+          <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-1">
+            Composição do mês · {MESES[mes - 1]}/{ano}
           </div>
 
-          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-4">
+          <GraficoComposicao />
+
+          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 justify-center">
             {segmentos.map((s) => (
-              <span key={s.categoria_id} className="flex items-center gap-1.5 text-[11.5px] text-text-dim">
+              <span key={s.id} className="flex items-center gap-1.5 text-[11.5px] text-text-dim">
                 <span className="w-2.5 h-2.5 rounded-full" style={{ background: s.cor }} />
                 {s.categoria_nome}
+                {s.subcategoria_nome && <span className="text-text-faint">· {s.subcategoria_nome}</span>}
               </span>
             ))}
           </div>
 
-          <div className="mt-4 bg-panel-2 rounded-[9px] px-4 py-3 text-[12.5px]">
-            {economia > 0 ? (
-              <>
-                Seguindo seu plano você gastaria <strong className="text-accent">{formatarMoeda(economia)}</strong> a
-                menos que hoje — sobrariam <strong className="text-accent">{formatarMoeda(sobraPlano)}</strong> no mês.
-              </>
-            ) : economia < 0 ? (
-              <>
-                Suas metas somam <strong className="text-amber">{formatarMoeda(-economia)}</strong> a mais do que você
-                gastou de fato — dá pra apertar os limites.
-              </>
-            ) : (
-              <>Seus gastos reais estão batendo com o plano. 👏</>
+          <div className="flex flex-col gap-2 mt-4">
+            <div className="bg-panel-2 rounded-[9px] px-4 py-3 text-[12.5px]">
+              {economia > 0 ? (
+                <>
+                  Seguindo seu plano você gastaria <strong className="text-accent">{formatarMoeda(economia)}</strong> a
+                  menos que hoje — sobrariam <strong className="text-accent">{formatarMoeda(sobraPlano)}</strong> no mês.
+                </>
+              ) : economia < 0 ? (
+                <>
+                  Suas metas somam <strong className="text-amber">{formatarMoeda(-economia)}</strong> a mais do que
+                  você gastou de fato — dá pra apertar os limites.
+                </>
+              ) : (
+                <>Seus gastos reais estão batendo com o plano. 👏</>
+              )}
+            </div>
+            {gastosReais > 0 && (
+              <div className="bg-panel-2 rounded-[9px] px-4 py-3 text-[12.5px]">
+                De acordo com seus gastos médios atuais, a reserva de emergência ideal pra sua segurança é de{" "}
+                <strong className="text-accent">{formatarMoeda(reservaIdeal)}</strong>{" "}
+                <span className="text-text-faint">(estimativa: 6x os gastos do mês)</span>.
+              </div>
             )}
           </div>
         </Card>
@@ -225,13 +265,33 @@ export default function OrcamentoTab({ token, contexto = "PF" }) {
             e.preventDefault()
             if (categoriaId && valorOrcado) criar.mutate()
           }}
-          className="flex gap-3 flex-wrap items-end mb-4"
+          className="flex gap-3 flex-wrap items-end mb-2"
         >
           <div className="w-52">
-            <Select label="Categoria" value={categoriaId} onChange={(e) => setCategoriaId(e.target.value)}>
+            <Select
+              label="Categoria"
+              value={categoriaId}
+              onChange={(e) => {
+                setCategoriaId(e.target.value)
+                setSubcategoriaId("")
+              }}
+            >
               <option value="">Selecione…</option>
               {categoriasDisponiveis.map((c) => (
                 <option key={c.id} value={c.id}>{c.nome}</option>
+              ))}
+            </Select>
+          </div>
+          <div className="w-52">
+            <Select
+              label="Subcategoria (opcional)"
+              value={subcategoriaId}
+              onChange={(e) => setSubcategoriaId(e.target.value)}
+              disabled={!categoriaId}
+            >
+              <option value="">Categoria inteira</option>
+              {subcategoriasDaCategoria.map((s) => (
+                <option key={s.id} value={s.id}>{s.nome}</option>
               ))}
             </Select>
           </div>
@@ -248,11 +308,12 @@ export default function OrcamentoTab({ token, contexto = "PF" }) {
             Adicionar
           </Button>
         </form>
+        {erro && <p className="text-red text-[12.5px] mb-3">{erro}</p>}
 
         {isLoading && <p className="text-text-faint text-sm">Carregando…</p>}
         {!isLoading && !orcamentos.length && (
           <p className="text-text-faint text-[12.5px]">
-            Nenhuma meta em {MESES[mes - 1]}/{ano} — adicione a primeira acima pra ver a comparação Atual × Com metas.
+            Nenhuma meta em {MESES[mes - 1]}/{ano} — adicione a primeira acima pra ver a composição do mês.
           </p>
         )}
 
@@ -267,6 +328,9 @@ export default function OrcamentoTab({ token, contexto = "PF" }) {
                   <span className="flex items-center gap-2 font-medium text-[13px]">
                     <span className="w-2.5 h-2.5 rounded-full" style={{ background: o.cor }} />
                     {o.categoria_nome}
+                    {o.subcategoria_nome && (
+                      <span className="text-text-faint font-normal text-[12px]">› {o.subcategoria_nome}</span>
+                    )}
                   </span>
                   <div className="flex items-center gap-3">
                     {editandoId === o.id ? (

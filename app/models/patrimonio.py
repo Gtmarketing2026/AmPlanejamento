@@ -170,6 +170,11 @@ class OrcamentoCategoria(Base):
     categoria_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("categorias.id", ondelete="CASCADE"), nullable=False
     )
+    # Opcional: meta mais específica, restrita a uma subcategoria (ex: "Uber"
+    # dentro de "Transporte") em vez da categoria inteira.
+    subcategoria_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("subcategorias.id", ondelete="CASCADE"), nullable=True
+    )
     ano: Mapped[int] = mapped_column(Integer, nullable=False)
     mes: Mapped[int] = mapped_column(Integer, nullable=False)
     valor_orcado: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)

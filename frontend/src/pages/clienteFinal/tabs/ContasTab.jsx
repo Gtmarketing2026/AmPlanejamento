@@ -19,6 +19,8 @@ export default function ContasTab({ token }) {
   const [form, setForm] = useState(FORM_VAZIO)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [editandoId, setEditandoId] = useState(null)
+  const [ajustandoId, setAjustandoId] = useState(null)
+  const [valorAjuste, setValorAjuste] = useState("")
 
   const { data: contas = [], isLoading } = useQuery({
     queryKey: ["cliente-eu-contas", token],
@@ -51,6 +53,25 @@ export default function ContasTab({ token }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cliente-eu-contas", token] }),
   })
 
+  // Ajustar saldo: o saldo da conta é somado automaticamente a partir dos
+  // lançamentos vinculados a ela; aqui o cliente informa o valor CORRETO de
+  // hoje e a gente calcula o ajuste (diferença) por trás -- os lançamentos
+  // seguintes continuam somando normalmente em cima disso.
+  const ajustarSaldo = useMutation({
+    mutationFn: ({ conta, novoValor }) =>
+      atualizarMinhaConta(token, conta.id, { saldo_manual: novoValor - Number(conta.saldo_automatico || 0) }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cliente-eu-contas", token] })
+      setAjustandoId(null)
+      setValorAjuste("")
+    },
+  })
+
+  function abrirAjuste(conta) {
+    setAjustandoId(conta.id)
+    setValorAjuste(String(conta.saldo_atual ?? 0))
+  }
+
   function editar(conta) {
     setEditandoId(conta.id)
     setForm({
@@ -72,7 +93,7 @@ export default function ContasTab({ token }) {
 
   const contasBancarias = contas.filter((c) => c.natureza === "conta")
   const cartoes = contas.filter((c) => c.natureza === "cartao")
-  const totalContas = contasBancarias.reduce((s, c) => s + Number(c.saldo_manual || 0), 0)
+  const totalContas = contasBancarias.reduce((s, c) => s + Number(c.saldo_atual || 0), 0)
   const totalUsadoCartoes = cartoes.reduce((s, c) => s + Number(c.valor_usado || 0), 0)
   const totalLimiteCartoes = cartoes.reduce((s, c) => s + Number(c.limite_total || 0), 0)
 
@@ -135,14 +156,17 @@ export default function ContasTab({ token }) {
                 />
               </div>
               {form.natureza === "conta" ? (
-                <div className="w-40">
-                  <Field
-                    label="Saldo atual (R$)"
-                    type="number"
-                    value={form.saldo_manual}
-                    onChange={(e) => setForm((f) => ({ ...f, saldo_manual: e.target.value }))}
-                  />
-                </div>
+                !editandoId && (
+                  <div className="w-40">
+                    <Field
+                      label="Saldo inicial (R$)"
+                      type="number"
+                      value={form.saldo_manual}
+                      onChange={(e) => setForm((f) => ({ ...f, saldo_manual: e.target.value }))}
+                      placeholder="0,00"
+                    />
+                  </div>
+                )
               ) : (
                 <>
                   <div className="w-40">
@@ -193,22 +217,53 @@ export default function ContasTab({ token }) {
           <p className="text-text-faint text-[12.5px] py-3">Nenhuma conta cadastrada ainda.</p>
         )}
         {contasBancarias.map((c) => (
-          <div key={c.id} className="flex items-center justify-between py-2.5 border-b border-line last:border-0">
-            <div>
-              <div className="text-[13.5px] font-medium">{c.nome_exibicao}</div>
-              {c.banco && <div className="text-text-faint text-[11px]">{c.banco}</div>}
+          <div key={c.id} className="py-2.5 border-b border-line last:border-0">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-[13.5px] font-medium">{c.nome_exibicao}</div>
+                {c.banco && <div className="text-text-faint text-[11px]">{c.banco}</div>}
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[13.5px]">{formatarMoeda(c.saldo_atual || 0)}</span>
+                <button onClick={() => editar(c)} className="text-text-faint hover:text-text text-[11.5px]">
+                  ✎
+                </button>
+                <button
+                  onClick={() => confirm(`Excluir "${c.nome_exibicao}"? Isso remove também os lançamentos dela.`) && excluir.mutate(c.id)}
+                  className="text-text-faint hover:text-red text-[11.5px]"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="font-mono text-[13.5px]">{formatarMoeda(c.saldo_manual || 0)}</span>
-              <button onClick={() => editar(c)} className="text-text-faint hover:text-text text-[11.5px]">
-                ✎
-              </button>
-              <button
-                onClick={() => confirm(`Excluir "${c.nome_exibicao}"? Isso remove também os lançamentos dela.`) && excluir.mutate(c.id)}
-                className="text-text-faint hover:text-red text-[11.5px]"
-              >
-                ✕
-              </button>
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-text-faint text-[10.5px]">
+                Atualizado automaticamente pelos lançamentos
+              </span>
+              {ajustandoId === c.id ? (
+                <>
+                  <input
+                    type="number"
+                    autoFocus
+                    value={valorAjuste}
+                    onChange={(e) => setValorAjuste(e.target.value)}
+                    className="bg-bg border border-line rounded-[7px] px-2 py-1 text-[11.5px] text-text outline-none focus:border-accent/60 w-24"
+                  />
+                  <button
+                    onClick={() => valorAjuste !== "" && ajustarSaldo.mutate({ conta: c, novoValor: Number(valorAjuste) })}
+                    className="text-accent text-[11px] hover:underline"
+                  >
+                    OK
+                  </button>
+                  <button onClick={() => setAjustandoId(null)} className="text-text-faint text-[11px] hover:underline">
+                    Cancelar
+                  </button>
+                </>
+              ) : (
+                <button onClick={() => abrirAjuste(c)} className="text-text-dim hover:text-text text-[10.5px] underline decoration-dotted">
+                  ajustar saldo
+                </button>
+              )}
             </div>
           </div>
         ))}
