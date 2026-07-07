@@ -209,6 +209,23 @@ class PatrimonioResposta(BaseModel):
     patrimonio_liquido: float
 
 
+# ---------- Saúde financeira (termômetro + alertas do mês) ----------
+class MensagemSaudeFinanceira(BaseModel):
+    tipo: str  # alerta | positivo | neutro
+    texto: str
+
+
+class SaudeFinanceiraResposta(BaseModel):
+    tem_dados: bool
+    score: int  # 0-100, usado pra posicionar o ponteiro do termômetro
+    receitas_mes: float
+    despesas_mes: float
+    gasto_acima_renda_pct: float | None  # None se não está gastando mais do que ganha
+    comprometimento_dividas_pct: float | None  # % das despesas do mês tomado por parcelas de dívida
+    mensagens: list[MensagemSaudeFinanceira]
+    planejador_whatsapp: str | None = None
+
+
 # ---------- Simulação (Meu Futuro / independência financeira) ----------
 # Taxas reais (já descontada a inflação) -- padrão conservador, editável.
 TAXA_ACUMULACAO_PADRAO_PCT = 4.0

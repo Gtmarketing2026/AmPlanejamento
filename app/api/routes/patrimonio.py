@@ -26,6 +26,7 @@ from app.models.patrimonio import (
     OrcamentoCategoria,
     Simulacao,
 )
+from app.models.profissional import Profissional
 from app.models.transacao import Transacao
 from app.schemas.patrimonio import (
     PRIORIDADES_META,
@@ -41,6 +42,7 @@ from app.schemas.patrimonio import (
     InvestimentoAtualizar,
     InvestimentoCriar,
     InvestimentoResposta,
+    MensagemSaudeFinanceira,
     MetaAporteCriar,
     MetaAporteResposta,
     MetaAtualizar,
@@ -50,6 +52,7 @@ from app.schemas.patrimonio import (
     OrcamentoCriar,
     OrcamentoResposta,
     PatrimonioResposta,
+    SaudeFinanceiraResposta,
     SimulacaoCriar,
     SimulacaoResposta,
 )
@@ -363,6 +366,117 @@ def obter_patrimonio(cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: 
         total_bens=total_bens,
         total_dividas=total_dividas,
         patrimonio_liquido=saldo_contas + total_investido + total_bens - total_dividas,
+    )
+
+
+# ============================================================================
+# Saúde financeira (termômetro + alertas do mês)
+# ============================================================================
+
+
+@router.get("/saude-financeira", response_model=SaudeFinanceiraResposta)
+def obter_saude_financeira(
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)
+):
+    """Diagnóstico rápido do mês corrente pro cliente ver logo de cara: quanto
+    ganhou x gastou, e quanto das despesas está comprometido com dívidas.
+    Regras simples e determinísticas (sem IA) -- os dois alertas de exemplo
+    são só aritmética, não precisam de um modelo de linguagem pra soar
+    relevantes; mais barato, instantâneo e sempre consistente."""
+    hoje = date.today()
+    inicio_mes = hoje.replace(day=1)
+
+    entradas_mes = float(
+        db.scalar(
+            select(func.coalesce(func.sum(Transacao.valor), 0)).where(
+                Transacao.cliente_id == cliente_id, Transacao.tipo == "entrada", Transacao.data >= inicio_mes
+            )
+        )
+        or 0
+    )
+    despesas_mes = float(
+        abs(
+            db.scalar(
+                select(func.coalesce(func.sum(Transacao.valor), 0)).where(
+                    Transacao.cliente_id == cliente_id, Transacao.tipo == "saida", Transacao.data >= inicio_mes
+                )
+            )
+            or 0
+        )
+    )
+
+    # Parcela mensal estimada de cada dívida ativa: valor_total/parcelas_totais
+    # quando informado, senão aproxima por valor_restante/12 (amortização
+    # genérica de 1 ano) -- é só uma estimativa pro alerta, não um cálculo
+    # financeiro exato de amortização.
+    dividas_ativas = db.scalars(
+        select(Divida).where(Divida.cliente_id == cliente_id, Divida.status != "quitada")
+    ).all()
+    parcela_mensal_dividas = 0.0
+    for d in dividas_ativas:
+        if d.parcelas_totais:
+            parcela_mensal_dividas += float(d.valor_total) / d.parcelas_totais
+        else:
+            parcela_mensal_dividas += float(d.valor_restante) / 12
+
+    tem_dados = entradas_mes > 0 or despesas_mes > 0
+    mensagens: list[MensagemSaudeFinanceira] = []
+    gasto_acima_renda_pct = None
+    comprometimento_dividas_pct = None
+
+    if not tem_dados:
+        score = 50
+    else:
+        poupanca_pct = ((entradas_mes - despesas_mes) / entradas_mes * 100) if entradas_mes > 0 else -100.0
+        score = max(0, min(100, round(50 + poupanca_pct)))
+
+        if despesas_mes > entradas_mes and entradas_mes > 0:
+            gasto_acima_renda_pct = round((despesas_mes - entradas_mes) / entradas_mes * 100, 2)
+            mensagens.append(
+                MensagemSaudeFinanceira(
+                    tipo="alerta",
+                    texto=(
+                        f"Cuidado! Você está gastando {gasto_acima_renda_pct}% a mais do que você ganha. "
+                        "Revise seu orçamento e metas de gasto ou peça auxílio para o seu planejador!"
+                    ),
+                )
+            )
+
+        if despesas_mes > 0 and parcela_mensal_dividas > 0:
+            comprometimento_dividas_pct = round(min(100, parcela_mensal_dividas / despesas_mes * 100), 2)
+            if comprometimento_dividas_pct >= 20:
+                score = max(0, score - 15)
+                mensagens.append(
+                    MensagemSaudeFinanceira(
+                        tipo="alerta",
+                        texto=(
+                            f"Cuidado! Suas dívidas e financiamentos estão comprometendo "
+                            f"{comprometimento_dividas_pct}% das suas despesas. Revise o seu orçamento ou "
+                            "fale com o seu planejador para lhe auxiliar na solução!"
+                        ),
+                    )
+                )
+
+        if not mensagens:
+            mensagens.append(
+                MensagemSaudeFinanceira(
+                    tipo="positivo",
+                    texto=f"Parabéns! Você está economizando {round(max(0, 100 - (despesas_mes / entradas_mes * 100 if entradas_mes else 0)), 1)}% da sua renda este mês.",
+                )
+            )
+
+    cliente = db.get(Cliente, cliente_id)
+    profissional = db.get(Profissional, cliente.profissional_id) if cliente else None
+
+    return SaudeFinanceiraResposta(
+        tem_dados=tem_dados,
+        score=score,
+        receitas_mes=entradas_mes,
+        despesas_mes=despesas_mes,
+        gasto_acima_renda_pct=gasto_acima_renda_pct,
+        comprometimento_dividas_pct=comprometimento_dividas_pct,
+        mensagens=mensagens,
+        planejador_whatsapp=profissional.whatsapp if profissional else None,
     )
 
 

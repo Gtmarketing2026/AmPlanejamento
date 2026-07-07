@@ -17,6 +17,7 @@ import InvestimentosTab from "./tabs/InvestimentosTab"
 import PatrimonioTab from "./tabs/PatrimonioTab"
 import MeuFuturoTab from "./tabs/MeuFuturoTab"
 import ClarezaFinanceiraTab from "./tabs/ClarezaFinanceiraTab"
+import SaudeFinanceiraCard from "./SaudeFinanceiraCard"
 
 export default function ClienteDashboardPage() {
   const { token } = useOutletContext()
@@ -78,6 +79,8 @@ export default function ClienteDashboardPage() {
 
   return (
     <div className="max-w-[1080px] mx-auto px-8 py-10">
+      <SaudeFinanceiraCard token={token} />
+
       <div className="mb-5">
         <Tabs
           options={[

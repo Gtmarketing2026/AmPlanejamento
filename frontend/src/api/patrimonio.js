@@ -28,6 +28,9 @@ export const excluirMeuInvestimento = (token, id) =>
 // ---------- Patrimônio (agregado) ----------
 export const obterMeuPatrimonio = (token) => apiGet("/clientes/eu/patrimonio", { token })
 
+// ---------- Saúde financeira (termômetro) ----------
+export const obterMinhaSaudeFinanceira = (token) => apiGet("/clientes/eu/saude-financeira", { token })
+
 // ---------- Bens (móveis/imóveis) ----------
 export const listarMeusBens = (token) => apiGet("/clientes/eu/bens", { token })
 export const criarMeuBem = (token, dados) => apiPost("/clientes/eu/bens", dados, { token })
