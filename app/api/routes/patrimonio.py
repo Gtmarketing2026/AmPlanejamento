@@ -18,9 +18,11 @@ from app.api.deps import get_cliente_id_atual, get_db_admin
 from app.models.categoria import Categoria
 from app.models.cliente import Cliente
 from app.models.patrimonio import (
+    ApoliceSeguro,
     BemPatrimonial,
     Divida,
     Investimento,
+    InvestimentoAlocacao,
     Meta,
     MetaAporte,
     OrcamentoCategoria,
@@ -30,10 +32,14 @@ from app.models.profissional import Profissional
 from app.models.transacao import Transacao
 from app.schemas.patrimonio import (
     PRIORIDADES_META,
+    TIPOS_APOLICE,
     TIPOS_BEM,
     TIPOS_DIVIDA,
     TIPOS_INVESTIMENTO,
     TIPOS_META,
+    AlocacaoResposta,
+    ApoliceCriar,
+    ApoliceResposta,
     BemCriar,
     BemResposta,
     DividaAtualizar,
@@ -48,10 +54,12 @@ from app.schemas.patrimonio import (
     MetaAtualizar,
     MetaCriar,
     MetaResposta,
+    MinhaProtecaoResposta,
     OrcamentoAtualizar,
     OrcamentoCriar,
     OrcamentoResposta,
     PatrimonioResposta,
+    ResumoPatrimonialResposta,
     SaudeFinanceiraResposta,
     SimulacaoCriar,
     SimulacaoResposta,
@@ -72,9 +80,27 @@ def _exigir_cliente(db: Session, cliente_id: uuid.UUID) -> Cliente:
 # ============================================================================
 
 
+def _valor_alocado_da_meta(db: Session, meta_id: uuid.UUID) -> float:
+    return float(
+        db.scalar(
+            select(func.coalesce(func.sum(InvestimentoAlocacao.valor_alocado), 0)).where(
+                InvestimentoAlocacao.meta_id == meta_id
+            )
+        )
+        or 0
+    )
+
+
+def _meta_para_resposta(db: Session, meta: Meta) -> MetaResposta:
+    resposta = MetaResposta.model_validate(meta)
+    resposta.valor_investido_alocado = _valor_alocado_da_meta(db, meta.id)
+    return resposta
+
+
 @router.get("/metas", response_model=list[MetaResposta])
 def listar_metas(cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)):
-    return db.scalars(select(Meta).where(Meta.cliente_id == cliente_id).order_by(Meta.criado_em.desc())).all()
+    metas = db.scalars(select(Meta).where(Meta.cliente_id == cliente_id).order_by(Meta.criado_em.desc())).all()
+    return [_meta_para_resposta(db, m) for m in metas]
 
 
 @router.post("/metas", response_model=MetaResposta, status_code=status.HTTP_201_CREATED)
@@ -96,11 +122,12 @@ def criar_meta(
         prioridade=dados.prioridade,
         valor_alvo=dados.valor_alvo,
         prazo=dados.prazo,
+        aporte_mensal_meta=dados.aporte_mensal_meta,
     )
     db.add(meta)
     db.flush()
     db.refresh(meta)
-    return meta
+    return _meta_para_resposta(db, meta)
 
 
 @router.patch("/metas/{meta_id}", response_model=MetaResposta)
@@ -120,14 +147,14 @@ def atualizar_meta(
     if dados.prioridade is not None and dados.prioridade not in PRIORIDADES_META:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Prioridade inválida")
 
-    for campo in ("titulo", "tipo", "prioridade", "valor_alvo", "prazo", "status"):
+    for campo in ("titulo", "tipo", "prioridade", "valor_alvo", "prazo", "status", "aporte_mensal_meta"):
         valor = getattr(dados, campo)
         if valor is not None:
             setattr(meta, campo, valor)
     meta.atualizado_em = datetime.now(timezone.utc)
     db.flush()
     db.refresh(meta)
-    return meta
+    return _meta_para_resposta(db, meta)
 
 
 @router.delete("/metas/{meta_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -247,15 +274,57 @@ def excluir_divida(
 # ============================================================================
 
 
+def _investimento_para_resposta(db: Session, investimento: Investimento) -> InvestimentoResposta:
+    linhas = db.execute(
+        select(InvestimentoAlocacao, Meta.titulo)
+        .join(Meta, Meta.id == InvestimentoAlocacao.meta_id)
+        .where(InvestimentoAlocacao.investimento_id == investimento.id)
+    ).all()
+    resposta = InvestimentoResposta.model_validate(investimento)
+    resposta.alocacoes = [
+        AlocacaoResposta(id=a.id, meta_id=a.meta_id, meta_titulo=titulo, valor_alocado=a.valor_alocado)
+        for a, titulo in linhas
+    ]
+    return resposta
+
+
+def _aplicar_alocacoes(db: Session, investimento_id: uuid.UUID, cliente_id: uuid.UUID, profissional_id: uuid.UUID, alocacoes) -> None:
+    """Substitui de uma vez a divisão do investimento entre objetivos --
+    mais simples de raciocinar do que endpoints incrementais separados pra
+    adicionar/remover cada alocação."""
+    existentes = db.scalars(
+        select(InvestimentoAlocacao).where(InvestimentoAlocacao.investimento_id == investimento_id)
+    ).all()
+    for e in existentes:
+        db.delete(e)
+    db.flush()
+
+    for aloc in alocacoes:
+        meta = db.get(Meta, aloc.meta_id)
+        if meta is None or meta.cliente_id != cliente_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, f"Meta {aloc.meta_id} não encontrada")
+        db.add(
+            InvestimentoAlocacao(
+                investimento_id=investimento_id,
+                meta_id=aloc.meta_id,
+                cliente_id=cliente_id,
+                profissional_id=profissional_id,
+                valor_alocado=aloc.valor_alocado,
+            )
+        )
+    db.flush()
+
+
 @router.get("/investimentos", response_model=list[InvestimentoResposta])
 def listar_investimentos(
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)
 ):
-    return db.scalars(
+    investimentos = db.scalars(
         select(Investimento)
         .where(Investimento.cliente_id == cliente_id)
         .order_by(Investimento.data_referencia.desc())
     ).all()
+    return [_investimento_para_resposta(db, i) for i in investimentos]
 
 
 @router.post("/investimentos", response_model=InvestimentoResposta, status_code=status.HTTP_201_CREATED)
@@ -276,11 +345,15 @@ def criar_investimento(
         valor_aplicado=dados.valor_aplicado,
         valor_atual=dados.valor_atual,
         data_referencia=dados.data_referencia or date.today(),
+        instituicao_nome=dados.instituicao_nome,
+        liquidez=dados.liquidez,
     )
     db.add(investimento)
     db.flush()
+    if dados.alocacoes:
+        _aplicar_alocacoes(db, investimento.id, cliente_id, cliente.profissional_id, dados.alocacoes)
     db.refresh(investimento)
-    return investimento
+    return _investimento_para_resposta(db, investimento)
 
 
 @router.patch("/investimentos/{investimento_id}", response_model=InvestimentoResposta)
@@ -293,13 +366,15 @@ def atualizar_investimento(
     investimento = db.get(Investimento, investimento_id)
     if investimento is None or investimento.cliente_id != cliente_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Investimento não encontrado")
-    for campo in ("nome_ativo", "quantidade", "valor_aplicado", "valor_atual"):
+    for campo in ("nome_ativo", "quantidade", "valor_aplicado", "valor_atual", "instituicao_nome", "liquidez"):
         valor = getattr(dados, campo)
         if valor is not None:
             setattr(investimento, campo, valor)
     db.flush()
+    if dados.alocacoes is not None:
+        _aplicar_alocacoes(db, investimento.id, cliente_id, investimento.profissional_id, dados.alocacoes)
     db.refresh(investimento)
-    return investimento
+    return _investimento_para_resposta(db, investimento)
 
 
 @router.delete("/investimentos/{investimento_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -319,8 +394,7 @@ def excluir_investimento(
 # ============================================================================
 
 
-@router.get("/patrimonio", response_model=PatrimonioResposta)
-def obter_patrimonio(cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)):
+def _calcular_patrimonio(db: Session, cliente_id: uuid.UUID) -> dict:
     # Não há saldo de conta persistido -- "saldo" é a posição de caixa
     # acumulada desde o início dos lançamentos (entradas - saídas).
     entradas = db.scalar(
@@ -360,12 +434,38 @@ def obter_patrimonio(cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: 
         or 0
     )
 
-    return PatrimonioResposta(
-        saldo_contas=saldo_contas,
-        total_investido=total_investido,
-        total_bens=total_bens,
-        total_dividas=total_dividas,
-        patrimonio_liquido=saldo_contas + total_investido + total_bens - total_dividas,
+    return {
+        "saldo_contas": saldo_contas,
+        "total_investido": total_investido,
+        "total_bens": total_bens,
+        "total_dividas": total_dividas,
+        "patrimonio_liquido": saldo_contas + total_investido + total_bens - total_dividas,
+    }
+
+
+@router.get("/patrimonio", response_model=PatrimonioResposta)
+def obter_patrimonio(cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)):
+    return PatrimonioResposta(**_calcular_patrimonio(db, cliente_id))
+
+
+@router.get("/patrimonio/resumo", response_model=ResumoPatrimonialResposta)
+def obter_resumo_patrimonial(
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)
+):
+    """Visão em fatias pro Resumo Patrimonial (donuts de Ativos/Passivos +
+    indicador de quanto do patrimônio está "trabalhando" -- investido, e não
+    parado em conta ou em bens de uso pessoal)."""
+    p = _calcular_patrimonio(db, cliente_id)
+    total_ativos = max(0.0, p["saldo_contas"]) + p["total_investido"] + p["total_bens"]
+    pct_gerador_renda = (p["total_investido"] / total_ativos * 100) if total_ativos > 0 else 0.0
+
+    return ResumoPatrimonialResposta(
+        ativos_liquidez=max(0.0, p["saldo_contas"]),
+        ativos_investimentos=p["total_investido"],
+        ativos_bens=p["total_bens"],
+        passivos_dividas=p["total_dividas"],
+        patrimonio_liquido=p["patrimonio_liquido"],
+        pct_ativo_gerador_renda=round(pct_gerador_renda, 1),
     )
 
 
@@ -767,3 +867,78 @@ def excluir_simulacao(
     if simulacao is None or simulacao.cliente_id != cliente_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Simulação não encontrada")
     db.delete(simulacao)
+
+
+# ============================================================================
+# Minha Proteção (apólices de seguro)
+# ============================================================================
+
+# Regra de bolso pra sugerir cobertura de vida: múltiplo da renda mensal
+# atual. É só uma estimativa de referência (mesmo espírito do disclaimer que
+# já usamos em Meu Futuro) -- não substitui o cálculo detalhado que um
+# planejador faria caso a caso.
+MULTIPLICADOR_COBERTURA_RECOMENDADA = 60  # ~5 anos de renda mensal
+
+
+@router.get("/protecao", response_model=MinhaProtecaoResposta)
+def obter_minha_protecao(
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)
+):
+    apolices = db.scalars(
+        select(ApoliceSeguro).where(ApoliceSeguro.cliente_id == cliente_id).order_by(ApoliceSeguro.criado_em.desc())
+    ).all()
+    cobertura_atual = sum(float(a.valor_cobertura) for a in apolices if a.tipo == "vida")
+
+    hoje = date.today()
+    inicio_mes = hoje.replace(day=1)
+    renda_mensal = float(
+        db.scalar(
+            select(func.coalesce(func.sum(Transacao.valor), 0)).where(
+                Transacao.cliente_id == cliente_id, Transacao.tipo == "entrada", Transacao.data >= inicio_mes
+            )
+        )
+        or 0
+    )
+    cobertura_recomendada = renda_mensal * MULTIPLICADOR_COBERTURA_RECOMENDADA
+
+    return MinhaProtecaoResposta(
+        cobertura_atual=cobertura_atual,
+        cobertura_recomendada=cobertura_recomendada,
+        apolices=apolices,
+    )
+
+
+@router.post("/apolices", response_model=ApoliceResposta, status_code=status.HTTP_201_CREATED)
+def criar_apolice(
+    dados: ApoliceCriar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    cliente = _exigir_cliente(db, cliente_id)
+    if dados.tipo not in TIPOS_APOLICE:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Tipo inválido: {dados.tipo}")
+    apolice = ApoliceSeguro(
+        cliente_id=cliente_id,
+        profissional_id=cliente.profissional_id,
+        tipo=dados.tipo,
+        seguradora=dados.seguradora,
+        valor_cobertura=dados.valor_cobertura,
+        premio_mensal=dados.premio_mensal,
+        vencimento=dados.vencimento,
+    )
+    db.add(apolice)
+    db.flush()
+    db.refresh(apolice)
+    return apolice
+
+
+@router.delete("/apolices/{apolice_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_apolice(
+    apolice_id: uuid.UUID,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    apolice = db.get(ApoliceSeguro, apolice_id)
+    if apolice is None or apolice.cliente_id != cliente_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Apólice não encontrada")
+    db.delete(apolice)

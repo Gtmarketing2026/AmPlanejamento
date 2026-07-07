@@ -45,6 +45,7 @@ class MetaCriar(BaseModel):
     prioridade: str = "desejo"
     valor_alvo: float | None = None
     prazo: date | None = None
+    aporte_mensal_meta: float | None = None
 
 
 class MetaAtualizar(BaseModel):
@@ -54,6 +55,7 @@ class MetaAtualizar(BaseModel):
     valor_alvo: float | None = None
     prazo: date | None = None
     status: str | None = None
+    aporte_mensal_meta: float | None = None
 
 
 class MetaResposta(BaseModel):
@@ -66,7 +68,10 @@ class MetaResposta(BaseModel):
     progresso_pct: float | None
     prazo: date | None
     status: str
-    criado_em: datetime
+    aporte_mensal_meta: float | None = None
+    # Soma do que já está alocado a esta meta via investimentos (calculado
+    # na rota, não é coluna -- ver investimento_alocacoes).
+    valor_investido_alocado: float = 0
 
     model_config = {"from_attributes": True}
 
@@ -127,6 +132,20 @@ class DividaResposta(BaseModel):
 
 
 # ---------- Investimentos ----------
+class AlocacaoCriar(BaseModel):
+    meta_id: uuid.UUID
+    valor_alocado: float
+
+
+class AlocacaoResposta(BaseModel):
+    id: uuid.UUID
+    meta_id: uuid.UUID
+    meta_titulo: str | None = None
+    valor_alocado: float
+
+    model_config = {"from_attributes": True}
+
+
 class InvestimentoCriar(BaseModel):
     tipo: str
     nome_ativo: str
@@ -134,6 +153,11 @@ class InvestimentoCriar(BaseModel):
     valor_aplicado: float | None = None
     valor_atual: float | None = None
     data_referencia: date | None = None
+    instituicao_nome: str | None = None
+    liquidez: str | None = None
+    # Se informado, substitui a divisão do valor entre objetivos de uma vez
+    # (não precisa de tela separada -- o cliente já aloca ao criar/editar).
+    alocacoes: list[AlocacaoCriar] | None = None
 
 
 class InvestimentoAtualizar(BaseModel):
@@ -141,6 +165,9 @@ class InvestimentoAtualizar(BaseModel):
     quantidade: float | None = None
     valor_aplicado: float | None = None
     valor_atual: float | None = None
+    instituicao_nome: str | None = None
+    liquidez: str | None = None
+    alocacoes: list[AlocacaoCriar] | None = None
 
 
 class InvestimentoResposta(BaseModel):
@@ -151,7 +178,10 @@ class InvestimentoResposta(BaseModel):
     valor_aplicado: float | None
     valor_atual: float | None
     data_referencia: date
+    instituicao_nome: str | None = None
+    liquidez: str | None = None
     criado_em: datetime
+    alocacoes: list[AlocacaoResposta] = []
 
     model_config = {"from_attributes": True}
 
@@ -207,6 +237,47 @@ class PatrimonioResposta(BaseModel):
     total_bens: float
     total_dividas: float
     patrimonio_liquido: float
+
+
+class ResumoPatrimonialResposta(BaseModel):
+    """Visão em fatias do Patrimônio -- pros donuts de Ativos/Passivos."""
+
+    ativos_liquidez: float  # saldo em conta
+    ativos_investimentos: float
+    ativos_bens: float
+    passivos_dividas: float
+    patrimonio_liquido: float
+    pct_ativo_gerador_renda: float  # % dos ativos que são investimentos (rendem)
+
+
+# ---------- Apólices de seguro (Minha Proteção) ----------
+TIPOS_APOLICE = {"vida", "saude", "patrimonial", "outro"}
+
+
+class ApoliceCriar(BaseModel):
+    tipo: str
+    seguradora: str
+    valor_cobertura: float
+    premio_mensal: float | None = None
+    vencimento: date | None = None
+
+
+class ApoliceResposta(BaseModel):
+    id: uuid.UUID
+    tipo: str
+    seguradora: str
+    valor_cobertura: float
+    premio_mensal: float | None
+    vencimento: date | None
+    criado_em: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class MinhaProtecaoResposta(BaseModel):
+    cobertura_atual: float
+    cobertura_recomendada: float
+    apolices: list[ApoliceResposta]
 
 
 # ---------- Saúde financeira (termômetro + alertas do mês) ----------

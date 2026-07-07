@@ -43,6 +43,9 @@ export default function MetasTab({ token }) {
   const [prazo, setPrazo] = useState("")
   const [aporteAberto, setAporteAberto] = useState(null)
   const [valorAporte, setValorAporte] = useState("")
+  const [metaMensalAberta, setMetaMensalAberta] = useState(null)
+  const [valorMetaMensal, setValorMetaMensal] = useState("")
+  const [novaMetaMensal, setNovaMetaMensal] = useState("")
 
   const { data: metas = [], isLoading } = useQuery({
     queryKey: ["cliente-eu-metas", token],
@@ -58,12 +61,23 @@ export default function MetasTab({ token }) {
         prioridade,
         valor_alvo: valorAlvo ? Number(valorAlvo) : null,
         prazo: prazo || null,
+        aporte_mensal_meta: novaMetaMensal ? Number(novaMetaMensal) : null,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cliente-eu-metas", token] })
       setTitulo("")
       setValorAlvo("")
       setPrazo("")
+      setNovaMetaMensal("")
+    },
+  })
+
+  const atualizarMetaMensal = useMutation({
+    mutationFn: ({ id, valor }) => atualizarMinhaMeta(token, id, { aporte_mensal_meta: valor }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cliente-eu-metas", token] })
+      setMetaMensalAberta(null)
+      setValorMetaMensal("")
     },
   })
 
@@ -140,6 +154,15 @@ export default function MetasTab({ token }) {
             <div className="w-40">
               <Field label="Prazo" type="date" value={prazo} onChange={(e) => setPrazo(e.target.value)} />
             </div>
+            <div className="w-40">
+              <Field
+                label="Meta mensal (R$)"
+                type="number"
+                value={novaMetaMensal}
+                onChange={(e) => setNovaMetaMensal(e.target.value)}
+                placeholder="ex: 500"
+              />
+            </div>
           </div>
           <Button type="submit" disabled={!titulo.trim() || criar.isPending}>
             {criar.isPending ? "Criando…" : "Criar meta"}
@@ -193,6 +216,7 @@ export default function MetasTab({ token }) {
               <Th>Tipo</Th>
               <Th className="text-right">Alvo</Th>
               <Th className="text-right">Atual</Th>
+              <Th className="text-right">Meta mensal</Th>
               <Th>Status</Th>
               <Th></Th>
             </Thead>
@@ -204,6 +228,7 @@ export default function MetasTab({ token }) {
                   <Td className="text-text-dim">{TIPOS[m.tipo]}</Td>
                   <Td className="text-right font-mono">{formatarMoeda(m.valor_alvo)}</Td>
                   <Td className="text-right font-mono">{formatarMoeda(m.valor_atual)}</Td>
+                  <Td className="text-right font-mono text-text-dim">{formatarMoeda(m.aporte_mensal_meta)}</Td>
                   <Td>
                     <Pill variant={STATUS_VARIANT[m.status]}>{STATUS_LABEL[m.status]}</Pill>
                   </Td>
@@ -219,7 +244,7 @@ export default function MetasTab({ token }) {
               ))}
               {!metas.length && (
                 <Tr>
-                  <Td colSpan={7} className="text-text-faint text-center py-6">
+                  <Td colSpan={8} className="text-text-faint text-center py-6">
                     Nenhuma meta cadastrada ainda.
                   </Td>
                 </Tr>
@@ -287,6 +312,44 @@ export default function MetasTab({ token }) {
                   ) : (
                     <div className="text-[12.5px] text-text-dim">Aportado: {formatarMoeda(m.valor_atual)}</div>
                   )}
+                  {m.valor_investido_alocado > 0 && (
+                    <div className="text-text-faint text-[11px] mt-1">
+                      Investido: {formatarMoeda(m.valor_investido_alocado)}
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <span className="text-text-faint text-[11px]">Meta mensal:</span>
+                    {metaMensalAberta === m.id ? (
+                      <>
+                        <input
+                          type="number"
+                          autoFocus
+                          value={valorMetaMensal}
+                          onChange={(e) => setValorMetaMensal(e.target.value)}
+                          placeholder="R$"
+                          className="bg-bg border border-line rounded-[7px] px-2 py-1 text-[11.5px] text-text outline-none focus:border-accent/60 w-20"
+                        />
+                        <button
+                          onClick={() =>
+                            atualizarMetaMensal.mutate({ id: m.id, valor: Number(valorMetaMensal) || 0 })
+                          }
+                          className="text-accent text-[11px] hover:underline"
+                        >
+                          OK
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setMetaMensalAberta(m.id)
+                          setValorMetaMensal(m.aporte_mensal_meta || "")
+                        }}
+                        className="text-text-dim hover:text-text text-[11px] font-mono underline decoration-dotted"
+                      >
+                        {m.aporte_mensal_meta ? formatarMoeda(m.aporte_mensal_meta) : "definir"}
+                      </button>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 mt-2">
                     {aporteAberto === m.id ? (
                       <>

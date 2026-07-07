@@ -17,6 +17,7 @@ import InvestimentosTab from "./tabs/InvestimentosTab"
 import PatrimonioTab from "./tabs/PatrimonioTab"
 import MeuFuturoTab from "./tabs/MeuFuturoTab"
 import ClarezaFinanceiraTab from "./tabs/ClarezaFinanceiraTab"
+import ProtecaoTab from "./tabs/ProtecaoTab"
 import SaudeFinanceiraCard from "./SaudeFinanceiraCard"
 
 export default function ClienteDashboardPage() {
@@ -93,6 +94,7 @@ export default function ClienteDashboardPage() {
             { value: "investimentos", n: "G", label: "Investimentos" },
             { value: "patrimonio", n: "H", label: "Patrimônio" },
             { value: "dividas", n: "I", label: "Dívidas" },
+            { value: "protecao", n: "J", label: "Proteção" },
           ]}
           active={tab}
           onChange={setTab}
@@ -143,6 +145,7 @@ export default function ClienteDashboardPage() {
       {tab === "investimentos" && <InvestimentosTab token={token} />}
       {tab === "patrimonio" && <PatrimonioTab token={token} />}
       {tab === "dividas" && <DividasTab token={token} />}
+      {tab === "protecao" && <ProtecaoTab token={token} />}
     </div>
   )
 }

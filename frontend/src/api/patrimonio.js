@@ -27,6 +27,7 @@ export const excluirMeuInvestimento = (token, id) =>
 
 // ---------- Patrimônio (agregado) ----------
 export const obterMeuPatrimonio = (token) => apiGet("/clientes/eu/patrimonio", { token })
+export const obterMeuResumoPatrimonial = (token) => apiGet("/clientes/eu/patrimonio/resumo", { token })
 
 // ---------- Saúde financeira (termômetro) ----------
 export const obterMinhaSaudeFinanceira = (token) => apiGet("/clientes/eu/saude-financeira", { token })
@@ -50,3 +51,9 @@ export const listarMinhasSimulacoes = (token) => apiGet("/clientes/eu/simulacoes
 export const criarMinhaSimulacao = (token, dados) => apiPost("/clientes/eu/simulacoes", dados, { token })
 export const excluirMinhaSimulacao = (token, id) =>
   apiDelete(`/clientes/eu/simulacoes/${id}`, undefined, { token })
+
+// ---------- Minha Proteção (apólices de seguro) ----------
+export const obterMinhaProtecao = (token) => apiGet("/clientes/eu/protecao", { token })
+export const criarMinhaApolice = (token, dados) => apiPost("/clientes/eu/apolices", dados, { token })
+export const excluirMinhaApolice = (token, id) =>
+  apiDelete(`/clientes/eu/apolices/${id}`, undefined, { token })

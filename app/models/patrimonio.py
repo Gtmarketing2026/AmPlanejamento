@@ -34,6 +34,9 @@ class Meta(Base):
     progresso_pct: Mapped[float | None] = mapped_column(Numeric(5, 2), Computed("0"), nullable=True)
     prazo: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String, default="em_andamento")
+    # Quanto o cliente pretende investir por mês voltado a este objetivo
+    # (usado no resumo de Investimentos -- soma de todas as metas ativas).
+    aporte_mensal_meta: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -102,6 +105,10 @@ class Investimento(Base):
     # tem model Python (mesmo motivo documentado em Transacao.instituicao_id)
     # -- a FK real já existe no banco (schema_seguranca.sql).
     instituicao_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    # Nome livre da instituição (ex: "Nubank", "XP") -- mais simples que exigir
+    # cadastro prévio numa tabela de instituições pra um MVP de carteira.
+    instituicao_nome: Mapped[str | None] = mapped_column(String, nullable=True)
+    liquidez: Mapped[str | None] = mapped_column(String, nullable=True)  # ex: "Diária", "D+30", "Sem vencimento"
     quantidade: Mapped[float | None] = mapped_column(Numeric(18, 8), nullable=True)
     valor_aplicado: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     valor_atual: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
@@ -186,4 +193,48 @@ class BemPatrimonial(Base):
     tipo: Mapped[str] = mapped_column(String, nullable=False)  # movel | imovel
     nome: Mapped[str] = mapped_column(String, nullable=False)
     valor: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class InvestimentoAlocacao(Base):
+    """Quanto de um investimento está reservado pra cada objetivo (meta).
+    Um investimento pode ser dividido entre vários objetivos -- ex: metade
+    de um CDB pra reserva de emergência, metade pra independência financeira."""
+
+    __tablename__ = "investimento_alocacoes"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    investimento_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("investimentos.id", ondelete="CASCADE"), nullable=False
+    )
+    meta_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("metas.id", ondelete="CASCADE"), nullable=False
+    )
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False
+    )
+    profissional_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
+    )
+    valor_alocado: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ApoliceSeguro(Base):
+    """Apólice de seguro cadastrada manualmente (Minha Proteção)."""
+
+    __tablename__ = "apolices_seguro"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False
+    )
+    profissional_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
+    )
+    tipo: Mapped[str] = mapped_column(String, nullable=False)  # vida | saude | patrimonial | outro
+    seguradora: Mapped[str] = mapped_column(String, nullable=False)
+    valor_cobertura: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    premio_mensal: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    vencimento: Mapped[date | None] = mapped_column(Date, nullable=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

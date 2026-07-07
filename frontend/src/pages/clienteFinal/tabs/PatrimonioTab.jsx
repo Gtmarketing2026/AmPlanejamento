@@ -4,11 +4,13 @@ import Card from "../../../components/ui/Card"
 import KpiStat from "../../../components/ui/KpiStat"
 import Button from "../../../components/ui/Button"
 import Field, { Select } from "../../../components/ui/Field"
+import DonutMultiChart from "../../../components/ui/DonutMultiChart"
 import {
   criarMeuBem,
   excluirMeuBem,
   listarMeusBens,
   obterMeuPatrimonio,
+  obterMeuResumoPatrimonial,
 } from "../../../api/patrimonio"
 import { formatarMoeda } from "../../../lib/format"
 
@@ -19,6 +21,11 @@ export default function PatrimonioTab({ token }) {
   const { data, isLoading } = useQuery({
     queryKey: ["cliente-eu-patrimonio", token],
     queryFn: () => obterMeuPatrimonio(token),
+    enabled: !!token,
+  })
+  const { data: resumo } = useQuery({
+    queryKey: ["cliente-eu-patrimonio-resumo", token],
+    queryFn: () => obterMeuResumoPatrimonial(token),
     enabled: !!token,
   })
   const { data: bens = [] } = useQuery({
@@ -62,6 +69,29 @@ export default function PatrimonioTab({ token }) {
         <KpiStat label="Total de ativos" value={formatarMoeda(ativos)} />
         <KpiStat label="Total de passivos" value={formatarMoeda(data.total_dividas)} deltaColor="red" />
       </div>
+
+      {resumo && (ativos > 0 || resumo.passivos_dividas > 0) && (
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono">
+              Resumo patrimonial
+            </div>
+            <div className="text-[12px] text-text-dim">
+              <strong className="text-accent">{resumo.pct_ativo_gerador_renda}%</strong> dos seus ativos estão
+              investidos (gerando renda)
+            </div>
+          </div>
+          <DonutMultiChart
+            centroLabel="Ativos"
+            centroValor={formatarMoeda(ativos)}
+            fatias={[
+              { label: "Investimentos", valor: resumo.ativos_investimentos, cor: "#26D9A8" },
+              { label: "Saldo em conta", valor: resumo.ativos_liquidez, cor: "#4C8DFF" },
+              { label: "Bens móveis/imóveis", valor: resumo.ativos_bens, cor: "#F0A63C" },
+            ]}
+          />
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
         <Card>
