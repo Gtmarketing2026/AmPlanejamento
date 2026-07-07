@@ -10,13 +10,13 @@ import { exportarCsv, exportarPdfViaImpressao } from "../../../lib/exportar"
 
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 
-export default function ClarezaFinanceiraTab({ token }) {
+export default function ClarezaFinanceiraTab({ token, contexto = "PF" }) {
   const hoje = new Date()
   const [ano, setAno] = useState(hoje.getFullYear())
 
   const { data: transacoes = [], isLoading } = useQuery({
-    queryKey: ["cliente-eu-transacoes-todas", token],
-    queryFn: () => minhasTransacoes(token),
+    queryKey: ["cliente-eu-transacoes-todas", token, contexto],
+    queryFn: () => minhasTransacoes(token, { contexto }),
     enabled: !!token,
   })
   const { data: categorias = [] } = useQuery({
