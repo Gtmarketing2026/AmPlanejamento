@@ -6,13 +6,14 @@ function getToken() {
   return localStorage.getItem("fluxo_token")
 }
 
-export async function criarImportacao({ clienteId, tipoDocumento, periodoInicio, periodoFim, senhaPdf, arquivo }) {
+export async function criarImportacao({ clienteId, tipoDocumento, periodoInicio, periodoFim, senhaPdf, contaConectadaId, arquivo }) {
   const form = new FormData()
   form.append("cliente_id", clienteId)
   form.append("tipo_documento", tipoDocumento)
   if (periodoInicio) form.append("periodo_inicio", periodoInicio)
   if (periodoFim) form.append("periodo_fim", periodoFim)
   if (senhaPdf) form.append("senha_pdf", senhaPdf)
+  if (contaConectadaId) form.append("conta_conectada_id", contaConectadaId)
   form.append("arquivo", arquivo)
 
   const res = await fetch(`${BASE_URL}/importacoes`, {

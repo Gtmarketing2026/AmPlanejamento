@@ -36,10 +36,11 @@ export const excluirMinhaTransacao = (token, id) =>
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL
 
-export async function importarMeuExtrato(token, { tipoDocumento, senhaPdf, arquivo }) {
+export async function importarMeuExtrato(token, { tipoDocumento, senhaPdf, contaId, arquivo }) {
   const form = new FormData()
   form.append("tipo_documento", tipoDocumento)
   if (senhaPdf) form.append("senha_pdf", senhaPdf)
+  if (contaId) form.append("conta_conectada_id", contaId)
   form.append("arquivo", arquivo)
   const res = await fetch(`${BASE_URL}/clientes/eu/importacoes`, {
     method: "POST",

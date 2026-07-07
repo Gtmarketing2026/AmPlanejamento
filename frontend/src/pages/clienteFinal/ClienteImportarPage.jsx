@@ -11,6 +11,7 @@ import {
   importarMeuExtrato,
   listarMinhasImportacoes,
 } from "../../api/clientes"
+import { listarMinhasContas } from "../../api/contas"
 import { formatarData } from "../../lib/format"
 
 const STATUS_VARIANT = { processado: "on", processando: "warn", pendente: "warn", erro: "off" }
@@ -22,6 +23,7 @@ export default function ClienteImportarPage() {
   const [tipoDocumento, setTipoDocumento] = useState("extrato")
   const [arquivo, setArquivo] = useState(null)
   const [senhaPdf, setSenhaPdf] = useState("")
+  const [contaId, setContaId] = useState("")
   const [erro, setErro] = useState(null)
   const ehPdf = arquivo?.name?.toLowerCase().endsWith(".pdf")
 
@@ -30,12 +32,21 @@ export default function ClienteImportarPage() {
     queryFn: () => listarMinhasImportacoes(token),
     enabled: !!token,
   })
+  const { data: contas = [] } = useQuery({
+    queryKey: ["cliente-eu-contas", token],
+    queryFn: () => listarMinhasContas(token),
+    enabled: !!token,
+  })
+  const naturezaEsperada = tipoDocumento === "fatura_cartao" ? "cartao" : "conta"
+  const contasCompativeis = contas.filter((c) => c.natureza === naturezaEsperada)
 
   const importar = useMutation({
-    mutationFn: () => importarMeuExtrato(token, { tipoDocumento, senhaPdf: senhaPdf || null, arquivo }),
+    mutationFn: () =>
+      importarMeuExtrato(token, { tipoDocumento, senhaPdf: senhaPdf || null, contaId: contaId || null, arquivo }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cliente-eu-importacoes", token] })
       qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] })
+      qc.invalidateQueries({ queryKey: ["cliente-eu-contas", token] })
       setArquivo(null)
       setSenhaPdf("")
       if (inputRef.current) inputRef.current.value = ""
@@ -68,10 +79,27 @@ export default function ClienteImportarPage() {
 
       <Card className="mb-5">
         <form onSubmit={onEnviar} className="flex items-end gap-3 flex-wrap">
-          <Select label="Tipo" value={tipoDocumento} onChange={(e) => setTipoDocumento(e.target.value)}>
+          <Select
+            label="Tipo"
+            value={tipoDocumento}
+            onChange={(e) => {
+              setTipoDocumento(e.target.value)
+              setContaId("")
+            }}
+          >
             <option value="extrato">Extrato de conta</option>
             <option value="fatura_cartao">Fatura de cartão</option>
           </Select>
+          {!!contasCompativeis.length && (
+            <Select label={naturezaEsperada === "cartao" ? "Cartão" : "Conta"} value={contaId} onChange={(e) => setContaId(e.target.value)}>
+              <option value="">Sem conta específica</option>
+              {contasCompativeis.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.nome_exibicao}
+                </option>
+              ))}
+            </Select>
+          )}
           <div className="mb-3">
             <div className="text-[11px] text-text-faint uppercase tracking-wide mb-1.5 font-mono">Arquivo</div>
             <input

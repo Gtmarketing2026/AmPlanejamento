@@ -8,6 +8,8 @@ import Tabs from "../../components/ui/Tabs"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import { useClientes } from "../../hooks/useClientes"
 import { useCriarImportacao, useExcluirImportacao, useImportacoes } from "../../hooks/useImportacoes"
+import { listarContasDoCliente } from "../../api/contas"
+import { useQuery } from "@tanstack/react-query"
 import { formatarData } from "../../lib/format"
 
 const STATUS_VARIANT = { processado: "on", processando: "warn", erro: "off" }
@@ -22,6 +24,7 @@ export default function ImportarExtratoPage() {
   const [periodoInicio, setPeriodoInicio] = useState("")
   const [periodoFim, setPeriodoFim] = useState("")
   const [senhaPdf, setSenhaPdf] = useState("")
+  const [contaId, setContaId] = useState("")
   const [nomeArquivo, setNomeArquivo] = useState("")
   const [erro, setErro] = useState(null)
   const fileInputRef = useRef(null)
@@ -30,6 +33,13 @@ export default function ImportarExtratoPage() {
   const { data: historico, isLoading } = useImportacoes(clienteIdEfetivo)
   const criar = useCriarImportacao(clienteIdEfetivo)
   const excluir = useExcluirImportacao(clienteIdEfetivo)
+  const { data: contas = [] } = useQuery({
+    queryKey: ["contas-cliente", clienteIdEfetivo],
+    queryFn: () => listarContasDoCliente(clienteIdEfetivo),
+    enabled: !!clienteIdEfetivo,
+  })
+  const naturezaEsperada = tipoDoc === "fatura_cartao" ? "cartao" : "conta"
+  const contasCompativeis = contas.filter((c) => c.natureza === naturezaEsperada)
 
   async function onProcessar(e) {
     e.preventDefault()
@@ -46,11 +56,13 @@ export default function ImportarExtratoPage() {
         periodoInicio: periodoInicio || null,
         periodoFim: periodoFim || null,
         senhaPdf: senhaPdf || null,
+        contaConectadaId: contaId || null,
         arquivo,
       })
       fileInputRef.current.value = ""
       setNomeArquivo("")
       setSenhaPdf("")
+      setContaId("")
     } catch (err) {
       setErro(err.message)
     }
@@ -127,9 +139,29 @@ export default function ImportarExtratoPage() {
                     { value: "fatura_cartao", label: "Fatura de cartão" },
                   ]}
                   active={tipoDoc}
-                  onChange={setTipoDoc}
+                  onChange={(v) => {
+                    setTipoDoc(v)
+                    setContaId("")
+                  }}
                 />
               </div>
+
+              {!!contasCompativeis.length && (
+                <div className="mb-4">
+                  <Select
+                    label={naturezaEsperada === "cartao" ? "Cartão" : "Conta"}
+                    value={contaId}
+                    onChange={(e) => setContaId(e.target.value)}
+                  >
+                    <option value="">Sem conta específica</option>
+                    {contasCompativeis.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome_exibicao}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Período início" type="date" value={periodoInicio} onChange={(e) => setPeriodoInicio(e.target.value)} />

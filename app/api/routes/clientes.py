@@ -13,7 +13,7 @@ from app.api.deps import (
     get_db_sem_rls,
     get_profissional_id_atual,
 )
-from app.api.routes.importacoes import _obter_ou_criar_conta_manual, processar_upload
+from app.api.routes.importacoes import _calcular_mes_referencia, _obter_conta_do_upload, processar_upload
 from app.core.config import settings
 from app.core.security import criar_access_token, hash_senha, verificar_senha
 from app.db.base import SessionLocalAdmin
@@ -21,6 +21,7 @@ from app.integrations.supabase_storage import excluir_arquivo
 from app.models.categoria import Categoria, Subcategoria
 from app.models.cliente import Cliente
 from app.models.importacao_extrato import ImportacaoExtrato
+from app.models.preferencia_cliente import PreferenciaCliente
 from app.models.transacao import Transacao
 from app.parsers.dedup import calcular_hash_dedup
 from app.schemas.categoria import CategoriaResposta, SubcategoriaResposta
@@ -271,7 +272,7 @@ def criar_minha_transacao(
     if dados.tipo not in ("entrada", "saida"):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Tipo inválido: use 'entrada' ou 'saida'")
 
-    conta = _obter_ou_criar_conta_manual(db, cliente_id, cliente.profissional_id)
+    conta = _obter_conta_do_upload(db, cliente_id, cliente.profissional_id, dados.conta_conectada_id)
     valor = abs(dados.valor) if dados.tipo == "entrada" else -abs(dados.valor)
     hash_dedup = calcular_hash_dedup(conta.id, dados.data, valor, dados.descricao)
 
@@ -281,6 +282,10 @@ def criar_minha_transacao(
     if ja_existe:
         raise HTTPException(status.HTTP_409_CONFLICT, "Já existe um lançamento igual (mesma data/valor/descrição).")
 
+    preferencia = db.get(PreferenciaCliente, cliente_id)
+    modo_visualizacao = preferencia.visualizacao_lancamento if preferencia else "data_compra"
+    mes_referencia = _calcular_mes_referencia(dados.data, conta.natureza, conta.dia_virada, modo_visualizacao)
+
     transacao = Transacao(
         conta_conectada_id=conta.id,
         cliente_id=cliente_id,
@@ -289,11 +294,12 @@ def criar_minha_transacao(
         descricao=dados.descricao,
         valor=valor,
         tipo=dados.tipo,
-        origem="conta",
+        origem="cartao" if conta.natureza == "cartao" else "conta",
         categoria_id=dados.categoria_id,
         subcategoria_id=dados.subcategoria_id,
         conciliado=True,
         hash_dedup=hash_dedup,
+        mes_referencia=mes_referencia,
     )
     db.add(transacao)
     db.flush()
@@ -374,6 +380,7 @@ async def importar_meu_extrato(
     periodo_inicio: date | None = Form(None),
     periodo_fim: date | None = Form(None),
     senha_pdf: str | None = Form(None),
+    conta_conectada_id: uuid.UUID | None = Form(None),
     arquivo: UploadFile = File(...),
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
     db: Session = Depends(get_db_admin),
@@ -386,7 +393,7 @@ async def importar_meu_extrato(
     return processar_upload(
         db, cliente_id, cliente.profissional_id, tipo_documento,
         arquivo.filename or "arquivo", conteudo, periodo_inicio, periodo_fim, "cliente_final",
-        senha_pdf=senha_pdf or None,
+        senha_pdf=senha_pdf or None, conta_conectada_id=conta_conectada_id,
     )
 
 

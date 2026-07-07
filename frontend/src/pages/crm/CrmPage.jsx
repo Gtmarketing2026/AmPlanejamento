@@ -13,6 +13,7 @@ import {
   criarFollowUp,
   criarInteracao,
   criarTarefaCliente,
+  enviarNotificacaoCliente,
   excluirFollowUp,
   excluirInteracao,
   excluirTarefaCliente,
@@ -153,6 +154,8 @@ export default function CrmPage() {
                 setSearchParams={setSearchParams}
               />
 
+              <MensagemCard clienteId={clienteId} />
+
               <TarefasCard clienteId={clienteId} qc={qc} />
 
               <FollowUpsCard clienteId={clienteId} qc={qc} />
@@ -276,6 +279,59 @@ function TimelineCard({ clienteId, qc }) {
           )
         })}
       </div>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Mensagem direta pro cliente (aparece na aba Notificações dele)
+// ---------------------------------------------------------------------------
+function MensagemCard({ clienteId }) {
+  const [titulo, setTitulo] = useState("")
+  const [mensagem, setMensagem] = useState("")
+  const [enviado, setEnviado] = useState(false)
+
+  const enviar = useMutation({
+    mutationFn: () => enviarNotificacaoCliente(clienteId, { titulo, mensagem }),
+    onSuccess: () => {
+      setTitulo("")
+      setMensagem("")
+      setEnviado(true)
+      setTimeout(() => setEnviado(false), 2500)
+    },
+  })
+
+  return (
+    <Card className="mb-5">
+      <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
+        Mandar mensagem pro cliente
+      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (titulo.trim() && mensagem.trim()) enviar.mutate()
+        }}
+      >
+        <Field
+          label="Título"
+          value={titulo}
+          onChange={(e) => setTitulo(e.target.value)}
+          placeholder="ex: Revisão do mês"
+        />
+        <Textarea
+          label="Mensagem"
+          rows={2}
+          value={mensagem}
+          onChange={(e) => setMensagem(e.target.value)}
+          placeholder="Aparece na aba Notificações do painel do cliente."
+        />
+        <div className="flex items-center gap-3">
+          <Button type="submit" disabled={!titulo.trim() || !mensagem.trim() || enviar.isPending}>
+            {enviar.isPending ? "Enviando…" : "Enviar"}
+          </Button>
+          {enviado && <span className="text-accent text-[12.5px]">Mensagem enviada.</span>}
+        </div>
+      </form>
     </Card>
   )
 }

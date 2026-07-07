@@ -17,6 +17,15 @@ export default function Tabs({ options, active, onChange }) {
             </span>
           )}
           {opt.label}
+          {!!opt.badge && (
+            <span
+              className={`text-[10px] font-mono rounded-full px-1.5 py-0.5 leading-none ${
+                active === opt.value ? "bg-[#062019]/20 text-[#062019]" : "bg-red/20 text-red"
+              }`}
+            >
+              {opt.badge}
+            </span>
+          )}
         </button>
       ))}
     </div>

@@ -18,6 +18,10 @@ export const atualizarTarefaCliente = (id, dados) => apiPatch(`/crm/tarefas/${id
 
 export const excluirTarefaCliente = (id) => apiDelete(`/crm/tarefas/${id}`)
 
+// ---------- Notificações (mensagem direta do profissional pro cliente) ----------
+export const enviarNotificacaoCliente = (clienteId, dados) =>
+  apiPost(`/crm/clientes/${clienteId}/notificacoes`, dados)
+
 // ---------- Follow-ups ----------
 export const listarFollowUps = (apenasPendentes = true) =>
   apiGet(`/crm/follow-ups?apenas_pendentes=${apenasPendentes}`)

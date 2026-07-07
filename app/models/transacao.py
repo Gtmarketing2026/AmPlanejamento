@@ -39,6 +39,11 @@ class Transacao(Base):
     parcela_atual: Mapped[int | None] = mapped_column(Integer, nullable=True)
     parcela_total: Mapped[int | None] = mapped_column(Integer, nullable=True)
     conciliado: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Mês em que o gasto "conta" pro cliente (1º dia do mês) -- por padrão é
+    # o mês calendário de `data`; quando a preferência é "virada do cartão" e
+    # o cartão tem dia_virada configurado, compras feitas depois da virada
+    # contam pro mês seguinte (ver _calcular_mes_referencia).
+    mes_referencia: Mapped[date | None] = mapped_column(Date, nullable=True)
     importacao_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("importacoes_extrato.id", ondelete="SET NULL"), nullable=True
     )

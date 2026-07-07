@@ -23,6 +23,7 @@ from app.models.categoria import Categoria, Subcategoria
 from app.models.cliente import Cliente
 from app.models.conta_conectada import ContaConectada
 from app.models.importacao_extrato import ImportacaoExtrato
+from app.models.preferencia_cliente import PreferenciaCliente
 from app.models.transacao import Transacao
 from app.parsers.csv_parser import CsvFormatoInvalido, parse_csv
 from app.parsers.dedup import calcular_hash_dedup
@@ -55,15 +56,26 @@ def _e_linha_agregada(descricao: str) -> bool:
     return bool(_PADRAO_LINHA_AGREGADA.search(descricao))
 
 
-def _obter_ou_criar_conta_manual(
-    db: Session, cliente_id: uuid.UUID, profissional_id: uuid.UUID
+def _obter_conta_do_upload(
+    db: Session,
+    cliente_id: uuid.UUID,
+    profissional_id: uuid.UUID,
+    conta_conectada_id: uuid.UUID | None,
 ) -> ContaConectada:
-    """Toda importação manual fica ligada a UMA conta_conectada modo='manual'
-    por cliente (reaproveitada entre uploads) -- é o mesmo conceito que uma
-    conexão Open Finance, só que alimentada por arquivo em vez de sincronia."""
+    """Se o caller já cadastrou a conta/cartão em "Minhas Contas" (ver
+    app/api/routes/contas.py) e escolheu ela no upload, usa essa. Senão, cai
+    de volta pra UMA conta_conectada genérica modo='manual' por cliente
+    (comportamento anterior, mantido pra quem ainda não cadastrou contas)."""
+    if conta_conectada_id is not None:
+        conta = db.get(ContaConectada, conta_conectada_id)
+        if conta is None or conta.cliente_id != cliente_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Conta/cartão não encontrado")
+        return conta
+
     conta = db.scalar(
         select(ContaConectada).where(
-            ContaConectada.cliente_id == cliente_id, ContaConectada.modo == "manual"
+            ContaConectada.cliente_id == cliente_id, ContaConectada.modo == "manual",
+            ContaConectada.natureza == "conta", ContaConectada.nome_exibicao.is_(None),
         )
     )
     if conta:
@@ -79,6 +91,23 @@ def _obter_ou_criar_conta_manual(
     return conta
 
 
+def _calcular_mes_referencia(data_transacao: date, natureza: str, dia_virada: int | None, modo_visualizacao: str) -> date:
+    """1º dia do mês em que o gasto "conta" pro cliente. Por padrão (ou pra
+    contas/cartões sem dia de virada configurado) é o próprio mês calendário
+    de `data_transacao`. Com a preferência "virada_cartao" e um cartão com
+    dia_virada definido, compras feitas DEPOIS da virada contam pro mês
+    seguinte -- ex: cartão vira todo dia 19, uma compra em 25/06 é gasto de
+    julho (o "mês" desse cliente vai de 19/06 a 18/07), não de junho."""
+    mes_calendario = date(data_transacao.year, data_transacao.month, 1)
+    if modo_visualizacao != "virada_cartao" or natureza != "cartao" or not dia_virada:
+        return mes_calendario
+    if data_transacao.day <= dia_virada:
+        return mes_calendario
+    if data_transacao.month == 12:
+        return date(data_transacao.year + 1, 1, 1)
+    return date(data_transacao.year, data_transacao.month + 1, 1)
+
+
 def processar_upload(
     db: Session,
     cliente_id: uuid.UUID,
@@ -90,6 +119,7 @@ def processar_upload(
     periodo_fim: date | None,
     enviado_por: str,  # 'profissional' | 'cliente_final'
     senha_pdf: str | None = None,
+    conta_conectada_id: uuid.UUID | None = None,
 ) -> ImportacaoExtrato:
     """Núcleo do upload de extrato/fatura, compartilhado entre a rota do
     planejador (/importacoes) e a do cliente final (/clientes/eu/importacoes):
@@ -104,7 +134,7 @@ def processar_upload(
     if len(conteudo) > TAMANHO_MAXIMO_BYTES:
         raise HTTPException(status_code=413, detail="Arquivo maior que 10MB")
 
-    conta = _obter_ou_criar_conta_manual(db, cliente_id, profissional_id)
+    conta = _obter_conta_do_upload(db, cliente_id, profissional_id, conta_conectada_id)
     caminho_storage = upload_arquivo(conteudo, nome_arquivo, profissional_id)
 
     importacao = ImportacaoExtrato(
@@ -164,11 +194,14 @@ def processar_upload(
             t["tipo"] = "saida" if t["tipo"] == "entrada" else "entrada"
 
     origem = "cartao" if tipo_documento == "fatura_cartao" else "conta"
+    preferencia = db.get(PreferenciaCliente, cliente_id)
+    modo_visualizacao = preferencia.visualizacao_lancamento if preferencia else "data_compra"
     importadas = 0
     duplicadas = 0
     inseridas = []  # [{"id", "descricao", "tipo"}] -- só as que entraram de fato (não duplicadas)
     for t in transacoes_parseadas:
         hash_dedup = calcular_hash_dedup(conta.id, t["data"], t["valor"], t["descricao"])
+        mes_referencia = _calcular_mes_referencia(t["data"], conta.natureza, conta.dia_virada, modo_visualizacao)
         stmt = (
             pg_insert(Transacao)
             .values(
@@ -182,6 +215,7 @@ def processar_upload(
                 origem=origem,
                 importacao_id=importacao.id,
                 hash_dedup=hash_dedup,
+                mes_referencia=mes_referencia,
             )
             .on_conflict_do_nothing(index_elements=["conta_conectada_id", "hash_dedup"])
             .returning(Transacao.id)
@@ -237,6 +271,7 @@ async def criar_importacao(
     periodo_inicio: date | None = Form(None),
     periodo_fim: date | None = Form(None),
     senha_pdf: str | None = Form(None),
+    conta_conectada_id: uuid.UUID | None = Form(None),
     arquivo: UploadFile = File(...),
     db: Session = Depends(get_db_com_rls),
     profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
@@ -250,7 +285,7 @@ async def criar_importacao(
     return processar_upload(
         db, cliente_id, profissional_id, tipo_documento,
         arquivo.filename or "arquivo", conteudo, periodo_inicio, periodo_fim, "profissional",
-        senha_pdf=senha_pdf or None,
+        senha_pdf=senha_pdf or None, conta_conectada_id=conta_conectada_id,
     )
 
 

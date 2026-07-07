@@ -62,3 +62,10 @@ export const excluirMinhaApolice = (token, id) =>
 export const listarMinhasTarefas = (token) => apiGet("/clientes/eu/tarefas", { token })
 export const concluirMinhaTarefa = (token, id, concluido) =>
   apiPatch(`/clientes/eu/tarefas/${id}`, { concluido }, { token })
+
+// ---------- Minhas notificações ----------
+export const listarMinhasNotificacoes = (token) => apiGet("/clientes/eu/notificacoes", { token })
+export const marcarNotificacaoLida = (token, id) =>
+  apiPatch(`/clientes/eu/notificacoes/${id}`, {}, { token })
+export const marcarTodasNotificacoesLidas = (token) =>
+  apiPost("/clientes/eu/notificacoes/marcar-todas-lidas", {}, { token })

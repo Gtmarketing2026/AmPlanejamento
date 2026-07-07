@@ -7,11 +7,13 @@ from app.api.routes import (
     auth,
     categorias,
     clientes,
+    contas,
     crm,
     faturas,
     importacoes,
     marca,
     negocio,
+    notificacoes,
     patrimonio,
     webhooks,
 )
@@ -44,6 +46,10 @@ app.include_router(crm.router)
 app.include_router(crm.router_cliente)
 app.include_router(marca.router)
 app.include_router(patrimonio.router)
+app.include_router(contas.router)
+app.include_router(contas.router_profissional)
+app.include_router(notificacoes.router)
+app.include_router(notificacoes.router_cliente)
 
 
 @app.get("/health")

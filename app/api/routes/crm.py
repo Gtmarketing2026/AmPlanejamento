@@ -23,6 +23,7 @@ from app.db.base import SessionLocal
 from app.integrations import google_calendar as gcal
 from app.models.cliente import Cliente
 from app.models.crm import CredencialGoogle, FollowUp, InteracaoCrm, TarefaCliente
+from app.api.routes.notificacoes import notificar_cliente
 from app.schemas.crm import (
     TIPOS_INTERACAO,
     FollowUpAtualizar,
@@ -146,6 +147,11 @@ def criar_tarefa_cliente(
         prazo=dados.prazo,
     )
     db.add(tarefa)
+    notificar_cliente(
+        db, cliente_id, profissional_id, "outro",
+        "Nova tarefa do seu planejador",
+        f'"{dados.titulo}" foi adicionada à sua lista de tarefas.',
+    )
     db.flush()
     db.refresh(tarefa)
     return tarefa

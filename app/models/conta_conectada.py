@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, LargeBinary, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, Numeric, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -27,4 +27,15 @@ class ContaConectada(Base):
     status: Mapped[str] = mapped_column(String, default="ativa")  # ativa | pausada | revogada | erro
     consentimento_expira_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ultima_sincronizacao: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # "Minhas Contas": mesma tabela representa conta bancária E cartão de
+    # crédito (natureza), evitando uma segunda tabela quase idêntica -- os
+    # campos abaixo só fazem sentido conforme a natureza.
+    natureza: Mapped[str] = mapped_column(String, default="conta")  # conta | cartao
+    nome_exibicao: Mapped[str | None] = mapped_column(String, nullable=True)
+    saldo_manual: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)  # natureza=conta
+    limite_total: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)  # natureza=cartao
+    dia_virada: Mapped[int | None] = mapped_column(Integer, nullable=True)  # natureza=cartao, 1-31, opcional
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

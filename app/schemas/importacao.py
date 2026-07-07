@@ -40,6 +40,7 @@ class TransacaoCriar(BaseModel):
     tipo: str  # entrada | saida
     categoria_id: uuid.UUID | None = None
     subcategoria_id: uuid.UUID | None = None
+    conta_conectada_id: uuid.UUID | None = None
 
 
 class TransacaoResposta(BaseModel):
@@ -53,6 +54,8 @@ class TransacaoResposta(BaseModel):
     categoria_id: uuid.UUID | None
     subcategoria_id: uuid.UUID | None
     importacao_id: uuid.UUID | None
+    conta_conectada_id: uuid.UUID | None = None
+    mes_referencia: date | None = None
     criado_em: datetime
     # Só preenchido quando a reclassificação usou aplicar_a_todos_iguais --
     # quantos outros lançamentos também foram atualizados junto.
