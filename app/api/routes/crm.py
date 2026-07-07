@@ -174,6 +174,10 @@ def criar_follow_up(
     )
     db.add(follow_up)
     db.flush()
+    # Pega os defaults do banco (criado_em, concluido) ANTES de sincronizar --
+    # se der refresh() depois de setar google_event_id, o refresh sobrescreve
+    # o campo recém-gravado com o valor NULL do banco e a sincronização "some".
+    db.refresh(follow_up)
 
     # Espelha no Google Agenda se pedido e a conta estiver conectada. Falha de
     # sincronização não derruba a criação do follow-up (fica só local).
@@ -188,11 +192,11 @@ def criar_follow_up(
                 )
                 follow_up.google_event_id = event_id
                 follow_up.sincronizado_google = True
+                db.flush()  # persiste o event_id (commit final é do get_db_com_rls)
             except Exception:
                 # mantém sincronizado_google=False; o profissional pode tentar de novo
                 pass
 
-    db.refresh(follow_up)
     return _follow_up_para_resposta(follow_up, cliente.nome)
 
 
