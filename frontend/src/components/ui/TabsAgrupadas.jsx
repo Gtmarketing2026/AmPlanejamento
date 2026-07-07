@@ -14,6 +14,17 @@ export default function TabsAgrupadas({ grupos, active, onChange }) {
 
   const itens = grupos[aberto]?.itens ?? []
 
+  // Clicar no grupo já abre o primeiro item dele (a não ser que o item ativo
+  // já pertença ao grupo -- aí mantém a escolha atual). Ex: clicou em
+  // "Lançamentos" e já cai em Lançamentos, sem precisar clicar no submenu.
+  function abrirGrupo(idx) {
+    setAberto(idx)
+    const g = grupos[idx]
+    if (g && !g.itens.some((i) => i.value === active)) {
+      onChange(g.itens[0].value)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-2">
       <div className="inline-flex flex-wrap gap-1 bg-panel border border-line rounded-[10px] p-1 w-fit">
@@ -24,7 +35,7 @@ export default function TabsAgrupadas({ grupos, active, onChange }) {
           return (
             <button
               key={g.label}
-              onClick={() => setAberto(idx)}
+              onClick={() => abrirGrupo(idx)}
               className={`px-3.5 py-2 rounded-[7px] text-[12.5px] font-semibold whitespace-nowrap transition-colors flex items-center gap-1.5 ${
                 ativo ? "bg-panel-2 text-text" : "text-text-dim hover:text-text"
               } ${contemAtivo && !ativo ? "text-text" : ""}`}

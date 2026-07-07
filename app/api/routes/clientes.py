@@ -244,6 +244,8 @@ def listar_minhas_subcategorias(
 def listar_minhas_transacoes(
     busca: str | None = None,
     categoria_id: uuid.UUID | None = None,
+    subcategoria_id: uuid.UUID | None = None,
+    conta_conectada_id: uuid.UUID | None = None,  # filtro por conta/cartão
     tipo: str | None = None,
     data_inicio: date | None = None,
     data_fim: date | None = None,
@@ -267,6 +269,10 @@ def listar_minhas_transacoes(
         query = query.where(Transacao.descricao.ilike(f"%{busca}%"))
     if categoria_id:
         query = query.where(Transacao.categoria_id == categoria_id)
+    if subcategoria_id:
+        query = query.where(Transacao.subcategoria_id == subcategoria_id)
+    if conta_conectada_id:
+        query = query.where(Transacao.conta_conectada_id == conta_conectada_id)
     if tipo:
         query = query.where(Transacao.tipo == tipo)
     if data_inicio:

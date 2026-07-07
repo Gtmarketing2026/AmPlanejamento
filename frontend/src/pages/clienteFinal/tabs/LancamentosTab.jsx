@@ -15,15 +15,25 @@ import {
   minhasSubcategorias,
   minhasTransacoes,
 } from "../../../api/clientes"
+import { listarMinhasContas } from "../../../api/contas"
 import { formatarData, formatarMoeda } from "../../../lib/format"
 import { exportarCsv } from "../../../lib/exportar"
 
 const NOME_CATEGORIA_EMPRESA = "Empresa e autônomo"
+const FILTROS_VAZIO = {
+  tipo: "",
+  categoria_id: "",
+  subcategoria_id: "",
+  conta_conectada_id: "",
+  data_inicio: "",
+  data_fim: "",
+}
 
 export default function LancamentosTab({ token, contexto = "PF", temCnpj = false }) {
   const qc = useQueryClient()
   const [busca, setBusca] = useState("")
-  const [tipoFiltro, setTipoFiltro] = useState("")
+  const [f, setF] = useState(FILTROS_VAZIO)
+  const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [verPrevistos, setVerPrevistos] = useState(false)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [erro, setErro] = useState(null)
@@ -38,10 +48,16 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
 
   const filtros = {
     busca: busca || undefined,
-    tipo: tipoFiltro || undefined,
+    tipo: f.tipo || undefined,
+    categoria_id: f.categoria_id || undefined,
+    subcategoria_id: f.subcategoria_id || undefined,
+    conta_conectada_id: f.conta_conectada_id || undefined,
+    data_inicio: f.data_inicio || undefined,
+    data_fim: f.data_fim || undefined,
     incluir_previstos: verPrevistos ? "true" : undefined,
     contexto,
   }
+  const filtrosAtivos = Object.values(f).filter(Boolean).length
 
   const { data: transacoes = [] } = useQuery({
     queryKey: ["cliente-eu-transacoes", token, filtros],
@@ -58,6 +74,14 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
     queryFn: () => minhasSubcategorias(token),
     enabled: !!token,
   })
+  const { data: contas = [] } = useQuery({
+    queryKey: ["cliente-eu-contas", token],
+    queryFn: () => listarMinhasContas(token),
+    enabled: !!token,
+  })
+  const subcategoriasDaCategoria = (subcategorias || []).filter(
+    (s) => !f.categoria_id || s.categoria_id === f.categoria_id
+  )
 
   const [mensagemReclassificacao, setMensagemReclassificacao] = useState(null)
   const [promptEmpresa, setPromptEmpresa] = useState(null) // id da transação a mandar pro PJ
@@ -168,22 +192,26 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
         </div>
       </div>
 
-      <div className="flex gap-3 flex-wrap mb-4">
+      <div className="flex gap-3 flex-wrap mb-4 items-center">
         <input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
           placeholder="Buscar por descrição…"
           className="flex-1 min-w-[200px] bg-bg border border-line rounded-[9px] px-3.5 py-2.5 text-[13px] text-text placeholder:text-text-faint outline-none focus:border-accent/60"
         />
-        <select
-          value={tipoFiltro}
-          onChange={(e) => setTipoFiltro(e.target.value)}
-          className="bg-bg border border-line rounded-[9px] px-3.5 py-2.5 text-[13px] text-text outline-none focus:border-accent/60"
+        <button
+          onClick={() => setMostrarFiltros((v) => !v)}
+          className={`px-3.5 py-2.5 rounded-[9px] border text-[13px] flex items-center gap-2 ${
+            filtrosAtivos ? "border-accent/60 text-accent" : "border-line text-text-dim hover:text-text"
+          }`}
         >
-          <option value="">Todos</option>
-          <option value="entrada">Entradas</option>
-          <option value="saida">Saídas</option>
-        </select>
+          Filtros
+          {filtrosAtivos > 0 && (
+            <span className="text-[10px] font-mono rounded-full px-1.5 py-0.5 leading-none bg-accent/20 text-accent">
+              {filtrosAtivos}
+            </span>
+          )}
+        </button>
         <label className="flex items-center gap-2 text-[12.5px] text-text-dim cursor-pointer select-none">
           <input
             type="checkbox"
@@ -191,9 +219,61 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
             onChange={(e) => setVerPrevistos(e.target.checked)}
             className="accent-accent"
           />
-          Mostrar parcelas futuras (previstas)
+          Parcelas futuras
         </label>
       </div>
+
+      {mostrarFiltros && (
+        <div className="border border-line rounded-[9px] p-4 mb-4 grid grid-cols-3 gap-3 max-md:grid-cols-1">
+          <Select label="Tipo" value={f.tipo} onChange={(e) => setF((x) => ({ ...x, tipo: e.target.value }))}>
+            <option value="">Todos</option>
+            <option value="entrada">Entradas</option>
+            <option value="saida">Saídas</option>
+          </Select>
+          <Select
+            label="Categoria"
+            value={f.categoria_id}
+            onChange={(e) => setF((x) => ({ ...x, categoria_id: e.target.value, subcategoria_id: "" }))}
+          >
+            <option value="">Todas</option>
+            {(categorias || []).map((c) => (
+              <option key={c.id} value={c.id}>{c.nome}</option>
+            ))}
+          </Select>
+          <Select
+            label="Subcategoria"
+            value={f.subcategoria_id}
+            onChange={(e) => setF((x) => ({ ...x, subcategoria_id: e.target.value }))}
+          >
+            <option value="">Todas</option>
+            {subcategoriasDaCategoria.map((s) => (
+              <option key={s.id} value={s.id}>{s.nome}</option>
+            ))}
+          </Select>
+          <Select
+            label="Conta / cartão"
+            value={f.conta_conectada_id}
+            onChange={(e) => setF((x) => ({ ...x, conta_conectada_id: e.target.value }))}
+          >
+            <option value="">Todas</option>
+            {contas.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome_exibicao || (c.natureza === "cartao" ? "Cartão" : "Conta")}
+                {c.natureza === "cartao" ? " (cartão)" : ""}
+              </option>
+            ))}
+          </Select>
+          <Field label="De" type="date" value={f.data_inicio} onChange={(e) => setF((x) => ({ ...x, data_inicio: e.target.value }))} />
+          <Field label="Até" type="date" value={f.data_fim} onChange={(e) => setF((x) => ({ ...x, data_fim: e.target.value }))} />
+          {filtrosAtivos > 0 && (
+            <div className="col-span-3 max-md:col-span-1">
+              <button onClick={() => setF(FILTROS_VAZIO)} className="text-text-faint hover:text-text text-[12px]">
+                Limpar filtros
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {mostrarForm && (
         <form
@@ -336,7 +416,7 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
           {!transacoes.length && (
             <Tr>
               <Td colSpan={5} className="text-text-faint text-center py-6">
-                {busca || tipoFiltro
+                {busca || filtrosAtivos
                   ? "Nenhum lançamento encontrado com esse filtro."
                   : "Nenhum lançamento ainda — importe um extrato ou adicione manualmente."}
               </Td>
