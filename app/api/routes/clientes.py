@@ -30,6 +30,7 @@ from app.db.base import SessionLocalAdmin
 from app.integrations.supabase_storage import excluir_arquivo
 from app.models.categoria import Categoria, Subcategoria
 from app.models.cliente import Cliente
+from app.models.conta_conectada import ContaConectada
 from app.models.importacao_extrato import ImportacaoExtrato
 from app.models.preferencia_cliente import PreferenciaCliente
 from app.models.transacao import Transacao
@@ -531,11 +532,18 @@ def listar_minhas_importacoes(
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
     db: Session = Depends(get_db_admin),
 ):
-    return db.scalars(
-        select(ImportacaoExtrato)
+    linhas = db.execute(
+        select(ImportacaoExtrato, ContaConectada)
+        .outerjoin(ContaConectada, ContaConectada.id == ImportacaoExtrato.conta_conectada_id)
         .where(ImportacaoExtrato.cliente_id == cliente_id)
         .order_by(ImportacaoExtrato.criado_em.desc())
     ).all()
+    return [
+        ImportacaoResposta.model_validate(imp).model_copy(
+            update={"conta_natureza": conta.natureza if conta else None, "conta_nome": conta.nome_exibicao if conta else None}
+        )
+        for imp, conta in linhas
+    ]
 
 
 @router.delete("/eu/importacoes/{importacao_id}", status_code=status.HTTP_200_OK)

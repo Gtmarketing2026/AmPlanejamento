@@ -445,10 +445,20 @@ def gerar_parcelas_importacao(importacao_id: uuid.UUID, db: Session = Depends(ge
 
 @router.get("/importacoes", response_model=list[ImportacaoResposta])
 def listar_importacoes(cliente_id: uuid.UUID | None = None, db: Session = Depends(get_db_com_rls)):
-    query = select(ImportacaoExtrato).order_by(ImportacaoExtrato.criado_em.desc())
+    query = (
+        select(ImportacaoExtrato, ContaConectada)
+        .outerjoin(ContaConectada, ContaConectada.id == ImportacaoExtrato.conta_conectada_id)
+        .order_by(ImportacaoExtrato.criado_em.desc())
+    )
     if cliente_id:
         query = query.where(ImportacaoExtrato.cliente_id == cliente_id)
-    return db.scalars(query).all()
+    linhas = db.execute(query).all()
+    return [
+        ImportacaoResposta.model_validate(imp).model_copy(
+            update={"conta_natureza": conta.natureza if conta else None, "conta_nome": conta.nome_exibicao if conta else None}
+        )
+        for imp, conta in linhas
+    ]
 
 
 @router.delete("/importacoes/{importacao_id}", status_code=status.HTTP_200_OK)

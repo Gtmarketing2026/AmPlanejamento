@@ -151,6 +151,7 @@ export default function ClienteImportarPage() {
           <Thead>
             <Th>Enviado em</Th>
             <Th>Tipo</Th>
+            <Th>Conta</Th>
             <Th>Formato</Th>
             <Th>Lançamentos</Th>
             <Th>Status</Th>
@@ -161,6 +162,10 @@ export default function ClienteImportarPage() {
               <Tr key={imp.id}>
                 <Td className="font-mono text-text-dim">{formatarData(imp.criado_em)}</Td>
                 <Td>{imp.tipo_documento === "fatura_cartao" ? "Fatura" : "Extrato"}</Td>
+                <Td className="text-text-dim">
+                  {imp.conta_natureza === "cartao" ? "Cartão" : "Banco"}
+                  {imp.conta_nome && <span className="text-text-faint"> · {imp.conta_nome}</span>}
+                </Td>
                 <Td className="uppercase text-text-dim">{imp.formato_arquivo}</Td>
                 <Td className="font-mono">
                   {imp.status === "erro"
@@ -185,7 +190,7 @@ export default function ClienteImportarPage() {
             ))}
             {!importacoes.length && (
               <Tr>
-                <Td colSpan={6} className="text-text-faint text-center py-6">
+                <Td colSpan={7} className="text-text-faint text-center py-6">
                   Nenhuma importação ainda.
                 </Td>
               </Tr>

@@ -17,6 +17,9 @@ class ImportacaoResposta(BaseModel):
     erro_detalhe: str | None
     criado_em: datetime
     processado_em: datetime | None
+    # Conta/cartão ao qual a importação foi associada (ver ContaConectada.natureza).
+    conta_natureza: str | None = None  # conta | cartao
+    conta_nome: str | None = None
     # Só na resposta do upload: quantas compras parceladas têm parcelas futuras
     # que podem ser geradas (o frontend pergunta se o usuário quer gerá-las).
     parcelamentos_detectados: int = 0
