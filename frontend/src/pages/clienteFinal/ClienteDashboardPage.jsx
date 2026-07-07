@@ -104,7 +104,7 @@ export default function ClienteDashboardPage() {
 
       {tab === "fluxo" && <FluxoTab token={token} contexto={ctx} />}
       {tab === "lancamentos" && <LancamentosTab token={token} contexto={ctx} temCnpj={temCnpj} />}
-      {tab === "orcamento" && <OrcamentoTab token={token} />}
+      {tab === "orcamento" && <OrcamentoTab token={token} contexto={ctx} />}
       {tab === "clareza" && <ClarezaFinanceiraTab token={token} />}
       {tab === "metas" && <MetasTab token={token} />}
       {tab === "futuro" && <MeuFuturoTab token={token} />}
