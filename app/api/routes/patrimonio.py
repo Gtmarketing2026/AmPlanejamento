@@ -28,6 +28,7 @@ from app.models.patrimonio import (
 )
 from app.models.transacao import Transacao
 from app.schemas.patrimonio import (
+    PRIORIDADES_META,
     TIPOS_BEM,
     TIPOS_DIVIDA,
     TIPOS_INVESTIMENTO,
@@ -82,11 +83,14 @@ def criar_meta(
     cliente = _exigir_cliente(db, cliente_id)
     if dados.tipo not in TIPOS_META:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Tipo inválido: {dados.tipo}")
+    if dados.prioridade not in PRIORIDADES_META:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Prioridade inválida: {dados.prioridade}")
     meta = Meta(
         cliente_id=cliente_id,
         profissional_id=cliente.profissional_id,
         titulo=dados.titulo,
         tipo=dados.tipo,
+        prioridade=dados.prioridade,
         valor_alvo=dados.valor_alvo,
         prazo=dados.prazo,
     )
@@ -110,8 +114,10 @@ def atualizar_meta(
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Status inválido")
     if dados.tipo is not None and dados.tipo not in TIPOS_META:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Tipo inválido")
+    if dados.prioridade is not None and dados.prioridade not in PRIORIDADES_META:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Prioridade inválida")
 
-    for campo in ("titulo", "tipo", "valor_alvo", "prazo", "status"):
+    for campo in ("titulo", "tipo", "prioridade", "valor_alvo", "prazo", "status"):
         valor = getattr(dados, campo)
         if valor is not None:
             setattr(meta, campo, valor)
@@ -551,6 +557,32 @@ def _projetar_valor_final(patrimonio_inicial: float, aporte_mensal: float, taxa_
     return patrimonio_inicial * fator + aporte_mensal * ((fator - 1) / i)
 
 
+def _aporte_necessario(patrimonio_inicial: float, valor_alvo: float, taxa_anual_pct: float, prazo_anos: int) -> float:
+    """Inverso de _projetar_valor_final: qual aporte mensal (PMT) leva o
+    patrimônio inicial até o valor_alvo em prazo_anos, dado i? Resolve
+    PMT = (FV - P*(1+i)^n) * i / ((1+i)^n - 1). Nunca negativo -- se o
+    patrimônio já basta sozinho, o aporte necessário é 0."""
+    i = (taxa_anual_pct / 100) / 12
+    n = max(1, prazo_anos * 12)
+    if i == 0:
+        pmt = (valor_alvo - patrimonio_inicial) / n
+    else:
+        fator = (1 + i) ** n
+        pmt = (valor_alvo - patrimonio_inicial * fator) * i / (fator - 1)
+    return max(0.0, pmt)
+
+
+def _patrimonio_necessario_aposentadoria(renda_desejada_mensal: float, outras_rendas_mensal: float, taxa_pos_pct: float) -> float:
+    """Perpetuidade real: quanto patrimônio sustenta a renda mensal que falta
+    (desejada - outras rendas) indefinidamente, sem consumir o principal,
+    rendendo taxa_pos_pct ao ano (real) na fase de usufruto. PV = PMT / i."""
+    renda_faltante = max(0.0, renda_desejada_mensal - outras_rendas_mensal)
+    i_mensal = (taxa_pos_pct / 100) / 12
+    if i_mensal <= 0:
+        return renda_faltante * 12 * 100  # fallback improvável (taxa <= 0)
+    return renda_faltante / i_mensal
+
+
 @router.get("/simulacoes", response_model=list[SimulacaoResposta])
 def listar_simulacoes(
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)
@@ -567,8 +599,25 @@ def criar_simulacao(
     db: Session = Depends(get_db_admin),
 ):
     cliente = _exigir_cliente(db, cliente_id)
+
+    prazo_anos = dados.prazo_anos
+    patrimonio_necessario = None
+    aporte_necessario = None
+
+    # Modo "independência financeira": tem idade atual/aposentadoria e renda
+    # desejada -> calcula quanto patrimônio sustenta essa renda (perpetuidade)
+    # e qual aporte mensal é necessário pra chegar lá.
+    if dados.idade_atual is not None and dados.idade_aposentadoria is not None and dados.renda_desejada_mensal is not None:
+        prazo_anos = max(1, dados.idade_aposentadoria - dados.idade_atual)
+        patrimonio_necessario = _patrimonio_necessario_aposentadoria(
+            dados.renda_desejada_mensal, dados.outras_rendas_mensal or 0, dados.taxa_pos_aposentadoria_pct
+        )
+        aporte_necessario = _aporte_necessario(
+            dados.patrimonio_inicial, patrimonio_necessario, dados.taxa_retorno_anual_pct, prazo_anos
+        )
+
     valor_final = _projetar_valor_final(
-        dados.patrimonio_inicial, dados.aporte_mensal, dados.taxa_retorno_anual_pct, dados.prazo_anos
+        dados.patrimonio_inicial, dados.aporte_mensal, dados.taxa_retorno_anual_pct, prazo_anos
     )
     simulacao = Simulacao(
         cliente_id=cliente_id,
@@ -577,9 +626,16 @@ def criar_simulacao(
         patrimonio_inicial=dados.patrimonio_inicial,
         aporte_mensal=dados.aporte_mensal,
         taxa_retorno_anual_pct=dados.taxa_retorno_anual_pct,
-        prazo_anos=dados.prazo_anos,
+        prazo_anos=prazo_anos,
         valor_final_projetado=valor_final,
         criado_por="cliente_final",
+        idade_atual=dados.idade_atual,
+        idade_aposentadoria=dados.idade_aposentadoria,
+        renda_desejada_mensal=dados.renda_desejada_mensal,
+        outras_rendas_mensal=dados.outras_rendas_mensal,
+        taxa_pos_aposentadoria_pct=dados.taxa_pos_aposentadoria_pct,
+        aporte_necessario=aporte_necessario,
+        patrimonio_necessario=patrimonio_necessario,
     )
     db.add(simulacao)
     db.flush()

@@ -24,6 +24,8 @@ class Meta(Base):
     )
     titulo: Mapped[str] = mapped_column(String, nullable=False)
     tipo: Mapped[str] = mapped_column(String, default="outro")
+    # essencial = curto prazo · desejo = médio prazo · sonho = longo prazo
+    prioridade: Mapped[str] = mapped_column(String, default="desejo")
     valor_alvo: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
     valor_atual: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
     # progresso_pct é GENERATED ALWAYS no banco -- Computed() avisa o SQLAlchemy
@@ -124,11 +126,25 @@ class Simulacao(Base):
     nome_cenario: Mapped[str] = mapped_column(String, default="Cenário base")
     patrimonio_inicial: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
     aporte_mensal: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    # taxa de acumulação (fase antes da aposentadoria)
     taxa_retorno_anual_pct: Mapped[float] = mapped_column(Numeric(6, 3), nullable=False)
     prazo_anos: Mapped[int] = mapped_column(Integer, nullable=False)
     valor_final_projetado: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     criado_por: Mapped[str] = mapped_column(String, default="cliente_final")
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # Independência financeira: campos usados pra calcular o aporte necessário
+    # (todos opcionais -- cenários antigos/simples continuam funcionando sem
+    # eles, só não mostram o quadro "quanto preciso investir por mês").
+    idade_atual: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    idade_aposentadoria: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    renda_desejada_mensal: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    outras_rendas_mensal: Mapped[float | None] = mapped_column(Numeric(12, 2), default=0)
+    # taxa de retorno na fase de usufruto (pós-aposentadoria) -- normalmente
+    # menor/mais conservadora que a taxa de acumulação.
+    taxa_pos_aposentadoria_pct: Mapped[float | None] = mapped_column(Numeric(6, 3), nullable=True)
+    aporte_necessario: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    patrimonio_necessario: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
 
 
 class OrcamentoCategoria(Base):

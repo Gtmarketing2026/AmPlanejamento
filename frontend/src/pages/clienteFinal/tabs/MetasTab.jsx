@@ -5,6 +5,7 @@ import Button from "../../../components/ui/Button"
 import Field, { Select } from "../../../components/ui/Field"
 import Pill from "../../../components/ui/Pill"
 import BarRow from "../../../components/ui/BarRow"
+import { Table, Thead, Th, Tr, Td } from "../../../components/ui/Table"
 import {
   atualizarMinhaMeta,
   criarAporteMeta,
@@ -26,10 +27,18 @@ const TIPOS = {
 const STATUS_VARIANT = { em_andamento: "warn", concluida: "on", pausada: "neutral" }
 const STATUS_LABEL = { em_andamento: "em andamento", concluida: "concluída", pausada: "pausada" }
 
+const PRIORIDADES = [
+  { valor: "essencial", label: "Essencial", sub: "curto prazo" },
+  { valor: "desejo", label: "Desejo", sub: "médio prazo" },
+  { valor: "sonho", label: "Sonho", sub: "longo prazo" },
+]
+
 export default function MetasTab({ token }) {
   const qc = useQueryClient()
+  const [visualizar, setVisualizar] = useState("prioridade") // prioridade | tabela | resumo
   const [titulo, setTitulo] = useState("")
   const [tipo, setTipo] = useState("outro")
+  const [prioridade, setPrioridade] = useState("desejo")
   const [valorAlvo, setValorAlvo] = useState("")
   const [prazo, setPrazo] = useState("")
   const [aporteAberto, setAporteAberto] = useState(null)
@@ -46,6 +55,7 @@ export default function MetasTab({ token }) {
       criarMinhaMeta(token, {
         titulo,
         tipo,
+        prioridade,
         valor_alvo: valorAlvo ? Number(valorAlvo) : null,
         prazo: prazo || null,
       }),
@@ -62,7 +72,7 @@ export default function MetasTab({ token }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cliente-eu-metas", token] }),
   })
 
-  const pausarOuRetomar = useMutation({
+  const alternarAtiva = useMutation({
     mutationFn: ({ id, status }) => atualizarMinhaMeta(token, id, { status }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cliente-eu-metas", token] }),
   })
@@ -75,6 +85,9 @@ export default function MetasTab({ token }) {
       setValorAporte("")
     },
   })
+
+  const porPrioridade = (p) => metas.filter((m) => m.prioridade === p)
+  const totalPrioridade = (p) => porPrioridade(p).reduce((s, m) => s + Number(m.valor_alvo || m.valor_atual || 0), 0)
 
   return (
     <div className="flex flex-col gap-5">
@@ -106,6 +119,15 @@ export default function MetasTab({ token }) {
                 ))}
               </Select>
             </div>
+            <div className="w-48">
+              <Select label="Prioridade" value={prioridade} onChange={(e) => setPrioridade(e.target.value)}>
+                {PRIORIDADES.map((p) => (
+                  <option key={p.valor} value={p.valor}>
+                    {p.label} ({p.sub})
+                  </option>
+                ))}
+              </Select>
+            </div>
             <div className="w-36">
               <Field
                 label="Valor alvo (R$)"
@@ -125,92 +147,190 @@ export default function MetasTab({ token }) {
         </form>
       </Card>
 
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="text-[13px] font-medium">Meus projetos</div>
+        <div className="inline-flex gap-1 bg-panel border border-line rounded-[10px] p-1">
+          {[
+            { v: "prioridade", l: "Prioridade" },
+            { v: "tabela", l: "Tabela" },
+            { v: "resumo", l: "Resumo" },
+          ].map((o) => (
+            <button
+              key={o.v}
+              onClick={() => setVisualizar(o.v)}
+              className={`px-3 py-1.5 rounded-[7px] text-[12px] font-semibold ${
+                visualizar === o.v ? "bg-accent text-[#062019]" : "text-text-dim hover:text-text"
+              }`}
+            >
+              {o.l}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {isLoading && <p className="text-text-faint text-sm">Carregando…</p>}
-      {!isLoading && !metas.length && (
-        <p className="text-text-faint text-[12.5px]">Nenhuma meta cadastrada ainda.</p>
+
+      {!isLoading && visualizar === "resumo" && (
+        <div className="grid grid-cols-3 gap-4 max-md:grid-cols-1">
+          {PRIORIDADES.map((p) => (
+            <Card key={p.valor}>
+              <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-1">
+                {p.label} · {p.sub}
+              </div>
+              <div className="font-display text-lg font-semibold">{formatarMoeda(totalPrioridade(p.valor))}</div>
+              <div className="text-text-faint text-[11.5px] mt-1">{porPrioridade(p.valor).length} meta(s)</div>
+            </Card>
+          ))}
+        </div>
       )}
 
-      {metas.map((m) => (
-        <Card key={m.id}>
-          <div className="flex items-start justify-between gap-3 mb-2">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="font-medium text-[14px]">{m.titulo}</span>
-                <Pill variant={STATUS_VARIANT[m.status]}>{STATUS_LABEL[m.status]}</Pill>
-              </div>
-              <div className="text-text-faint text-[11.5px] font-mono">
-                {TIPOS[m.tipo]}
-                {m.prazo && ` · até ${formatarData(m.prazo)}`}
-              </div>
-            </div>
-            <button
-              onClick={() => excluir.mutate(m.id)}
-              className="text-text-faint hover:text-red text-[11.5px]"
-            >
-              ✕
-            </button>
-          </div>
-
-          {m.valor_alvo ? (
-            <BarRow
-              label={formatarMoeda(m.valor_atual)}
-              pct={m.progresso_pct || 0}
-              value={`${m.progresso_pct || 0}%`}
-              labelWidth="w-[110px]"
-            />
-          ) : (
-            <div className="text-[13px] text-text-dim">Total aportado: {formatarMoeda(m.valor_atual)}</div>
-          )}
-          {m.valor_alvo && (
-            <div className="text-text-faint text-[11px] font-mono">Meta: {formatarMoeda(m.valor_alvo)}</div>
-          )}
-
-          <div className="flex items-center gap-2 mt-3">
-            {aporteAberto === m.id ? (
-              <>
-                <input
-                  type="number"
-                  autoFocus
-                  value={valorAporte}
-                  onChange={(e) => setValorAporte(e.target.value)}
-                  placeholder="Valor do aporte"
-                  className="bg-bg border border-line rounded-[9px] px-3 py-2 text-[13px] text-text outline-none focus:border-accent/60 w-36"
-                />
-                <Button
-                  onClick={() =>
-                    valorAporte && aportar.mutate({ metaId: m.id, valor: Number(valorAporte) })
-                  }
-                  disabled={!valorAporte || aportar.isPending}
-                >
-                  Confirmar
-                </Button>
-                <Button variant="ghost" onClick={() => setAporteAberto(null)}>
-                  Cancelar
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button variant="ghost" onClick={() => setAporteAberto(m.id)}>
-                  + Registrar aporte
-                </Button>
-                {m.status !== "concluida" && (
-                  <Button
-                    variant="ghost"
-                    onClick={() =>
-                      pausarOuRetomar.mutate({
-                        id: m.id,
-                        status: m.status === "pausada" ? "em_andamento" : "pausada",
-                      })
-                    }
-                  >
-                    {m.status === "pausada" ? "Retomar" : "Pausar"}
-                  </Button>
-                )}
-              </>
-            )}
-          </div>
+      {!isLoading && visualizar === "tabela" && (
+        <Card>
+          <Table>
+            <Thead>
+              <Th>Prioridade</Th>
+              <Th>Título</Th>
+              <Th>Tipo</Th>
+              <Th className="text-right">Alvo</Th>
+              <Th className="text-right">Atual</Th>
+              <Th>Status</Th>
+              <Th></Th>
+            </Thead>
+            <tbody>
+              {metas.map((m) => (
+                <Tr key={m.id}>
+                  <Td className="capitalize">{m.prioridade}</Td>
+                  <Td>{m.titulo}</Td>
+                  <Td className="text-text-dim">{TIPOS[m.tipo]}</Td>
+                  <Td className="text-right font-mono">{formatarMoeda(m.valor_alvo)}</Td>
+                  <Td className="text-right font-mono">{formatarMoeda(m.valor_atual)}</Td>
+                  <Td>
+                    <Pill variant={STATUS_VARIANT[m.status]}>{STATUS_LABEL[m.status]}</Pill>
+                  </Td>
+                  <Td className="text-right">
+                    <button
+                      onClick={() => excluir.mutate(m.id)}
+                      className="text-text-faint hover:text-red text-[12px]"
+                    >
+                      Excluir
+                    </button>
+                  </Td>
+                </Tr>
+              ))}
+              {!metas.length && (
+                <Tr>
+                  <Td colSpan={7} className="text-text-faint text-center py-6">
+                    Nenhuma meta cadastrada ainda.
+                  </Td>
+                </Tr>
+              )}
+            </tbody>
+          </Table>
         </Card>
-      ))}
+      )}
+
+      {!isLoading && visualizar === "prioridade" && (
+        <div className="grid grid-cols-3 gap-4 max-md:grid-cols-1">
+          {PRIORIDADES.map((p) => (
+            <div key={p.valor} className="flex flex-col gap-3">
+              <Card>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <div className="font-medium text-[13.5px]">{p.label}</div>
+                    <div className="text-text-faint text-[11px] font-mono">{p.sub}</div>
+                  </div>
+                  <div className="font-mono text-[13px]">{formatarMoeda(totalPrioridade(p.valor))}</div>
+                </div>
+              </Card>
+
+              {porPrioridade(p.valor).map((m) => (
+                <Card key={m.id}>
+                  <div className="flex items-start justify-between mb-1.5">
+                    <span className="font-medium text-[13px]">{m.titulo}</span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() =>
+                          alternarAtiva.mutate({
+                            id: m.id,
+                            status: m.status === "pausada" ? "em_andamento" : "pausada",
+                          })
+                        }
+                        title={m.status === "pausada" ? "Pausada — clique pra ativar" : "Ativa — clique pra pausar"}
+                        className={`w-8 h-[18px] rounded-full relative transition-colors ${
+                          m.status !== "pausada" ? "bg-accent" : "bg-line"
+                        }`}
+                      >
+                        <span
+                          className={`absolute top-[2px] w-3.5 h-3.5 rounded-full bg-white transition-all ${
+                            m.status !== "pausada" ? "left-[17px]" : "left-[2px]"
+                          }`}
+                        />
+                      </button>
+                      <button
+                        onClick={() => excluir.mutate(m.id)}
+                        className="text-text-faint hover:text-red text-[11px]"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                  {m.prazo && (
+                    <div className="text-text-faint text-[10.5px] font-mono mb-1.5">até {formatarData(m.prazo)}</div>
+                  )}
+                  {m.valor_alvo ? (
+                    <BarRow
+                      label={formatarMoeda(m.valor_atual)}
+                      pct={m.progresso_pct || 0}
+                      value={`${m.progresso_pct || 0}%`}
+                      labelWidth="w-[90px]"
+                    />
+                  ) : (
+                    <div className="text-[12.5px] text-text-dim">Aportado: {formatarMoeda(m.valor_atual)}</div>
+                  )}
+                  <div className="flex items-center gap-2 mt-2">
+                    {aporteAberto === m.id ? (
+                      <>
+                        <input
+                          type="number"
+                          autoFocus
+                          value={valorAporte}
+                          onChange={(e) => setValorAporte(e.target.value)}
+                          placeholder="Valor"
+                          className="bg-bg border border-line rounded-[7px] px-2.5 py-1.5 text-[12px] text-text outline-none focus:border-accent/60 w-24"
+                        />
+                        <button
+                          onClick={() =>
+                            valorAporte && aportar.mutate({ metaId: m.id, valor: Number(valorAporte) })
+                          }
+                          className="text-accent text-[11.5px] hover:underline"
+                        >
+                          OK
+                        </button>
+                        <button
+                          onClick={() => setAporteAberto(null)}
+                          className="text-text-faint text-[11.5px] hover:underline"
+                        >
+                          Cancelar
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        onClick={() => setAporteAberto(m.id)}
+                        className="text-text-faint hover:text-text text-[11.5px]"
+                      >
+                        + Aporte
+                      </button>
+                    )}
+                  </div>
+                </Card>
+              ))}
+              {!porPrioridade(p.valor).length && (
+                <p className="text-text-faint text-[11.5px] text-center py-3">Nenhuma meta aqui ainda.</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

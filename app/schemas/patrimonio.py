@@ -13,6 +13,8 @@ TIPOS_META = {
     "outro",
 }
 STATUS_META = {"em_andamento", "concluida", "pausada"}
+# essencial = curto prazo · desejo = médio prazo · sonho = longo prazo
+PRIORIDADES_META = {"essencial", "desejo", "sonho"}
 
 TIPOS_DIVIDA = {
     "emprestimo_pessoal",
@@ -40,6 +42,7 @@ TIPOS_INVESTIMENTO = {
 class MetaCriar(BaseModel):
     titulo: str
     tipo: str = "outro"
+    prioridade: str = "desejo"
     valor_alvo: float | None = None
     prazo: date | None = None
 
@@ -47,6 +50,7 @@ class MetaCriar(BaseModel):
 class MetaAtualizar(BaseModel):
     titulo: str | None = None
     tipo: str | None = None
+    prioridade: str | None = None
     valor_alvo: float | None = None
     prazo: date | None = None
     status: str | None = None
@@ -56,6 +60,7 @@ class MetaResposta(BaseModel):
     id: uuid.UUID
     titulo: str
     tipo: str
+    prioridade: str
     valor_alvo: float | None
     valor_atual: float
     progresso_pct: float | None
@@ -204,13 +209,23 @@ class PatrimonioResposta(BaseModel):
     patrimonio_liquido: float
 
 
-# ---------- Simulação (Meu Futuro) ----------
+# ---------- Simulação (Meu Futuro / independência financeira) ----------
+# Taxas reais (já descontada a inflação) -- padrão conservador, editável.
+TAXA_ACUMULACAO_PADRAO_PCT = 4.0
+TAXA_POS_APOSENTADORIA_PADRAO_PCT = 3.5
+
+
 class SimulacaoCriar(BaseModel):
     nome_cenario: str = "Cenário base"
     patrimonio_inicial: float
     aporte_mensal: float
-    taxa_retorno_anual_pct: float
+    taxa_retorno_anual_pct: float = TAXA_ACUMULACAO_PADRAO_PCT
     prazo_anos: int
+    idade_atual: int | None = None
+    idade_aposentadoria: int | None = None
+    renda_desejada_mensal: float | None = None
+    outras_rendas_mensal: float = 0
+    taxa_pos_aposentadoria_pct: float = TAXA_POS_APOSENTADORIA_PADRAO_PCT
 
 
 class SimulacaoResposta(BaseModel):
@@ -221,6 +236,13 @@ class SimulacaoResposta(BaseModel):
     taxa_retorno_anual_pct: float
     prazo_anos: int
     valor_final_projetado: float | None
+    idade_atual: int | None
+    idade_aposentadoria: int | None
+    renda_desejada_mensal: float | None
+    outras_rendas_mensal: float | None
+    taxa_pos_aposentadoria_pct: float | None
+    aporte_necessario: float | None
+    patrimonio_necessario: float | None
     criado_em: datetime
 
     model_config = {"from_attributes": True}
