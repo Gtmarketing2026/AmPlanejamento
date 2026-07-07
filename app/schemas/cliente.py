@@ -30,17 +30,32 @@ class TokenResponse(BaseModel):
 class ProfissionalPerfil(BaseModel):
     id: uuid.UUID
     nome: str
+    nome_empresa: str | None = None
+    whatsapp: str | None = None
     email: EmailStr
     subdominio: str
     status: str
     is_admin: bool
     trial_ate: date | None
+    # Marca (white-label)
+    cor_marca: str | None = None
+    logo_url: str | None = None
+    video_boas_vindas: str | None = None
+    pode_editar_marca: bool = False
     # Gating de plano (o frontend usa pra decidir travar/liberar o app)
     plano_ativo: bool = False
     tem_assinatura: bool = False
     tipo_plano: str | None = None
 
     model_config = {"from_attributes": True}
+
+
+# ---------- Marca (white-label) ----------
+class MarcaAtualizar(BaseModel):
+    nome_empresa: str | None = None
+    cor_marca: str | None = None
+    subdominio: str | None = None
+    video_boas_vindas: str | None = None
 
 
 # ---------- Clientes ----------

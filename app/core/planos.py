@@ -33,6 +33,16 @@ PLANOS = {
 }
 
 
+def em_trial(profissional) -> bool:
+    return profissional.trial_ate is not None and profissional.trial_ate >= date.today()
+
+
+def pode_usar_marca(profissional, tipo_plano: str | None) -> bool:
+    """Marca própria (white-label) é do plano Completo — liberada também
+    durante o trial pra o planejador avaliar o recurso."""
+    return em_trial(profissional) or tipo_plano == "completo"
+
+
 def tem_plano_ativo(db: Session, profissional) -> bool:
     """profissional: instância do model Profissional (precisa de trial_ate).
     db: sessão já com contexto de RLS do próprio profissional (as faturas dele)."""
