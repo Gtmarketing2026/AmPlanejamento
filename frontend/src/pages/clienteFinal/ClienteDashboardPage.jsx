@@ -5,9 +5,9 @@ import Card from "../../components/ui/Card"
 import KpiStat from "../../components/ui/KpiStat"
 import BarRow from "../../components/ui/BarRow"
 import Button from "../../components/ui/Button"
-import Tabs from "../../components/ui/Tabs"
+import TabsAgrupadas from "../../components/ui/TabsAgrupadas"
 import { meuPerfilCliente, minhasCategorias, minhasTransacoes } from "../../api/clientes"
-import { listarMinhasTarefas, listarMinhasNotificacoes } from "../../api/patrimonio"
+import { listarMinhasTarefas } from "../../api/patrimonio"
 import { formatarMoeda } from "../../lib/format"
 import { exportarCsv, exportarPdfViaImpressao } from "../../lib/exportar"
 import LancamentosTab from "./tabs/LancamentosTab"
@@ -21,8 +21,6 @@ import ClarezaFinanceiraTab from "./tabs/ClarezaFinanceiraTab"
 import ProtecaoTab from "./tabs/ProtecaoTab"
 import TarefasTab from "./tabs/TarefasTab"
 import ContasTab from "./tabs/ContasTab"
-import NotificacoesTab from "./tabs/NotificacoesTab"
-import ConfiguracoesTab from "./tabs/ConfiguracoesTab"
 import SaudeFinanceiraCard from "./SaudeFinanceiraCard"
 
 export default function ClienteDashboardPage() {
@@ -53,13 +51,7 @@ export default function ClienteDashboardPage() {
     queryFn: () => listarMinhasTarefas(token),
     enabled: !!token,
   })
-  const { data: notificacoes = [] } = useQuery({
-    queryKey: ["cliente-eu-notificacoes", token],
-    queryFn: () => listarMinhasNotificacoes(token),
-    enabled: !!token,
-  })
   const tarefasPendentes = tarefas.filter((t) => !t.concluido).length
-  const notificacoesNaoLidas = notificacoes.filter((n) => !n.lida_cliente).length
 
   // Fluxo de caixa calculado dos lançamentos reais
   const entradas = transacoes.filter((t) => t.tipo === "entrada").reduce((s, t) => s + Math.abs(Number(t.valor)), 0)
@@ -128,22 +120,40 @@ export default function ClienteDashboardPage() {
       <SaudeFinanceiraCard token={token} />
 
       <div className="mb-5">
-        <Tabs
-          options={[
-            { value: "fluxo", n: "A", label: "Fluxo de caixa" },
-            { value: "lancamentos", n: "B", label: "Lançamentos" },
-            { value: "orcamento", n: "C", label: "Orçamento" },
-            { value: "clareza", n: "D", label: "Clareza Financeira" },
-            { value: "metas", n: "E", label: "Metas" },
-            { value: "futuro", n: "F", label: "Meu Futuro" },
-            { value: "investimentos", n: "G", label: "Investimentos" },
-            { value: "patrimonio", n: "H", label: "Patrimônio" },
-            { value: "dividas", n: "I", label: "Dívidas" },
-            { value: "protecao", n: "J", label: "Proteção" },
-            { value: "tarefas", n: "K", label: "Tarefas", badge: tarefasPendentes },
-            { value: "contas", n: "L", label: "Contas" },
-            { value: "notificacoes", n: "M", label: "Notificações", badge: notificacoesNaoLidas },
-            { value: "configuracoes", n: "N", label: "Configurações" },
+        <TabsAgrupadas
+          grupos={[
+            {
+              label: "Visão geral",
+              itens: [
+                { value: "fluxo", label: "Fluxo de caixa" },
+                { value: "clareza", label: "Clareza Financeira" },
+                { value: "tarefas", label: "Tarefas", badge: tarefasPendentes },
+              ],
+            },
+            {
+              label: "Planejamento",
+              itens: [
+                { value: "orcamento", label: "Planejamento" },
+                { value: "metas", label: "Metas" },
+                { value: "futuro", label: "Meu Futuro" },
+              ],
+            },
+            {
+              label: "Patrimônio",
+              itens: [
+                { value: "investimentos", label: "Investimentos" },
+                { value: "patrimonio", label: "Patrimônio" },
+                { value: "dividas", label: "Dívidas" },
+                { value: "protecao", label: "Proteção" },
+              ],
+            },
+            {
+              label: "Lançamentos",
+              itens: [
+                { value: "lancamentos", label: "Lançamentos" },
+                { value: "contas", label: "Contas" },
+              ],
+            },
           ]}
           active={tab}
           onChange={setTab}
@@ -197,8 +207,6 @@ export default function ClienteDashboardPage() {
       {tab === "protecao" && <ProtecaoTab token={token} />}
       {tab === "tarefas" && <TarefasTab token={token} />}
       {tab === "contas" && <ContasTab token={token} />}
-      {tab === "notificacoes" && <NotificacoesTab token={token} />}
-      {tab === "configuracoes" && <ConfiguracoesTab token={token} />}
     </div>
   )
 }

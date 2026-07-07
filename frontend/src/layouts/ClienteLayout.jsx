@@ -2,6 +2,8 @@ import { useEffect } from "react"
 import { NavLink, Outlet, useNavigate } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import BannerImpersonacao from "../components/negocio/BannerImpersonacao"
+import SinoNotificacoes from "../components/cliente/SinoNotificacoes"
+import MenuConfiguracoes from "../components/cliente/MenuConfiguracoes"
 import { meuPerfilCliente } from "../api/clientes"
 import { ApiError } from "../api/client"
 import { getImpersonacao } from "../lib/impersonacao"
@@ -54,9 +56,13 @@ export default function ClienteLayout() {
           <NavLink to="/cliente/dashboard" className={linkClasse}>Meu painel</NavLink>
           <NavLink to="/cliente/importar" className={linkClasse}>Importar extrato</NavLink>
         </div>
-        <button onClick={sair} className="px-3 py-2 rounded-[7px] text-[12.5px] text-text-faint hover:text-text-dim">
-          Sair
-        </button>
+        <div className="flex items-center gap-2">
+          <SinoNotificacoes token={token} />
+          <MenuConfiguracoes token={token} />
+          <button onClick={sair} className="px-3 py-2 rounded-[7px] text-[12.5px] text-text-faint hover:text-text-dim">
+            Sair
+          </button>
+        </div>
       </div>
 
       <Outlet context={{ token, perfil }} />
