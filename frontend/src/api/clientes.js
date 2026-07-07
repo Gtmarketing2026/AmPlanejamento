@@ -14,8 +14,18 @@ export const loginCliente = (nickname, senha) =>
 export const meuPerfilCliente = (token) => apiGet("/clientes/eu", { token })
 
 export const minhasCategorias = (token) => apiGet("/clientes/eu/categorias", { token })
+export const criarMinhaCategoria = (token, dados) => apiPost("/clientes/eu/categorias", dados, { token })
+export const atualizarMinhaCategoria = (token, id, dados) =>
+  apiPatch(`/clientes/eu/categorias/${id}`, dados, { token })
+export const excluirMinhaCategoria = (token, id) =>
+  apiDelete(`/clientes/eu/categorias/${id}`, undefined, { token })
 
 export const minhasSubcategorias = (token) => apiGet("/clientes/eu/subcategorias", { token })
+export const criarMinhaSubcategoria = (token, dados) => apiPost("/clientes/eu/subcategorias", dados, { token })
+export const atualizarMinhaSubcategoria = (token, id, dados) =>
+  apiPatch(`/clientes/eu/subcategorias/${id}`, dados, { token })
+export const excluirMinhaSubcategoria = (token, id) =>
+  apiDelete(`/clientes/eu/subcategorias/${id}`, undefined, { token })
 
 export const minhasTransacoes = (token, filtros = {}) => {
   const params = new URLSearchParams()

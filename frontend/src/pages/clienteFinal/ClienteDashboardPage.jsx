@@ -16,6 +16,7 @@ import ClarezaFinanceiraTab from "./tabs/ClarezaFinanceiraTab"
 import ProtecaoTab from "./tabs/ProtecaoTab"
 import TarefasTab from "./tabs/TarefasTab"
 import ContasTab from "./tabs/ContasTab"
+import CategoriasTab from "./tabs/CategoriasTab"
 import SaudeFinanceiraCard from "./SaudeFinanceiraCard"
 
 export default function ClienteDashboardPage() {
@@ -108,6 +109,7 @@ export default function ClienteDashboardPage() {
               itens: [
                 { value: "lancamentos", label: "Lançamentos" },
                 { value: "contas", label: "Contas" },
+                { value: "categorias", label: "Categorias" },
               ],
             },
           ]}
@@ -132,6 +134,7 @@ export default function ClienteDashboardPage() {
       {tab === "protecao" && <ProtecaoTab token={token} />}
       {tab === "tarefas" && <TarefasTab token={token} />}
       {tab === "contas" && <ContasTab token={token} />}
+      {tab === "categorias" && <CategoriasTab token={token} temCnpj={temCnpj} />}
     </div>
   )
 }

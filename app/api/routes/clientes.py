@@ -35,7 +35,16 @@ from app.models.importacao_extrato import ImportacaoExtrato
 from app.models.preferencia_cliente import PreferenciaCliente
 from app.models.transacao import Transacao
 from app.parsers.dedup import calcular_hash_dedup
-from app.schemas.categoria import CategoriaResposta, SubcategoriaResposta
+from app.schemas.categoria import (
+    CONTEXTOS,
+    TIPOS,
+    CategoriaAtualizar,
+    CategoriaCriar,
+    CategoriaResposta,
+    SubcategoriaAtualizar,
+    SubcategoriaCriar,
+    SubcategoriaResposta,
+)
 from app.schemas.cliente import (
     ClienteAtualizar,
     ClienteCriar,
@@ -206,6 +215,21 @@ def perfil_cliente_atual(
     return cliente
 
 
+def _categoria_resposta_cliente(c: Categoria, cliente_id: uuid.UUID) -> CategoriaResposta:
+    return CategoriaResposta.model_validate(c).model_copy(update={"editavel": c.cliente_id == cliente_id})
+
+
+def _subcategoria_resposta_cliente(s: Subcategoria, cliente_id: uuid.UUID) -> SubcategoriaResposta:
+    return SubcategoriaResposta.model_validate(s).model_copy(update={"editavel": s.cliente_id == cliente_id})
+
+
+def _exigir_cliente_para_categorias(db: Session, cliente_id: uuid.UUID) -> Cliente:
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    return cliente
+
+
 @router.get("/eu/categorias", response_model=list[CategoriaResposta])
 def listar_minhas_categorias(
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
@@ -213,15 +237,90 @@ def listar_minhas_categorias(
 ):
     # Sem contexto de profissional_id no token do cliente final -- busca o
     # profissional dono do cadastro pra replicar manualmente a mesma regra
-    # da policy de RLS (padrão do sistema OR custom do próprio profissional).
-    cliente = db.get(Cliente, cliente_id)
-    if not cliente:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
-    return db.scalars(
+    # da policy de RLS (padrão do sistema OR compartilhada do profissional
+    # OR só deste cliente).
+    cliente = _exigir_cliente_para_categorias(db, cliente_id)
+    categorias = db.scalars(
         select(Categoria)
-        .where((Categoria.profissional_id.is_(None)) | (Categoria.profissional_id == cliente.profissional_id))
+        .where(
+            (Categoria.profissional_id.is_(None))
+            | ((Categoria.profissional_id == cliente.profissional_id) & (Categoria.cliente_id.is_(None)))
+            | (Categoria.cliente_id == cliente_id)
+        )
         .order_by(Categoria.nome)
     ).all()
+    return [_categoria_resposta_cliente(c, cliente_id) for c in categorias]
+
+
+@router.post("/eu/categorias", response_model=CategoriaResposta, status_code=status.HTTP_201_CREATED)
+def criar_minha_categoria(
+    dados: CategoriaCriar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    cliente = _exigir_cliente_para_categorias(db, cliente_id)
+    if dados.tipo not in TIPOS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Tipo inválido: {dados.tipo}")
+    if dados.contexto not in CONTEXTOS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Contexto inválido: {dados.contexto}")
+    categoria = Categoria(
+        profissional_id=cliente.profissional_id,
+        cliente_id=cliente_id,
+        nome=dados.nome,
+        tipo=dados.tipo,
+        icone=dados.icone,
+        contexto=dados.contexto,
+    )
+    db.add(categoria)
+    db.flush()
+    db.refresh(categoria)
+    return _categoria_resposta_cliente(categoria, cliente_id)
+
+
+def _exigir_minha_categoria(db: Session, categoria_id: uuid.UUID, cliente_id: uuid.UUID) -> Categoria:
+    categoria = db.get(Categoria, categoria_id)
+    if categoria is None or categoria.cliente_id != cliente_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria não encontrada")
+    return categoria
+
+
+@router.patch("/eu/categorias/{categoria_id}", response_model=CategoriaResposta)
+def atualizar_minha_categoria(
+    categoria_id: uuid.UUID,
+    dados: CategoriaAtualizar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    categoria = _exigir_minha_categoria(db, categoria_id, cliente_id)
+    if dados.contexto is not None and dados.contexto not in CONTEXTOS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Contexto inválido: {dados.contexto}")
+    if dados.nome is not None:
+        categoria.nome = dados.nome
+    if dados.icone is not None:
+        categoria.icone = dados.icone
+    if dados.contexto is not None:
+        categoria.contexto = dados.contexto
+    db.flush()
+    db.refresh(categoria)
+    return _categoria_resposta_cliente(categoria, cliente_id)
+
+
+@router.delete("/eu/categorias/{categoria_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_minha_categoria(
+    categoria_id: uuid.UUID,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    categoria = _exigir_minha_categoria(db, categoria_id, cliente_id)
+    sub_ids = list(db.scalars(select(Subcategoria.id).where(Subcategoria.categoria_id == categoria_id)))
+    db.query(Transacao).filter(Transacao.cliente_id == cliente_id, Transacao.categoria_id == categoria_id).update(
+        {"categoria_id": None, "subcategoria_id": None}, synchronize_session=False
+    )
+    if sub_ids:
+        db.query(Transacao).filter(
+            Transacao.cliente_id == cliente_id, Transacao.subcategoria_id.in_(sub_ids)
+        ).update({"subcategoria_id": None}, synchronize_session=False)
+    db.delete(categoria)
 
 
 @router.get("/eu/subcategorias", response_model=list[SubcategoriaResposta])
@@ -230,15 +329,71 @@ def listar_minhas_subcategorias(
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
     db: Session = Depends(get_db_admin),
 ):
-    cliente = db.get(Cliente, cliente_id)
-    if not cliente:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    cliente = _exigir_cliente_para_categorias(db, cliente_id)
     query = select(Subcategoria).where(
-        (Subcategoria.profissional_id.is_(None)) | (Subcategoria.profissional_id == cliente.profissional_id)
+        (Subcategoria.profissional_id.is_(None))
+        | ((Subcategoria.profissional_id == cliente.profissional_id) & (Subcategoria.cliente_id.is_(None)))
+        | (Subcategoria.cliente_id == cliente_id)
     )
     if categoria_id:
         query = query.where(Subcategoria.categoria_id == categoria_id)
-    return db.scalars(query.order_by(Subcategoria.nome)).all()
+    return [_subcategoria_resposta_cliente(s, cliente_id) for s in db.scalars(query.order_by(Subcategoria.nome)).all()]
+
+
+@router.post("/eu/subcategorias", response_model=SubcategoriaResposta, status_code=status.HTTP_201_CREATED)
+def criar_minha_subcategoria(
+    dados: SubcategoriaCriar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    cliente = _exigir_cliente_para_categorias(db, cliente_id)
+    categoria = db.get(Categoria, dados.categoria_id)
+    if categoria is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria não encontrada")
+    subcategoria = Subcategoria(
+        categoria_id=dados.categoria_id,
+        profissional_id=cliente.profissional_id,
+        cliente_id=cliente_id,
+        nome=dados.nome,
+    )
+    db.add(subcategoria)
+    db.flush()
+    db.refresh(subcategoria)
+    return _subcategoria_resposta_cliente(subcategoria, cliente_id)
+
+
+def _exigir_minha_subcategoria(db: Session, subcategoria_id: uuid.UUID, cliente_id: uuid.UUID) -> Subcategoria:
+    subcategoria = db.get(Subcategoria, subcategoria_id)
+    if subcategoria is None or subcategoria.cliente_id != cliente_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Subcategoria não encontrada")
+    return subcategoria
+
+
+@router.patch("/eu/subcategorias/{subcategoria_id}", response_model=SubcategoriaResposta)
+def atualizar_minha_subcategoria(
+    subcategoria_id: uuid.UUID,
+    dados: SubcategoriaAtualizar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    subcategoria = _exigir_minha_subcategoria(db, subcategoria_id, cliente_id)
+    subcategoria.nome = dados.nome
+    db.flush()
+    db.refresh(subcategoria)
+    return _subcategoria_resposta_cliente(subcategoria, cliente_id)
+
+
+@router.delete("/eu/subcategorias/{subcategoria_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_minha_subcategoria(
+    subcategoria_id: uuid.UUID,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    subcategoria = _exigir_minha_subcategoria(db, subcategoria_id, cliente_id)
+    db.query(Transacao).filter(
+        Transacao.cliente_id == cliente_id, Transacao.subcategoria_id == subcategoria_id
+    ).update({"subcategoria_id": None}, synchronize_session=False)
+    db.delete(subcategoria)
 
 
 @router.get("/eu/transacoes", response_model=list[TransacaoResposta])
