@@ -201,6 +201,7 @@ def atualizar_follow_up(
     follow_up_id: uuid.UUID,
     dados: FollowUpAtualizar,
     db: Session = Depends(get_db_com_rls),
+    profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
 ):
     follow_up = db.get(FollowUp, follow_up_id)
     if follow_up is None:
@@ -209,12 +210,37 @@ def atualizar_follow_up(
     if dados.concluido is not None:
         follow_up.concluido = dados.concluido
         follow_up.concluido_em = datetime.now(timezone.utc) if dados.concluido else None
+
+    # Detecta mudança de data/observação pra propagar ao Google só quando muda.
+    mudou_evento = (dados.data_prevista is not None and dados.data_prevista != follow_up.data_prevista) or (
+        dados.observacao is not None and dados.observacao != follow_up.observacao
+    )
     if dados.data_prevista is not None:
         follow_up.data_prevista = dados.data_prevista
     if dados.observacao is not None:
         follow_up.observacao = dados.observacao
 
     cliente = db.get(Cliente, follow_up.cliente_id)
+
+    # Espelha a edição no evento do Google (best-effort), se o follow-up já
+    # tem um evento sincronizado.
+    if mudou_evento and follow_up.google_event_id and gcal.oauth_configurado():
+        cred = db.get(CredencialGoogle, profissional_id)
+        if cred is not None:
+            try:
+                token = _access_token_valido(db, cred)
+                titulo = f"Follow-up: {cliente.nome}" if cliente else "Follow-up"
+                gcal.atualizar_evento_dia_inteiro(
+                    token,
+                    cred.calendar_id,
+                    follow_up.google_event_id,
+                    titulo,
+                    follow_up.observacao,
+                    follow_up.data_prevista,
+                )
+            except Exception:
+                pass
+
     return _follow_up_para_resposta(follow_up, cliente.nome if cliente else None)
 
 

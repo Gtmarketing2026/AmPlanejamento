@@ -138,6 +138,27 @@ def criar_evento_dia_inteiro(
     return resp.json()["id"]
 
 
+def atualizar_evento_dia_inteiro(
+    access_token: str, calendar_id: str, event_id: str, titulo: str, descricao: str | None, dia
+) -> None:
+    """Atualiza (PATCH) um evento de dia inteiro existente — usado quando o
+    follow-up muda de data/observação. `dia` é um datetime.date."""
+    fim = dia + timedelta(days=1)
+    corpo = {
+        "summary": titulo,
+        "description": descricao or "",
+        "start": {"date": dia.isoformat()},
+        "end": {"date": fim.isoformat()},
+    }
+    resp = requests.patch(
+        f"{_CALENDAR_EVENTS.format(cal=calendar_id)}/{event_id}",
+        headers={"Authorization": f"Bearer {access_token}"},
+        json=corpo,
+        timeout=_TIMEOUT,
+    )
+    resp.raise_for_status()
+
+
 def excluir_evento(access_token: str, calendar_id: str, event_id: str) -> None:
     resp = requests.delete(
         f"{_CALENDAR_EVENTS.format(cal=calendar_id)}/{event_id}",

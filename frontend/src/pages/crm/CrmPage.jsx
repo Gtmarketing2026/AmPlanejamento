@@ -313,6 +313,27 @@ function FollowUpsCard({ clienteId, qc }) {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["crm-followups", clienteId] }),
   })
 
+  // Edição inline de um follow-up (data/observação). A propagação pro Google
+  // é feita no backend quando o follow-up já tem evento sincronizado.
+  const [editandoId, setEditandoId] = useState(null)
+  const [editData, setEditData] = useState("")
+  const [editObs, setEditObs] = useState("")
+
+  function abrirEdicao(f) {
+    setEditandoId(f.id)
+    setEditData(f.data_prevista)
+    setEditObs(f.observacao || "")
+  }
+
+  const editar = useMutation({
+    mutationFn: () =>
+      atualizarFollowUp(editandoId, { data_prevista: editData, observacao: editObs || null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["crm-followups", clienteId] })
+      setEditandoId(null)
+    },
+  })
+
   return (
     <Card className="mb-5">
       <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
@@ -365,41 +386,91 @@ function FollowUpsCard({ clienteId, qc }) {
         <p className="text-text-faint text-[12.5px]">Nenhum follow-up agendado.</p>
       )}
       <div className="flex flex-col gap-2">
-        {followUps.map((f) => (
-          <div
-            key={f.id}
-            className="flex items-center gap-3 border border-line rounded-[9px] px-3.5 py-2.5"
-          >
-            <input
-              type="checkbox"
-              checked={f.concluido}
-              onChange={() => concluir.mutate({ id: f.id, concluido: !f.concluido })}
-              className="accent-accent"
-              title={f.concluido ? "Reabrir" : "Marcar como concluído"}
-            />
-            <div className="flex-1">
-              <div className="flex items-center gap-2">
-                <span
-                  className={`text-[13px] font-mono ${f.concluido ? "text-text-faint line-through" : "text-text"}`}
-                >
-                  {formatarData(f.data_prevista)}
-                </span>
-                {f.sincronizado_google && <Pill variant="neutral">Google</Pill>}
-                {f.concluido && <Pill variant="on">concluído</Pill>}
-              </div>
-              {f.observacao && (
-                <div className="text-text-dim text-[12px] mt-0.5">{f.observacao}</div>
-              )}
-            </div>
-            <button
-              onClick={() => excluir.mutate(f.id)}
-              className="text-text-faint hover:text-red text-[11.5px]"
-              title="Excluir"
+        {followUps.map((f) =>
+          editandoId === f.id ? (
+            <form
+              key={f.id}
+              onSubmit={(e) => {
+                e.preventDefault()
+                if (editData) editar.mutate()
+              }}
+              className="border border-accent/40 rounded-[9px] px-3.5 py-3"
             >
-              ✕
-            </button>
-          </div>
-        ))}
+              <div className="flex gap-3 flex-wrap items-start">
+                <div className="w-44">
+                  <Field
+                    label="Data prevista"
+                    type="date"
+                    value={editData}
+                    onChange={(e) => setEditData(e.target.value)}
+                  />
+                </div>
+                <div className="flex-1 min-w-[200px]">
+                  <Field
+                    label="Observação"
+                    value={editObs}
+                    onChange={(e) => setEditObs(e.target.value)}
+                    placeholder="ex: Revisar orçamento do mês"
+                  />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button type="submit" disabled={!editData || editar.isPending}>
+                  {editar.isPending ? "Salvando…" : "Salvar"}
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => setEditandoId(null)}>
+                  Cancelar
+                </Button>
+                {f.sincronizado_google && (
+                  <span className="text-text-faint text-[11.5px]">
+                    A alteração também atualiza o evento no Google.
+                  </span>
+                )}
+              </div>
+            </form>
+          ) : (
+            <div
+              key={f.id}
+              className="flex items-center gap-3 border border-line rounded-[9px] px-3.5 py-2.5"
+            >
+              <input
+                type="checkbox"
+                checked={f.concluido}
+                onChange={() => concluir.mutate({ id: f.id, concluido: !f.concluido })}
+                className="accent-accent"
+                title={f.concluido ? "Reabrir" : "Marcar como concluído"}
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-[13px] font-mono ${f.concluido ? "text-text-faint line-through" : "text-text"}`}
+                  >
+                    {formatarData(f.data_prevista)}
+                  </span>
+                  {f.sincronizado_google && <Pill variant="neutral">Google</Pill>}
+                  {f.concluido && <Pill variant="on">concluído</Pill>}
+                </div>
+                {f.observacao && (
+                  <div className="text-text-dim text-[12px] mt-0.5">{f.observacao}</div>
+                )}
+              </div>
+              <button
+                onClick={() => abrirEdicao(f)}
+                className="text-text-faint hover:text-text text-[11.5px]"
+                title="Editar"
+              >
+                ✎
+              </button>
+              <button
+                onClick={() => excluir.mutate(f.id)}
+                className="text-text-faint hover:text-red text-[11.5px]"
+                title="Excluir"
+              >
+                ✕
+              </button>
+            </div>
+          )
+        )}
       </div>
     </Card>
   )
