@@ -48,7 +48,9 @@ _PADRAO_LINHA_AGREGADA = re.compile(
     r"\b(total(?:\s+(?:de\s+compras(?:\s+parceladas)?|da\s+fatura|geral|a\s+pagar(?:\s+do\s+cart[aã]o)?))?|"
     r"subtotal|saldo\s+(?:anterior|atual|final|dispon[ií]vel)|valor\s+total|"
     r"limite\s+(?:dispon[ií]vel|total|de\s+cr[eé]dito)|fatura\s+anterior|"
-    r"pagamentos?\s+(?:efetuados?|recebidos?)|tarifa|anuidade)\b",
+    r"pagamentos?\s*(?:efetuados?|recebidos?)|tarifa|anuidade|"
+    r"despesas\s+futuras|pr[óo]xim[ao]s?\s+fatura|faturas?\s+nos?\s+pr[óo]ximos?\s+meses|"
+    r"parcelas?\s+e\s+transa[çc][õo]es\s+de|fechamento|vencimento)\b",
     re.IGNORECASE,
 )
 
@@ -112,8 +114,13 @@ def _calcular_mes_referencia(data_transacao: date, natureza: str, dia_virada: in
 # ---------------------------------------------------------------------------
 # Parcelamento -- detecção e projeção de parcelas futuras
 # ---------------------------------------------------------------------------
-# Marcador de parcela na descrição, ex: "(5/6)", "(12/12)", "(1/12)".
-_PADRAO_PARCELA = re.compile(r"\((\d{1,2})\s*/\s*(\d{1,2})\)")
+# Marcador de parcela na descrição -- "(5/6)", "(12/12)", "(1/12)" (formato
+# mais comum) ou "Parcela 5/6", "Parcela05/06" sem parênteses (ex: fatura Pan).
+_PADRAO_PARCELA = re.compile(
+    r"\((?P<a1>\d{1,2})\s*/\s*(?P<t1>\d{1,2})\)"
+    r"|parcela\s*(?P<a2>\d{1,2})\s*/\s*(?P<t2>\d{1,2})",
+    re.IGNORECASE,
+)
 
 
 def _detectar_parcela(descricao: str) -> tuple[int, int] | None:
@@ -123,7 +130,8 @@ def _detectar_parcela(descricao: str) -> tuple[int, int] | None:
     m = _PADRAO_PARCELA.search(descricao)
     if not m:
         return None
-    atual, total = int(m.group(1)), int(m.group(2))
+    atual = int(m.group("a1") or m.group("a2"))
+    total = int(m.group("t1") or m.group("t2"))
     if total < 2 or atual < 1 or atual > total:
         return None
     return atual, total

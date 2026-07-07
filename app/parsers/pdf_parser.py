@@ -33,6 +33,12 @@ from pdfplumber.utils.exceptions import PdfminerException
 
 _PADRAO_DATA = re.compile(r"(\d{2}/\d{2}(?:/\d{2,4})?)")
 _PADRAO_VALOR = re.compile(r"(-?R?\$?\s?-?\d{1,3}(?:\.\d{3})*,\d{2})")
+# "Parcela 03/10" antes de uma data (com qualquer quantidade de espaço) --
+# algumas faturas (ex: Pan) marcam a parcela nesse formato "NN/NN" sem
+# parênteses, idêntico a uma data; usado pra não confundir com a data real
+# da transação (lookbehind de largura fixa não serve aqui por causa do
+# espaço variável entre a palavra e os dígitos).
+_PADRAO_PRECEDIDO_DE_PARCELA = re.compile(r"parcela\s*$", re.IGNORECASE)
 
 # Cabeçalho de uma tabela de transações ("Data Descrição Valor" ou variações)
 # -- usado pra restringir a varredura de texto à seção certa do documento.
@@ -93,10 +99,55 @@ def _extrair_de_tabelas(pdf: "pdfplumber.PDF", ano_referencia: int) -> list[dict
     return transacoes
 
 
+def _pares_data_valor_da_linha(linha: str) -> list[tuple[str, str, str]]:
+    """Extrai TODOS os pares (data, descrição, valor) de uma linha -- algumas
+    faturas (ex: Pan) imprimem duas transações lado a lado na mesma linha
+    visual (layout em 2 colunas), então uma única data+valor por linha (via
+    `.search()`) descartava a segunda transação inteira. Casa cada data com
+    o primeiro valor que vem depois dela no texto, na ordem em que aparecem."""
+    datas = [
+        m for m in _PADRAO_DATA.finditer(linha) if not _PADRAO_PRECEDIDO_DE_PARCELA.search(linha[: m.start()])
+    ]
+    valores = list(_PADRAO_VALOR.finditer(linha))
+    pares = []
+    vi = 0
+    for dm in datas:
+        while vi < len(valores) and valores[vi].start() < dm.end():
+            vi += 1
+        if vi >= len(valores):
+            break
+        vm = valores[vi]
+        descricao = linha[dm.end() : vm.start()].strip()
+        pares.append((dm.group(1), descricao, vm.group(1)))
+        vi += 1
+    return pares
+
+
+def _eh_linha_so_valor_estrangeiro(linha: str) -> str | None:
+    """Algumas faturas mostram compra no exterior em 3 linhas: valor em
+    moeda estrangeira + valor em R$ numa linha (ex: "$ 10,00 | R$ 54,80"),
+    a data/descrição na linha seguinte, e a cotação do dólar depois. Aqui
+    identifica a 1ª linha (só valores e "|", sem nenhuma outra palavra) e
+    devolve o último valor (o em R$, que vem depois do valor estrangeiro)."""
+    if "|" not in linha:
+        return None
+    valores = list(_PADRAO_VALOR.finditer(linha))
+    if not valores:
+        return None
+    resto = _PADRAO_VALOR.sub("", linha)
+    if not re.fullmatch(r"[\s|]*", resto):
+        return None
+    return valores[-1].group(1)
+
+
 def _extrair_de_texto(pdf: "pdfplumber.PDF", ano_referencia: int) -> list[dict]:
     linhas = []
     for pagina in pdf.pages:
-        texto = pagina.extract_text() or ""
+        # x_tolerance baixo evita que o pdfplumber cole palavras sem espaço
+        # em fontes mais compactas (ex: "PagamentoEfetuado" vira "Pagamento
+        # Efetuado") -- sem isso a descrição vem ilegível e o filtro de
+        # linha agregada (que depende de \s entre palavras) não pega.
+        texto = pagina.extract_text(x_tolerance=1) or pagina.extract_text() or ""
         linhas.extend(texto.splitlines())
 
     tem_secao_marcada = any(_PADRAO_CABECALHO_TRANSACOES.search(linha) for linha in linhas)
@@ -104,33 +155,58 @@ def _extrair_de_texto(pdf: "pdfplumber.PDF", ano_referencia: int) -> list[dict]:
     transacoes = []
     # Sem cabeçalho reconhecível, mantém o comportamento antigo (varre tudo).
     dentro_secao = not tem_secao_marcada
+    valor_pendente: str | None = None  # linha só de valor (compra no exterior), aguardando a data na próxima linha
     for linha in linhas:
         if _PADRAO_CABECALHO_TRANSACOES.search(linha):
             dentro_secao = True
+            valor_pendente = None
             continue
         if tem_secao_marcada and dentro_secao and _PADRAO_FIM_SECAO.match(linha):
             dentro_secao = False
+            valor_pendente = None
             continue
         if not dentro_secao:
             continue
 
-        data_match = _PADRAO_DATA.search(linha)
-        valor_match = _PADRAO_VALOR.search(linha)
-        if not data_match or not valor_match:
+        pares = _pares_data_valor_da_linha(linha)
+        if pares:
+            valor_pendente = None
+            for data_bruta, descricao, valor_bruto in pares:
+                data = _parsear_data(data_bruta, ano_referencia)
+                valor = _parsear_valor(valor_bruto)
+                if data is None or valor is None:
+                    continue
+                transacoes.append(
+                    {
+                        "data": data,
+                        "descricao": descricao or "Sem descrição",
+                        "valor": abs(valor),
+                        "tipo": "entrada" if valor >= 0 else "saida",
+                    }
+                )
             continue
-        data = _parsear_data(data_match.group(1), ano_referencia)
-        valor = _parsear_valor(valor_match.group(1))
-        if data is None or valor is None:
+
+        valor_estrangeiro = _eh_linha_so_valor_estrangeiro(linha)
+        if valor_estrangeiro is not None:
+            valor_pendente = valor_estrangeiro
             continue
-        descricao = linha.replace(data_match.group(0), "").replace(valor_match.group(0), "").strip()
-        transacoes.append(
-            {
-                "data": data,
-                "descricao": descricao or "Sem descrição",
-                "valor": abs(valor),
-                "tipo": "entrada" if valor >= 0 else "saida",
-            }
-        )
+
+        if valor_pendente is not None:
+            data_match = _PADRAO_DATA.search(linha)
+            if data_match:
+                data = _parsear_data(data_match.group(1), ano_referencia)
+                valor = _parsear_valor(valor_pendente)
+                descricao = linha.replace(data_match.group(0), "").strip()
+                valor_pendente = None
+                if data is not None and valor is not None:
+                    transacoes.append(
+                        {
+                            "data": data,
+                            "descricao": descricao or "Sem descrição",
+                            "valor": abs(valor),
+                            "tipo": "entrada" if valor >= 0 else "saida",
+                        }
+                    )
     return transacoes
 
 
@@ -148,9 +224,13 @@ def parse_pdf(conteudo: bytes, ano_referencia: int | None = None, senha: str | N
     ano_referencia = ano_referencia or date.today().year
     try:
         with pdfplumber.open(io.BytesIO(conteudo), password=senha or "") as pdf:
-            transacoes = _extrair_de_tabelas(pdf, ano_referencia)
-            if not transacoes:
-                transacoes = _extrair_de_texto(pdf, ano_referencia)
+            transacoes_tabelas = _extrair_de_tabelas(pdf, ano_referencia)
+            transacoes_texto = _extrair_de_texto(pdf, ano_referencia)
+            # Em faturas que imprimem 2 transações lado a lado na mesma linha
+            # (layout em 2 colunas), a extração por tabela do pdfplumber só
+            # enxerga uma das colunas e descarta a outra silenciosamente --
+            # usa sempre o método que capturou mais lançamentos.
+            transacoes = transacoes_texto if len(transacoes_texto) > len(transacoes_tabelas) else transacoes_tabelas
     except (PDFPasswordIncorrect, PdfminerException) as e:
         if not _e_senha_incorreta(e):
             raise
