@@ -9,15 +9,19 @@ import Field, { Label, Select } from "../../components/ui/Field"
 import { useAtualizarCliente, useClientes } from "../../hooks/useClientes"
 import {
   atualizarFollowUp,
+  atualizarTarefaCliente,
   criarFollowUp,
   criarInteracao,
+  criarTarefaCliente,
   excluirFollowUp,
   excluirInteracao,
+  excluirTarefaCliente,
   googleConectar,
   googleDesconectar,
   googleStatus,
   listarFollowUpsCliente,
   listarInteracoes,
+  listarTarefasCliente,
 } from "../../api/crm"
 import { formatarData, iniciais } from "../../lib/format"
 
@@ -149,6 +153,8 @@ export default function CrmPage() {
                 setSearchParams={setSearchParams}
               />
 
+              <TarefasCard clienteId={clienteId} qc={qc} />
+
               <FollowUpsCard clienteId={clienteId} qc={qc} />
 
               <TimelineCard clienteId={clienteId} qc={qc} />
@@ -269,6 +275,120 @@ function TimelineCard({ clienteId, qc }) {
             </div>
           )
         })}
+      </div>
+    </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Tarefas do cliente (checklist)
+// ---------------------------------------------------------------------------
+function TarefasCard({ clienteId, qc }) {
+  const [titulo, setTitulo] = useState("")
+  const [descricao, setDescricao] = useState("")
+  const [prazo, setPrazo] = useState("")
+
+  const { data: tarefas = [], isLoading } = useQuery({
+    queryKey: ["crm-tarefas", clienteId],
+    queryFn: () => listarTarefasCliente(clienteId),
+    enabled: !!clienteId,
+  })
+
+  const criar = useMutation({
+    mutationFn: () =>
+      criarTarefaCliente(clienteId, { titulo, descricao: descricao || null, prazo: prazo || null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["crm-tarefas", clienteId] })
+      setTitulo("")
+      setDescricao("")
+      setPrazo("")
+    },
+  })
+  const concluir = useMutation({
+    mutationFn: ({ id, concluido }) => atualizarTarefaCliente(id, { concluido }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["crm-tarefas", clienteId] }),
+  })
+  const excluir = useMutation({
+    mutationFn: (id) => excluirTarefaCliente(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["crm-tarefas", clienteId] }),
+  })
+
+  const pendentes = tarefas.filter((t) => !t.concluido)
+  const concluidas = tarefas.filter((t) => t.concluido)
+
+  return (
+    <Card className="mb-5">
+      <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
+        Tarefas pro cliente
+      </div>
+
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (titulo.trim()) criar.mutate()
+        }}
+        className="mb-5"
+      >
+        <div className="flex gap-3 flex-wrap items-start">
+          <div className="flex-1 min-w-[200px]">
+            <Field
+              label="Tarefa"
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              placeholder="ex: Investir R$500 na ação XPTO"
+            />
+          </div>
+          <div className="w-44">
+            <Field label="Prazo (opcional)" type="date" value={prazo} onChange={(e) => setPrazo(e.target.value)} />
+          </div>
+        </div>
+        <Textarea
+          label="Detalhes (opcional)"
+          rows={2}
+          value={descricao}
+          onChange={(e) => setDescricao(e.target.value)}
+          placeholder="ex: aportar até o dia 10 pela corretora habitual"
+        />
+        <Button type="submit" disabled={!titulo.trim() || criar.isPending}>
+          {criar.isPending ? "Adicionando…" : "Adicionar tarefa"}
+        </Button>
+      </form>
+
+      {isLoading && <p className="text-text-faint text-sm">Carregando…</p>}
+      {!isLoading && !tarefas.length && (
+        <p className="text-text-faint text-[12.5px]">Nenhuma tarefa passada pro cliente ainda.</p>
+      )}
+      <div className="flex flex-col gap-2">
+        {[...pendentes, ...concluidas].map((t) => (
+          <div key={t.id} className="flex items-center gap-3 border border-line rounded-[9px] px-3.5 py-2.5">
+            <input
+              type="checkbox"
+              checked={t.concluido}
+              onChange={() => concluir.mutate({ id: t.id, concluido: !t.concluido })}
+              className="accent-accent"
+              title={t.concluido ? "Reabrir" : "Marcar como concluída"}
+            />
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <span className={`text-[13px] font-medium ${t.concluido ? "text-text-faint line-through" : "text-text"}`}>
+                  {t.titulo}
+                </span>
+                {t.prazo && (
+                  <span className="text-text-faint text-[11px] font-mono">até {formatarData(t.prazo)}</span>
+                )}
+                {t.concluido && <Pill variant="on">concluída</Pill>}
+              </div>
+              {t.descricao && <div className="text-text-dim text-[12px] mt-0.5">{t.descricao}</div>}
+            </div>
+            <button
+              onClick={() => excluir.mutate(t.id)}
+              className="text-text-faint hover:text-red text-[11.5px]"
+              title="Excluir"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
       </div>
     </Card>
   )

@@ -8,6 +8,16 @@ export const criarInteracao = (clienteId, dados) =>
 
 export const excluirInteracao = (id) => apiDelete(`/crm/interacoes/${id}`)
 
+// ---------- Tarefas do cliente ----------
+export const listarTarefasCliente = (clienteId) => apiGet(`/crm/clientes/${clienteId}/tarefas`)
+
+export const criarTarefaCliente = (clienteId, dados) =>
+  apiPost(`/crm/clientes/${clienteId}/tarefas`, dados)
+
+export const atualizarTarefaCliente = (id, dados) => apiPatch(`/crm/tarefas/${id}`, dados)
+
+export const excluirTarefaCliente = (id) => apiDelete(`/crm/tarefas/${id}`)
+
 // ---------- Follow-ups ----------
 export const listarFollowUps = (apenasPendentes = true) =>
   apiGet(`/crm/follow-ups?apenas_pendentes=${apenasPendentes}`)

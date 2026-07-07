@@ -52,6 +52,36 @@ class FollowUpResposta(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TarefaCriar(BaseModel):
+    titulo: str
+    descricao: str | None = None
+    prazo: date | None = None
+
+
+class TarefaAtualizar(BaseModel):
+    titulo: str | None = None
+    descricao: str | None = None
+    prazo: date | None = None
+    concluido: bool | None = None
+
+
+class TarefaConcluir(BaseModel):
+    concluido: bool
+
+
+class TarefaResposta(BaseModel):
+    id: uuid.UUID
+    cliente_id: uuid.UUID
+    titulo: str
+    descricao: str | None
+    prazo: date | None
+    concluido: bool
+    concluido_em: datetime | None
+    criado_em: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class GoogleStatusResposta(BaseModel):
     configurado: bool  # há GOOGLE_CLIENT_ID/SECRET no servidor
     conectado: bool  # este profissional já autorizou uma conta Google

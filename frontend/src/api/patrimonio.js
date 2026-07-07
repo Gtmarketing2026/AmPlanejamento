@@ -57,3 +57,8 @@ export const obterMinhaProtecao = (token) => apiGet("/clientes/eu/protecao", { t
 export const criarMinhaApolice = (token, dados) => apiPost("/clientes/eu/apolices", dados, { token })
 export const excluirMinhaApolice = (token, id) =>
   apiDelete(`/clientes/eu/apolices/${id}`, undefined, { token })
+
+// ---------- Minhas tarefas (checklist passado pelo profissional) ----------
+export const listarMinhasTarefas = (token) => apiGet("/clientes/eu/tarefas", { token })
+export const concluirMinhaTarefa = (token, id, concluido) =>
+  apiPatch(`/clientes/eu/tarefas/${id}`, { concluido }, { token })

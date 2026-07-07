@@ -16,13 +16,13 @@ from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db_com_rls, get_profissional_id_atual
+from app.api.deps import get_cliente_id_atual, get_db_admin, get_db_com_rls, get_profissional_id_atual
 from app.core.config import settings
 from app.core.security import criar_state_oauth_google, decodificar_state_oauth_google
 from app.db.base import SessionLocal
 from app.integrations import google_calendar as gcal
 from app.models.cliente import Cliente
-from app.models.crm import CredencialGoogle, FollowUp, InteracaoCrm
+from app.models.crm import CredencialGoogle, FollowUp, InteracaoCrm, TarefaCliente
 from app.schemas.crm import (
     TIPOS_INTERACAO,
     FollowUpAtualizar,
@@ -32,9 +32,14 @@ from app.schemas.crm import (
     GoogleStatusResposta,
     InteracaoCriar,
     InteracaoResposta,
+    TarefaAtualizar,
+    TarefaConcluir,
+    TarefaCriar,
+    TarefaResposta,
 )
 
 router = APIRouter(prefix="/crm", tags=["crm"])
+router_cliente = APIRouter(prefix="/clientes/eu", tags=["crm-cliente"])
 
 
 def _exigir_cliente(db: Session, cliente_id: uuid.UUID) -> Cliente:
@@ -101,6 +106,83 @@ def excluir_interacao(
     if interacao is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Interação não encontrada")
     db.delete(interacao)
+
+
+# ============================================================================
+# Tarefas do cliente (checklist passado pelo profissional)
+# ============================================================================
+
+
+@router.get("/clientes/{cliente_id}/tarefas", response_model=list[TarefaResposta])
+def listar_tarefas_cliente(
+    cliente_id: uuid.UUID,
+    db: Session = Depends(get_db_com_rls),
+):
+    _exigir_cliente(db, cliente_id)
+    return db.scalars(
+        select(TarefaCliente)
+        .where(TarefaCliente.cliente_id == cliente_id)
+        .order_by(TarefaCliente.concluido.asc(), TarefaCliente.prazo.asc().nulls_last(), TarefaCliente.criado_em.desc())
+    ).all()
+
+
+@router.post(
+    "/clientes/{cliente_id}/tarefas",
+    response_model=TarefaResposta,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_tarefa_cliente(
+    cliente_id: uuid.UUID,
+    dados: TarefaCriar,
+    db: Session = Depends(get_db_com_rls),
+    profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
+):
+    _exigir_cliente(db, cliente_id)
+    tarefa = TarefaCliente(
+        cliente_id=cliente_id,
+        profissional_id=profissional_id,
+        titulo=dados.titulo,
+        descricao=dados.descricao,
+        prazo=dados.prazo,
+    )
+    db.add(tarefa)
+    db.flush()
+    db.refresh(tarefa)
+    return tarefa
+
+
+@router.patch("/tarefas/{tarefa_id}", response_model=TarefaResposta)
+def atualizar_tarefa_cliente(
+    tarefa_id: uuid.UUID,
+    dados: TarefaAtualizar,
+    db: Session = Depends(get_db_com_rls),
+):
+    tarefa = db.get(TarefaCliente, tarefa_id)
+    if tarefa is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tarefa não encontrada")
+
+    if dados.titulo is not None:
+        tarefa.titulo = dados.titulo
+    if dados.descricao is not None:
+        tarefa.descricao = dados.descricao
+    if dados.prazo is not None:
+        tarefa.prazo = dados.prazo
+    if dados.concluido is not None:
+        tarefa.concluido = dados.concluido
+        tarefa.concluido_em = datetime.now(timezone.utc) if dados.concluido else None
+
+    return tarefa
+
+
+@router.delete("/tarefas/{tarefa_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_tarefa_cliente(
+    tarefa_id: uuid.UUID,
+    db: Session = Depends(get_db_com_rls),
+):
+    tarefa = db.get(TarefaCliente, tarefa_id)
+    if tarefa is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tarefa não encontrada")
+    db.delete(tarefa)
 
 
 # ============================================================================
@@ -376,3 +458,35 @@ def google_desconectar(
     cred = db.get(CredencialGoogle, profissional_id)
     if cred is not None:
         db.delete(cred)
+
+
+# ============================================================================
+# Tarefas — visão do cliente final (só lê e marca como concluída)
+# ============================================================================
+
+
+@router_cliente.get("/tarefas", response_model=list[TarefaResposta])
+def listar_minhas_tarefas(
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    return db.scalars(
+        select(TarefaCliente)
+        .where(TarefaCliente.cliente_id == cliente_id)
+        .order_by(TarefaCliente.concluido.asc(), TarefaCliente.prazo.asc().nulls_last(), TarefaCliente.criado_em.desc())
+    ).all()
+
+
+@router_cliente.patch("/tarefas/{tarefa_id}", response_model=TarefaResposta)
+def concluir_minha_tarefa(
+    tarefa_id: uuid.UUID,
+    dados: TarefaConcluir,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    tarefa = db.get(TarefaCliente, tarefa_id)
+    if tarefa is None or tarefa.cliente_id != cliente_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tarefa não encontrada")
+    tarefa.concluido = dados.concluido
+    tarefa.concluido_em = datetime.now(timezone.utc) if dados.concluido else None
+    return tarefa

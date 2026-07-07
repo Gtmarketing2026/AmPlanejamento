@@ -51,6 +51,28 @@ class FollowUp(Base):
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class TarefaCliente(Base):
+    """Checklist de tarefas que o profissional passa pro cliente executar
+    (ex: investir em tal ativo, reduzir gasto numa categoria, contestar uma
+    cobrança). O profissional cria/edita; o cliente só marca como concluída."""
+
+    __tablename__ = "tarefas_cliente"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False
+    )
+    profissional_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
+    )
+    titulo: Mapped[str] = mapped_column(String, nullable=False)
+    descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
+    prazo: Mapped[date | None] = mapped_column(Date, nullable=True)
+    concluido: Mapped[bool] = mapped_column(Boolean, default=False)
+    concluido_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class CredencialGoogle(Base):
     """Credenciais OAuth do Google de um profissional (uma conta Google por
     profissional). Guardamos o refresh_token para reobter access_tokens sem
