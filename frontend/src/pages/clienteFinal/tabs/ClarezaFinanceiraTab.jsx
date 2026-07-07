@@ -12,12 +12,11 @@ import { exportarCsv, exportarPdfViaImpressao } from "../../../lib/exportar"
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 const FILTROS_VAZIO = { categoria_id: "", conta_conectada_id: "", data_inicio: "", data_fim: "" }
 
-function primeiroDiaMes(ano, mes) {
-  return `${ano}-${String(mes).padStart(2, "0")}-01`
-}
-function ultimoDiaMes(ano, mes) {
-  const ultimo = new Date(ano, mes, 0).getDate()
-  return `${ano}-${String(mes).padStart(2, "0")}-${String(ultimo).padStart(2, "0")}`
+// Mês em que o lançamento CONTA (respeita a virada do cartão configurada em
+// Configurações) -- não confundir com a data de compra, que continua
+// aparecendo em Lançamentos, só não é o que decide a coluna do mês aqui.
+function mesRefDe(t) {
+  return (t.mes_referencia || t.data).slice(0, 7)
 }
 
 export default function ClarezaFinanceiraTab({ token, contexto = "PF", onVerLancamentos }) {
@@ -56,7 +55,7 @@ export default function ClarezaFinanceiraTab({ token, contexto = "PF", onVerLanc
       if (f.conta_conectada_id && t.conta_conectada_id !== f.conta_conectada_id) return
       if (f.data_inicio && t.data < f.data_inicio) return
       if (f.data_fim && t.data > f.data_fim) return
-      const [tAno, tMes] = t.data.split("-").map(Number)
+      const [tAno, tMes] = mesRefDe(t).split("-").map(Number)
       if (tAno !== ano) return
       const alvo = meses[tMes - 1]
       if (t.tipo === "entrada") alvo.receitas += Math.abs(Number(t.valor))
@@ -73,8 +72,7 @@ export default function ClarezaFinanceiraTab({ token, contexto = "PF", onVerLanc
     if (!onVerLancamentos) return
     onVerLancamentos({
       tipo,
-      data_inicio: primeiroDiaMes(ano, mes),
-      data_fim: ultimoDiaMes(ano, mes),
+      mes_referencia: `${ano}-${String(mes).padStart(2, "0")}-01`,
       categoria_id: f.categoria_id || "",
       conta_conectada_id: f.conta_conectada_id || "",
     })

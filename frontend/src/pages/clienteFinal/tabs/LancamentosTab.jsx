@@ -27,6 +27,7 @@ const FILTROS_VAZIO = {
   conta_conectada_id: "",
   data_inicio: "",
   data_fim: "",
+  mes_referencia: "", // atalho de mês -- filtra pelo mês em que o lançamento CONTA (respeita virada do cartão), não pela data de compra
 }
 
 const MESES_EXTENSO = [
@@ -125,30 +126,21 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
     conta_conectada_id: f.conta_conectada_id || undefined,
     data_inicio: f.data_inicio || undefined,
     data_fim: f.data_fim || undefined,
+    mes_referencia: f.mes_referencia || undefined,
     incluir_previstos: verPrevistos ? "true" : undefined,
     contexto,
   }
   const filtrosAtivos = Object.values(f).filter(Boolean).length
 
-  // Atalho rápido de mês, acima do painel de Filtros detalhado -- reflete
-  // De/Até quando eles formam um mês inteiro; escolher aqui já preenche os
-  // dois, e abrir "Filtros" permite refinar (data parcial, outro campo etc.).
-  const mesFiltro = (() => {
-    if (!f.data_inicio || !f.data_fim) return ""
-    const [ano, mes, dia] = f.data_inicio.split("-").map(Number)
-    if (dia !== 1) return ""
-    const ultimoDia = new Date(ano, mes, 0).getDate()
-    return f.data_fim === `${f.data_inicio.slice(0, 7)}-${String(ultimoDia).padStart(2, "0")}` ? f.data_inicio.slice(0, 7) : ""
-  })()
+  // Atalho rápido de mês, acima do painel de Filtros detalhado -- filtra por
+  // mes_referencia (o mês em que o lançamento CONTA, respeitando a virada do
+  // cartão configurada em Configurações), não pela data de compra. É
+  // independente do De/Até do painel detalhado, que continua sendo um
+  // intervalo literal de data de compra pra ajuste fino.
+  const mesFiltro = f.mes_referencia ? f.mes_referencia.slice(0, 7) : ""
 
   function aplicarMesFiltro(valorMes) {
-    if (!valorMes) {
-      setF((x) => ({ ...x, data_inicio: "", data_fim: "" }))
-      return
-    }
-    const [ano, mes] = valorMes.split("-").map(Number)
-    const ultimoDia = new Date(ano, mes, 0).getDate()
-    setF((x) => ({ ...x, data_inicio: `${valorMes}-01`, data_fim: `${valorMes}-${String(ultimoDia).padStart(2, "0")}` }))
+    setF((x) => ({ ...x, mes_referencia: valorMes ? `${valorMes}-01` : "" }))
   }
 
   const { data: transacoes = [] } = useQuery({
