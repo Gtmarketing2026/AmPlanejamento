@@ -1,32 +1,29 @@
 import { useState } from "react"
 import { useOutletContext } from "react-router-dom"
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQuery } from "@tanstack/react-query"
 import Card from "../../components/ui/Card"
 import KpiStat from "../../components/ui/KpiStat"
 import BarRow from "../../components/ui/BarRow"
+import Button from "../../components/ui/Button"
 import Tabs from "../../components/ui/Tabs"
-import SeletorCategoria from "../../components/ui/SeletorCategoria"
-import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
-import {
-  atualizarMinhaTransacao,
-  minhasCategorias,
-  minhasSubcategorias,
-  minhasTransacoes,
-} from "../../api/clientes"
-import { formatarData, formatarMoeda } from "../../lib/format"
+import { minhasCategorias, minhasTransacoes } from "../../api/clientes"
+import { formatarMoeda } from "../../lib/format"
+import { exportarCsv, exportarPdfViaImpressao } from "../../lib/exportar"
+import LancamentosTab from "./tabs/LancamentosTab"
 import MetasTab from "./tabs/MetasTab"
+import OrcamentoTab from "./tabs/OrcamentoTab"
 import DividasTab from "./tabs/DividasTab"
 import InvestimentosTab from "./tabs/InvestimentosTab"
 import PatrimonioTab from "./tabs/PatrimonioTab"
 import MeuFuturoTab from "./tabs/MeuFuturoTab"
+import ClarezaFinanceiraTab from "./tabs/ClarezaFinanceiraTab"
 
 export default function ClienteDashboardPage() {
   const { token } = useOutletContext()
-  const qc = useQueryClient()
   const [tab, setTab] = useState("fluxo")
 
   const { data: transacoes = [] } = useQuery({
-    queryKey: ["cliente-eu-transacoes", token],
+    queryKey: ["cliente-eu-transacoes", token, {}],
     queryFn: () => minhasTransacoes(token),
     enabled: !!token,
   })
@@ -34,15 +31,6 @@ export default function ClienteDashboardPage() {
     queryKey: ["cliente-eu-categorias", token],
     queryFn: () => minhasCategorias(token),
     enabled: !!token,
-  })
-  const { data: subcategorias } = useQuery({
-    queryKey: ["cliente-eu-subcategorias", token],
-    queryFn: () => minhasSubcategorias(token),
-    enabled: !!token,
-  })
-  const atualizarTransacao = useMutation({
-    mutationFn: ({ id, dados }) => atualizarMinhaTransacao(token, id, dados),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] }),
   })
 
   // Fluxo de caixa calculado dos lançamentos reais
@@ -62,6 +50,32 @@ export default function ClienteDashboardPage() {
     .sort((a, b) => b.valor - a.valor)
   const maxGasto = Math.max(1, ...gastoPorCategoria.map((g) => g.valor))
 
+  function exportarFluxoCsv() {
+    exportarCsv(
+      "fluxo-de-caixa.csv",
+      transacoes.map((t) => ({
+        data: t.data,
+        descricao: t.descricao,
+        categoria: nomePorCategoria[t.categoria_id] || "Sem categoria",
+        tipo: t.tipo,
+        valor: t.valor,
+      }))
+    )
+  }
+
+  function exportarFluxoPdf() {
+    const linhasGasto = gastoPorCategoria
+      .map((c) => `<tr><td>${c.label}</td><td class="right">${formatarMoeda(c.valor)}</td></tr>`)
+      .join("")
+    exportarPdfViaImpressao(
+      "Fluxo de caixa",
+      `<p>Entradas: <strong>${formatarMoeda(entradas)}</strong> · Saídas: <strong>${formatarMoeda(
+        saidas
+      )}</strong></p>
+       <table><thead><tr><th>Categoria</th><th class="right">Gasto</th></tr></thead><tbody>${linhasGasto}</tbody></table>`
+    )
+  }
+
   return (
     <div className="max-w-[1080px] mx-auto px-8 py-10">
       <div className="mb-5">
@@ -69,11 +83,13 @@ export default function ClienteDashboardPage() {
           options={[
             { value: "fluxo", n: "A", label: "Fluxo de caixa" },
             { value: "lancamentos", n: "B", label: "Lançamentos" },
-            { value: "metas", n: "C", label: "Metas" },
-            { value: "futuro", n: "D", label: "Meu Futuro" },
-            { value: "investimentos", n: "E", label: "Investimentos" },
-            { value: "patrimonio", n: "F", label: "Patrimônio" },
-            { value: "dividas", n: "G", label: "Dívidas" },
+            { value: "orcamento", n: "C", label: "Orçamento" },
+            { value: "clareza", n: "D", label: "Clareza Financeira" },
+            { value: "metas", n: "E", label: "Metas" },
+            { value: "futuro", n: "F", label: "Meu Futuro" },
+            { value: "investimentos", n: "G", label: "Investimentos" },
+            { value: "patrimonio", n: "H", label: "Patrimônio" },
+            { value: "dividas", n: "I", label: "Dívidas" },
           ]}
           active={tab}
           onChange={setTab}
@@ -82,6 +98,14 @@ export default function ClienteDashboardPage() {
 
       {tab === "fluxo" && (
         <>
+          <div className="flex justify-end gap-2 mb-3">
+            <Button variant="ghost" onClick={exportarFluxoPdf} disabled={!transacoes.length}>
+              Exportar PDF
+            </Button>
+            <Button variant="ghost" onClick={exportarFluxoCsv} disabled={!transacoes.length}>
+              Exportar Excel/CSV
+            </Button>
+          </div>
           <div className="grid grid-cols-2 gap-4 mb-5">
             <KpiStat label="Entradas" value={formatarMoeda(entradas)} deltaColor="accent" />
             <KpiStat label="Saídas" value={formatarMoeda(saidas)} deltaColor="red" />
@@ -108,51 +132,9 @@ export default function ClienteDashboardPage() {
         </>
       )}
 
-      {tab === "lancamentos" && (
-        <Card>
-          <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
-            Lançamentos · você pode ajustar a categoria sugerida
-          </div>
-          <Table>
-            <Thead>
-              <Th>Data</Th>
-              <Th>Descrição</Th>
-              <Th>Categoria</Th>
-              <Th className="text-right">Valor</Th>
-            </Thead>
-            <tbody>
-              {transacoes.map((t) => (
-                <Tr key={t.id}>
-                  <Td className="font-mono text-text-dim">{formatarData(t.data)}</Td>
-                  <Td>{t.descricao}</Td>
-                  <Td>
-                    <SeletorCategoria
-                      categoriaId={t.categoria_id}
-                      subcategoriaId={t.subcategoria_id}
-                      categorias={categorias}
-                      subcategorias={subcategorias}
-                      disabled={atualizarTransacao.isPending}
-                      onChange={(dados) => atualizarTransacao.mutate({ id: t.id, dados })}
-                    />
-                  </Td>
-                  <Td className={`text-right font-mono ${t.tipo === "entrada" ? "text-accent" : "text-red"}`}>
-                    {t.tipo === "entrada" ? "+ " : "- "}
-                    {formatarMoeda(Math.abs(Number(t.valor)))}
-                  </Td>
-                </Tr>
-              ))}
-              {!transacoes.length && (
-                <Tr>
-                  <Td colSpan={4} className="text-text-faint text-center py-6">
-                    Nenhum lançamento ainda — importe um extrato em Importar extrato.
-                  </Td>
-                </Tr>
-              )}
-            </tbody>
-          </Table>
-        </Card>
-      )}
-
+      {tab === "lancamentos" && <LancamentosTab token={token} />}
+      {tab === "orcamento" && <OrcamentoTab token={token} />}
+      {tab === "clareza" && <ClarezaFinanceiraTab token={token} />}
       {tab === "metas" && <MetasTab token={token} />}
       {tab === "futuro" && <MeuFuturoTab token={token} />}
       {tab === "investimentos" && <InvestimentosTab token={token} />}

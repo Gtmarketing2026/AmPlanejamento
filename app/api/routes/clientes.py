@@ -13,7 +13,7 @@ from app.api.deps import (
     get_db_sem_rls,
     get_profissional_id_atual,
 )
-from app.api.routes.importacoes import processar_upload
+from app.api.routes.importacoes import _obter_ou_criar_conta_manual, processar_upload
 from app.core.config import settings
 from app.core.security import criar_access_token, hash_senha, verificar_senha
 from app.db.base import SessionLocalAdmin
@@ -22,6 +22,7 @@ from app.models.categoria import Categoria, Subcategoria
 from app.models.cliente import Cliente
 from app.models.importacao_extrato import ImportacaoExtrato
 from app.models.transacao import Transacao
+from app.parsers.dedup import calcular_hash_dedup
 from app.schemas.categoria import CategoriaResposta, SubcategoriaResposta
 from app.schemas.cliente import (
     ClienteAtualizar,
@@ -31,7 +32,12 @@ from app.schemas.cliente import (
     ClienteResposta,
     TokenResponse,
 )
-from app.schemas.importacao import ImportacaoResposta, TransacaoAtualizar, TransacaoResposta
+from app.schemas.importacao import (
+    ImportacaoResposta,
+    TransacaoAtualizar,
+    TransacaoCriar,
+    TransacaoResposta,
+)
 
 router = APIRouter(prefix="/clientes", tags=["clientes"])
 
@@ -224,15 +230,75 @@ def listar_minhas_subcategorias(
 
 @router.get("/eu/transacoes", response_model=list[TransacaoResposta])
 def listar_minhas_transacoes(
+    busca: str | None = None,
+    categoria_id: uuid.UUID | None = None,
+    tipo: str | None = None,
+    data_inicio: date | None = None,
+    data_fim: date | None = None,
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
     db: Session = Depends(get_db_admin),
 ):
     # Mesmo padrão de /clientes/eu: sem policy de RLS por cliente_id, então a
     # conexão privilegiada é filtrada explicitamente pelo cliente_id do token.
-    transacoes = db.scalars(
-        select(Transacao).where(Transacao.cliente_id == cliente_id).order_by(Transacao.data.desc())
-    ).all()
+    query = select(Transacao).where(Transacao.cliente_id == cliente_id)
+    if busca:
+        query = query.where(Transacao.descricao.ilike(f"%{busca}%"))
+    if categoria_id:
+        query = query.where(Transacao.categoria_id == categoria_id)
+    if tipo:
+        query = query.where(Transacao.tipo == tipo)
+    if data_inicio:
+        query = query.where(Transacao.data >= data_inicio)
+    if data_fim:
+        query = query.where(Transacao.data <= data_fim)
+    transacoes = db.scalars(query.order_by(Transacao.data.desc())).all()
     return transacoes
+
+
+@router.post("/eu/transacoes", response_model=TransacaoResposta, status_code=status.HTTP_201_CREATED)
+def criar_minha_transacao(
+    dados: TransacaoCriar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    """Lançamento digitado à mão pelo cliente (ex: gasto em dinheiro que não
+    aparece em nenhum extrato). Usa a mesma "conta manual" das importações
+    por arquivo e o mesmo hash de dedup, pra nunca duplicar um lançamento já
+    existente com a mesma data/valor/descrição."""
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+    if dados.tipo not in ("entrada", "saida"):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Tipo inválido: use 'entrada' ou 'saida'")
+
+    conta = _obter_ou_criar_conta_manual(db, cliente_id, cliente.profissional_id)
+    valor = abs(dados.valor) if dados.tipo == "entrada" else -abs(dados.valor)
+    hash_dedup = calcular_hash_dedup(conta.id, dados.data, valor, dados.descricao)
+
+    ja_existe = db.scalar(
+        select(Transacao).where(Transacao.conta_conectada_id == conta.id, Transacao.hash_dedup == hash_dedup)
+    )
+    if ja_existe:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Já existe um lançamento igual (mesma data/valor/descrição).")
+
+    transacao = Transacao(
+        conta_conectada_id=conta.id,
+        cliente_id=cliente_id,
+        profissional_id=cliente.profissional_id,
+        data=dados.data,
+        descricao=dados.descricao,
+        valor=valor,
+        tipo=dados.tipo,
+        origem="conta",
+        categoria_id=dados.categoria_id,
+        subcategoria_id=dados.subcategoria_id,
+        conciliado=True,
+        hash_dedup=hash_dedup,
+    )
+    db.add(transacao)
+    db.flush()
+    db.refresh(transacao)
+    return transacao
 
 
 @router.patch("/eu/transacoes/{transacao_id}", response_model=TransacaoResposta)

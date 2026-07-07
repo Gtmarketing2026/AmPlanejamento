@@ -129,3 +129,45 @@ class Simulacao(Base):
     valor_final_projetado: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     criado_por: Mapped[str] = mapped_column(String, default="cliente_final")
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class OrcamentoCategoria(Base):
+    """Limite de gasto mensal por categoria (tela Orçamento — orçado x
+    realizado). Um registro por cliente/categoria/mês/ano."""
+
+    __tablename__ = "orcamentos_categoria"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False
+    )
+    profissional_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
+    )
+    categoria_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("categorias.id", ondelete="CASCADE"), nullable=False
+    )
+    ano: Mapped[int] = mapped_column(Integer, nullable=False)
+    mes: Mapped[int] = mapped_column(Integer, nullable=False)
+    valor_orcado: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    atualizado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class BemPatrimonial(Base):
+    """Bem móvel (carro) ou imóvel (casa) cadastrado manualmente pelo
+    cliente, somado ao Patrimônio junto com saldo/investimentos/dívidas."""
+
+    __tablename__ = "bens_patrimoniais"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False
+    )
+    profissional_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
+    )
+    tipo: Mapped[str] = mapped_column(String, nullable=False)  # movel | imovel
+    nome: Mapped[str] = mapped_column(String, nullable=False)
+    valor: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

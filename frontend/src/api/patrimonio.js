@@ -28,6 +28,20 @@ export const excluirMeuInvestimento = (token, id) =>
 // ---------- Patrimônio (agregado) ----------
 export const obterMeuPatrimonio = (token) => apiGet("/clientes/eu/patrimonio", { token })
 
+// ---------- Bens (móveis/imóveis) ----------
+export const listarMeusBens = (token) => apiGet("/clientes/eu/bens", { token })
+export const criarMeuBem = (token, dados) => apiPost("/clientes/eu/bens", dados, { token })
+export const excluirMeuBem = (token, id) => apiDelete(`/clientes/eu/bens/${id}`, undefined, { token })
+
+// ---------- Orçamento por categoria ----------
+export const listarMeusOrcamentos = (token, ano, mes) =>
+  apiGet(`/clientes/eu/orcamentos?ano=${ano}&mes=${mes}`, { token })
+export const criarMeuOrcamento = (token, dados) => apiPost("/clientes/eu/orcamentos", dados, { token })
+export const atualizarMeuOrcamento = (token, id, dados) =>
+  apiPatch(`/clientes/eu/orcamentos/${id}`, dados, { token })
+export const excluirMeuOrcamento = (token, id) =>
+  apiDelete(`/clientes/eu/orcamentos/${id}`, undefined, { token })
+
 // ---------- Simulações (Meu Futuro) ----------
 export const listarMinhasSimulacoes = (token) => apiGet("/clientes/eu/simulacoes", { token })
 export const criarMinhaSimulacao = (token, dados) => apiPost("/clientes/eu/simulacoes", dados, { token })

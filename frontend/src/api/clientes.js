@@ -17,7 +17,16 @@ export const minhasCategorias = (token) => apiGet("/clientes/eu/categorias", { t
 
 export const minhasSubcategorias = (token) => apiGet("/clientes/eu/subcategorias", { token })
 
-export const minhasTransacoes = (token) => apiGet("/clientes/eu/transacoes", { token })
+export const minhasTransacoes = (token, filtros = {}) => {
+  const params = new URLSearchParams()
+  Object.entries(filtros).forEach(([k, v]) => {
+    if (v) params.set(k, v)
+  })
+  const qs = params.toString()
+  return apiGet(`/clientes/eu/transacoes${qs ? `?${qs}` : ""}`, { token })
+}
+
+export const criarMinhaTransacao = (token, dados) => apiPost("/clientes/eu/transacoes", dados, { token })
 
 export const atualizarMinhaTransacao = (token, id, dados) =>
   apiPatch(`/clientes/eu/transacoes/${id}`, dados, { token })

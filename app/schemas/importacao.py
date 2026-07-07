@@ -26,6 +26,18 @@ class TransacaoAtualizar(BaseModel):
     subcategoria_id: uuid.UUID | None = None
 
 
+class TransacaoCriar(BaseModel):
+    """Lançamento manual (não veio de importação de arquivo) -- ex: o
+    cliente digitando um gasto em dinheiro na hora."""
+
+    data: date
+    descricao: str
+    valor: float
+    tipo: str  # entrada | saida
+    categoria_id: uuid.UUID | None = None
+    subcategoria_id: uuid.UUID | None = None
+
+
 class TransacaoResposta(BaseModel):
     id: uuid.UUID
     data: date

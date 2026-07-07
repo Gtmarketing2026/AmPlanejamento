@@ -15,13 +15,25 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_cliente_id_atual, get_db_admin
+from app.models.categoria import Categoria
 from app.models.cliente import Cliente
-from app.models.patrimonio import Divida, Investimento, Meta, MetaAporte, Simulacao
+from app.models.patrimonio import (
+    BemPatrimonial,
+    Divida,
+    Investimento,
+    Meta,
+    MetaAporte,
+    OrcamentoCategoria,
+    Simulacao,
+)
 from app.models.transacao import Transacao
 from app.schemas.patrimonio import (
+    TIPOS_BEM,
     TIPOS_DIVIDA,
     TIPOS_INVESTIMENTO,
     TIPOS_META,
+    BemCriar,
+    BemResposta,
     DividaAtualizar,
     DividaCriar,
     DividaResposta,
@@ -33,6 +45,9 @@ from app.schemas.patrimonio import (
     MetaAtualizar,
     MetaCriar,
     MetaResposta,
+    OrcamentoAtualizar,
+    OrcamentoCriar,
+    OrcamentoResposta,
     PatrimonioResposta,
     SimulacaoCriar,
     SimulacaoResposta,
@@ -327,13 +342,197 @@ def obter_patrimonio(cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: 
         )
         or 0
     )
+    total_bens = float(
+        db.scalar(
+            select(func.coalesce(func.sum(BemPatrimonial.valor), 0)).where(
+                BemPatrimonial.cliente_id == cliente_id
+            )
+        )
+        or 0
+    )
 
     return PatrimonioResposta(
         saldo_contas=saldo_contas,
         total_investido=total_investido,
+        total_bens=total_bens,
         total_dividas=total_dividas,
-        patrimonio_liquido=saldo_contas + total_investido - total_dividas,
+        patrimonio_liquido=saldo_contas + total_investido + total_bens - total_dividas,
     )
+
+
+# ============================================================================
+# Bens patrimoniais (móveis/imóveis)
+# ============================================================================
+
+
+@router.get("/bens", response_model=list[BemResposta])
+def listar_bens(cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)):
+    return db.scalars(
+        select(BemPatrimonial).where(BemPatrimonial.cliente_id == cliente_id).order_by(BemPatrimonial.criado_em.desc())
+    ).all()
+
+
+@router.post("/bens", response_model=BemResposta, status_code=status.HTTP_201_CREATED)
+def criar_bem(
+    dados: BemCriar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    cliente = _exigir_cliente(db, cliente_id)
+    if dados.tipo not in TIPOS_BEM:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Tipo inválido: {dados.tipo}")
+    bem = BemPatrimonial(
+        cliente_id=cliente_id,
+        profissional_id=cliente.profissional_id,
+        tipo=dados.tipo,
+        nome=dados.nome,
+        valor=dados.valor,
+    )
+    db.add(bem)
+    db.flush()
+    db.refresh(bem)
+    return bem
+
+
+@router.delete("/bens/{bem_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_bem(
+    bem_id: uuid.UUID,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    bem = db.get(BemPatrimonial, bem_id)
+    if bem is None or bem.cliente_id != cliente_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bem não encontrado")
+    db.delete(bem)
+
+
+# ============================================================================
+# Orçamento por categoria
+# ============================================================================
+
+
+def _calcular_realizado(db: Session, cliente_id: uuid.UUID, categoria_id: uuid.UUID, ano: int, mes: int) -> float:
+    realizado = db.scalar(
+        select(func.coalesce(func.sum(func.abs(Transacao.valor)), 0)).where(
+            Transacao.cliente_id == cliente_id,
+            Transacao.categoria_id == categoria_id,
+            Transacao.tipo == "saida",
+            func.extract("year", Transacao.data) == ano,
+            func.extract("month", Transacao.data) == mes,
+        )
+    )
+    return float(realizado or 0)
+
+
+@router.get("/orcamentos", response_model=list[OrcamentoResposta])
+def listar_orcamentos(
+    ano: int,
+    mes: int,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    linhas = db.execute(
+        select(OrcamentoCategoria, Categoria.nome)
+        .join(Categoria, Categoria.id == OrcamentoCategoria.categoria_id)
+        .where(OrcamentoCategoria.cliente_id == cliente_id, OrcamentoCategoria.ano == ano, OrcamentoCategoria.mes == mes)
+    ).all()
+
+    resultado = []
+    for orc, nome in linhas:
+        resultado.append(
+            OrcamentoResposta(
+                id=orc.id,
+                categoria_id=orc.categoria_id,
+                categoria_nome=nome,
+                ano=orc.ano,
+                mes=orc.mes,
+                valor_orcado=orc.valor_orcado,
+                valor_realizado=_calcular_realizado(db, cliente_id, orc.categoria_id, orc.ano, orc.mes),
+            )
+        )
+    return resultado
+
+
+@router.post("/orcamentos", response_model=OrcamentoResposta, status_code=status.HTTP_201_CREATED)
+def criar_orcamento(
+    dados: OrcamentoCriar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    cliente = _exigir_cliente(db, cliente_id)
+    categoria = db.get(Categoria, dados.categoria_id)
+    if categoria is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Categoria não encontrada")
+
+    existente = db.scalar(
+        select(OrcamentoCategoria).where(
+            OrcamentoCategoria.cliente_id == cliente_id,
+            OrcamentoCategoria.categoria_id == dados.categoria_id,
+            OrcamentoCategoria.ano == dados.ano,
+            OrcamentoCategoria.mes == dados.mes,
+        )
+    )
+    if existente:
+        raise HTTPException(status.HTTP_409_CONFLICT, "Já existe orçamento pra essa categoria neste mês.")
+
+    orcamento = OrcamentoCategoria(
+        cliente_id=cliente_id,
+        profissional_id=cliente.profissional_id,
+        categoria_id=dados.categoria_id,
+        ano=dados.ano,
+        mes=dados.mes,
+        valor_orcado=dados.valor_orcado,
+    )
+    db.add(orcamento)
+    db.flush()
+    db.refresh(orcamento)
+    return OrcamentoResposta(
+        id=orcamento.id,
+        categoria_id=orcamento.categoria_id,
+        categoria_nome=categoria.nome,
+        ano=orcamento.ano,
+        mes=orcamento.mes,
+        valor_orcado=orcamento.valor_orcado,
+        valor_realizado=_calcular_realizado(db, cliente_id, orcamento.categoria_id, orcamento.ano, orcamento.mes),
+    )
+
+
+@router.patch("/orcamentos/{orcamento_id}", response_model=OrcamentoResposta)
+def atualizar_orcamento(
+    orcamento_id: uuid.UUID,
+    dados: OrcamentoAtualizar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    orcamento = db.get(OrcamentoCategoria, orcamento_id)
+    if orcamento is None or orcamento.cliente_id != cliente_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Orçamento não encontrado")
+    orcamento.valor_orcado = dados.valor_orcado
+    orcamento.atualizado_em = datetime.now(timezone.utc)
+    db.flush()
+    db.refresh(orcamento)
+    categoria = db.get(Categoria, orcamento.categoria_id)
+    return OrcamentoResposta(
+        id=orcamento.id,
+        categoria_id=orcamento.categoria_id,
+        categoria_nome=categoria.nome if categoria else None,
+        ano=orcamento.ano,
+        mes=orcamento.mes,
+        valor_orcado=orcamento.valor_orcado,
+        valor_realizado=_calcular_realizado(db, cliente_id, orcamento.categoria_id, orcamento.ano, orcamento.mes),
+    )
+
+
+@router.delete("/orcamentos/{orcamento_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_orcamento(
+    orcamento_id: uuid.UUID,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    orcamento = db.get(OrcamentoCategoria, orcamento_id)
+    if orcamento is None or orcamento.cliente_id != cliente_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Orçamento não encontrado")
+    db.delete(orcamento)
 
 
 # ============================================================================

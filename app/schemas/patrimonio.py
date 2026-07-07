@@ -151,10 +151,55 @@ class InvestimentoResposta(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ---------- Bens patrimoniais (móveis/imóveis) ----------
+TIPOS_BEM = {"movel", "imovel"}
+
+
+class BemCriar(BaseModel):
+    tipo: str
+    nome: str
+    valor: float
+
+
+class BemResposta(BaseModel):
+    id: uuid.UUID
+    tipo: str
+    nome: str
+    valor: float
+    criado_em: datetime
+
+    model_config = {"from_attributes": True}
+
+
+# ---------- Orçamento por categoria ----------
+class OrcamentoCriar(BaseModel):
+    categoria_id: uuid.UUID
+    ano: int
+    mes: int
+    valor_orcado: float
+
+
+class OrcamentoAtualizar(BaseModel):
+    valor_orcado: float
+
+
+class OrcamentoResposta(BaseModel):
+    id: uuid.UUID
+    categoria_id: uuid.UUID
+    categoria_nome: str | None = None
+    ano: int
+    mes: int
+    valor_orcado: float
+    valor_realizado: float = 0
+
+    model_config = {"from_attributes": True}
+
+
 # ---------- Patrimônio (agregado) ----------
 class PatrimonioResposta(BaseModel):
     saldo_contas: float
     total_investido: float
+    total_bens: float
     total_dividas: float
     patrimonio_liquido: float
 
