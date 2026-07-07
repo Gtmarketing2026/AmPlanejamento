@@ -24,6 +24,10 @@ class ImportacaoResposta(BaseModel):
 class TransacaoAtualizar(BaseModel):
     categoria_id: uuid.UUID | None = None
     subcategoria_id: uuid.UUID | None = None
+    # Se true, aplica a mesma categoria/subcategoria a todos os lançamentos
+    # do cliente com a mesma descrição (ex: reclassificar "UBER" uma vez e
+    # já valer pra todos os "UBER" existentes).
+    aplicar_a_todos_iguais: bool = False
 
 
 class TransacaoCriar(BaseModel):
@@ -50,5 +54,8 @@ class TransacaoResposta(BaseModel):
     subcategoria_id: uuid.UUID | None
     importacao_id: uuid.UUID | None
     criado_em: datetime
+    # Só preenchido quando a reclassificação usou aplicar_a_todos_iguais --
+    # quantos outros lançamentos também foram atualizados junto.
+    quantidade_atualizada: int | None = None
 
     model_config = {"from_attributes": True}

@@ -8,6 +8,7 @@ class CategoriaResposta(BaseModel):
     id: uuid.UUID
     nome: str
     tipo: str
+    icone: str | None = None
     padrao_sistema: bool
     criado_em: datetime
 

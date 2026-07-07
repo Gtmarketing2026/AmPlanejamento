@@ -50,8 +50,11 @@ def _mapear_colunas(cabecalho: list[str]) -> dict:
 
 def _parsear_valor(bruto: str) -> float:
     texto = bruto.strip().replace("R$", "").strip()
-    # "1.234,56" (BR) -> "1234.56"; "1234.56" (US) passa direto.
-    if re.match(r"^-?\d{1,3}(\.\d{3})*,\d{2}$", texto):
+    # "1.234,56" ou "5000,56" (BR, com ou sem separador de milhar) -> "1234.56";
+    # "1234.56" (US) passa direto. \d+ (não \d{1,3}) pro grupo inicial --
+    # senão "5000,00" (4 dígitos, sem separador de milhar) não batia o regex
+    # e caía no float() direto, que quebra com vírgula decimal.
+    if re.match(r"^-?\d+(\.\d{3})*,\d{2}$", texto):
         texto = texto.replace(".", "").replace(",", ".")
     return float(texto)
 

@@ -3,6 +3,7 @@ import {
   atualizarTransacao,
   criarImportacao,
   excluirImportacao,
+  excluirTransacao,
   listarImportacoes,
   listarTransacoes,
 } from "../api/importacoes"
@@ -49,6 +50,16 @@ export function useAtualizarTransacao(clienteId) {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, dados }) => atualizarTransacao(id, dados),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transacoes", clienteId] })
+    },
+  })
+}
+
+export function useExcluirTransacao(clienteId) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id) => excluirTransacao(id),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transacoes", clienteId] })
     },

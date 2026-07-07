@@ -17,6 +17,7 @@ class Categoria(Base):
     )  # NULL = padrão do sistema, visível a todos
     nome: Mapped[str] = mapped_column(String, nullable=False)
     tipo: Mapped[str] = mapped_column(String, nullable=False)  # entrada | saida | neutra
+    icone: Mapped[str | None] = mapped_column(String, nullable=True)  # emoji exibido no lançamento
     padrao_sistema: Mapped[bool] = mapped_column(Boolean, default=False)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

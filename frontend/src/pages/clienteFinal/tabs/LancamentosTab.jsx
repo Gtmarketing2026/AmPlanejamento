@@ -3,11 +3,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Card from "../../../components/ui/Card"
 import Button from "../../../components/ui/Button"
 import Field, { Select } from "../../../components/ui/Field"
-import SeletorCategoria from "../../../components/ui/SeletorCategoria"
+import EditorCategoria from "../../../components/ui/EditorCategoria"
 import { Table, Thead, Th, Tr, Td } from "../../../components/ui/Table"
 import {
   atualizarMinhaTransacao,
   criarMinhaTransacao,
+  excluirMinhaTransacao,
   minhasCategorias,
   minhasSubcategorias,
   minhasTransacoes,
@@ -47,8 +48,23 @@ export default function LancamentosTab({ token }) {
     enabled: !!token,
   })
 
+  const [mensagemReclassificacao, setMensagemReclassificacao] = useState(null)
+
   const atualizarTransacao = useMutation({
     mutationFn: ({ id, dados }) => atualizarMinhaTransacao(token, id, dados),
+    onSuccess: (resposta) => {
+      qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] })
+      if (resposta?.quantidade_atualizada) {
+        setMensagemReclassificacao(
+          `Categoria aplicada a mais ${resposta.quantidade_atualizada} lançamento(s) igual(is).`
+        )
+        setTimeout(() => setMensagemReclassificacao(null), 3500)
+      }
+    },
+  })
+
+  const excluir = useMutation({
+    mutationFn: (id) => excluirMinhaTransacao(token, id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] }),
   })
 
@@ -181,12 +197,19 @@ export default function LancamentosTab({ token }) {
         </form>
       )}
 
+      {mensagemReclassificacao && (
+        <div className="bg-accent/10 text-accent text-[12.5px] rounded-[9px] px-3.5 py-2 mb-3">
+          {mensagemReclassificacao}
+        </div>
+      )}
+
       <Table>
         <Thead>
           <Th>Data</Th>
           <Th>Descrição</Th>
           <Th>Categoria</Th>
           <Th className="text-right">Valor</Th>
+          <Th></Th>
         </Thead>
         <tbody>
           {transacoes.map((t) => (
@@ -194,7 +217,7 @@ export default function LancamentosTab({ token }) {
               <Td className="font-mono text-text-dim">{formatarData(t.data)}</Td>
               <Td>{t.descricao}</Td>
               <Td>
-                <SeletorCategoria
+                <EditorCategoria
                   categoriaId={t.categoria_id}
                   subcategoriaId={t.subcategoria_id}
                   categorias={categorias}
@@ -207,11 +230,19 @@ export default function LancamentosTab({ token }) {
                 {t.tipo === "entrada" ? "+ " : "- "}
                 {formatarMoeda(Math.abs(Number(t.valor)))}
               </Td>
+              <Td className="text-right">
+                <button
+                  onClick={() => confirm("Excluir este lançamento?") && excluir.mutate(t.id)}
+                  className="text-text-faint hover:text-red text-[12px]"
+                >
+                  Excluir
+                </button>
+              </Td>
             </Tr>
           ))}
           {!transacoes.length && (
             <Tr>
-              <Td colSpan={4} className="text-text-faint text-center py-6">
+              <Td colSpan={5} className="text-text-faint text-center py-6">
                 {busca || tipoFiltro
                   ? "Nenhum lançamento encontrado com esse filtro."
                   : "Nenhum lançamento ainda — importe um extrato ou adicione manualmente."}

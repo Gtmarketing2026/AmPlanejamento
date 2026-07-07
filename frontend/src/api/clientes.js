@@ -31,6 +31,9 @@ export const criarMinhaTransacao = (token, dados) => apiPost("/clientes/eu/trans
 export const atualizarMinhaTransacao = (token, id, dados) =>
   apiPatch(`/clientes/eu/transacoes/${id}`, dados, { token })
 
+export const excluirMinhaTransacao = (token, id) =>
+  apiDelete(`/clientes/eu/transacoes/${id}`, undefined, { token })
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 export async function importarMeuExtrato(token, { tipoDocumento, arquivo }) {

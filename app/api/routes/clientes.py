@@ -2,7 +2,7 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
@@ -316,13 +316,48 @@ def atualizar_minha_transacao(
     if not transacao:
         raise HTTPException(status_code=404, detail="Transação não encontrada")
 
-    for campo, valor in dados.model_dump(exclude_unset=True).items():
+    campos = dados.model_dump(exclude_unset=True, exclude={"aplicar_a_todos_iguais"})
+    for campo, valor in campos.items():
         setattr(transacao, campo, valor)
+
+    quantidade_atualizada = None
+    if dados.aplicar_a_todos_iguais:
+        # Reclassifica de uma vez todos os outros lançamentos do mesmo
+        # cliente com a MESMA descrição (comparação exata, case-insensitive)
+        # -- ex: acertar "UBER" uma vez e já valer pra todos os "UBER"
+        # existentes, sem precisar editar um por um.
+        outras = db.scalars(
+            select(Transacao).where(
+                Transacao.cliente_id == cliente_id,
+                Transacao.id != transacao_id,
+                func.lower(Transacao.descricao) == transacao.descricao.lower(),
+            )
+        ).all()
+        for outra in outras:
+            outra.categoria_id = transacao.categoria_id
+            outra.subcategoria_id = transacao.subcategoria_id
+        quantidade_atualizada = len(outras)
 
     db.add(transacao)
     db.flush()
     db.refresh(transacao)
-    return transacao
+    resposta = TransacaoResposta.model_validate(transacao)
+    resposta.quantidade_atualizada = quantidade_atualizada
+    return resposta
+
+
+@router.delete("/eu/transacoes/{transacao_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_minha_transacao(
+    transacao_id: uuid.UUID,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    transacao = db.scalar(
+        select(Transacao).where(Transacao.id == transacao_id, Transacao.cliente_id == cliente_id)
+    )
+    if not transacao:
+        raise HTTPException(status_code=404, detail="Transação não encontrada")
+    db.delete(transacao)
 
 
 # ---------------------------------------------------------------------------

@@ -31,3 +31,5 @@ export const excluirImportacao = (id) => apiDelete(`/importacoes/${id}`)
 export const listarTransacoes = (clienteId) => apiGet(`/transacoes?cliente_id=${clienteId}`)
 
 export const atualizarTransacao = (id, dados) => apiPatch(`/transacoes/${id}`, dados)
+
+export const excluirTransacao = (id) => apiDelete(`/transacoes/${id}`)

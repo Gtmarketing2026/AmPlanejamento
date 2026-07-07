@@ -7,11 +7,12 @@ as transações com dedup (mesma lógica que a sincronização automática via
 Open Finance vai usar no futuro, ver hash_dedup em app/parsers/dedup.py).
 """
 
+import re
 import uuid
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -34,6 +35,20 @@ router = APIRouter(tags=["importacoes"])
 TAMANHO_MAXIMO_BYTES = 10 * 1024 * 1024  # 10MB
 FORMATOS_ACEITOS = {"ofx", "csv", "pdf"}
 TIPOS_DOCUMENTO = {"extrato", "fatura_cartao"}
+
+# Linhas de resumo/total que o parser de PDF/CSV pode confundir com uma
+# transação de verdade (têm data + valor na mesma linha, igual uma transação
+# real) -- ex: "Total de compras a 25/06 ... R$463,73" num extrato de cartão.
+# Melhor esforço (regex, não é possível cobrir 100% dos formatos de banco).
+_PADRAO_LINHA_AGREGADA = re.compile(
+    r"\b(total( de compras| da fatura| geral)?|subtotal|saldo (anterior|atual|final|dispon[ií]vel)|"
+    r"valor total|limite (dispon[ií]vel|total|de cr[eé]dito))\b",
+    re.IGNORECASE,
+)
+
+
+def _e_linha_agregada(descricao: str) -> bool:
+    return bool(_PADRAO_LINHA_AGREGADA.search(descricao))
 
 
 def _obter_ou_criar_conta_manual(
@@ -123,6 +138,10 @@ def processar_upload(
         db.flush()
         db.refresh(importacao)
         return importacao
+
+    # Descarta linhas de resumo/total (ver _e_linha_agregada) -- não são
+    # lançamentos de verdade, só apareceriam duplicando o gasto do período.
+    transacoes_parseadas = [t for t in transacoes_parseadas if not _e_linha_agregada(t["descricao"])]
 
     origem = "cartao" if tipo_documento == "fatura_cartao" else "conta"
     importadas = 0
@@ -265,10 +284,35 @@ def atualizar_transacao(
     if not transacao:
         raise HTTPException(status_code=404, detail="Transação não encontrada")
 
-    for campo, valor in dados.model_dump(exclude_unset=True).items():
+    campos = dados.model_dump(exclude_unset=True, exclude={"aplicar_a_todos_iguais"})
+    for campo, valor in campos.items():
         setattr(transacao, campo, valor)
+
+    quantidade_atualizada = None
+    if dados.aplicar_a_todos_iguais:
+        outras = db.scalars(
+            select(Transacao).where(
+                Transacao.cliente_id == transacao.cliente_id,
+                Transacao.id != transacao_id,
+                func.lower(Transacao.descricao) == transacao.descricao.lower(),
+            )
+        ).all()
+        for outra in outras:
+            outra.categoria_id = transacao.categoria_id
+            outra.subcategoria_id = transacao.subcategoria_id
+        quantidade_atualizada = len(outras)
 
     db.add(transacao)
     db.flush()
     db.refresh(transacao)
-    return transacao
+    resposta = TransacaoResposta.model_validate(transacao)
+    resposta.quantidade_atualizada = quantidade_atualizada
+    return resposta
+
+
+@router.delete("/transacoes/{transacao_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_transacao(transacao_id: uuid.UUID, db: Session = Depends(get_db_com_rls)):
+    transacao = db.get(Transacao, transacao_id)
+    if not transacao:
+        raise HTTPException(status_code=404, detail="Transação não encontrada")
+    db.delete(transacao)
