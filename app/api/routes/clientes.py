@@ -3,6 +3,7 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.api.deps import (
@@ -39,6 +40,7 @@ from app.schemas.cliente import (
     TokenResponse,
 )
 from app.schemas.importacao import (
+    EnviarEmpresa,
     ImportacaoResposta,
     TransacaoAtualizar,
     TransacaoCriar,
@@ -243,12 +245,15 @@ def listar_minhas_transacoes(
     data_fim: date | None = None,
     mes_referencia: date | None = None,
     incluir_previstos: bool = False,
+    contexto: str | None = None,  # 'PF' | 'PJ' -- separa pessoal do controle da empresa
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
     db: Session = Depends(get_db_admin),
 ):
     # Mesmo padrão de /clientes/eu: sem policy de RLS por cliente_id, então a
     # conexão privilegiada é filtrada explicitamente pelo cliente_id do token.
     query = select(Transacao).where(Transacao.cliente_id == cliente_id)
+    if contexto in ("PF", "PJ"):
+        query = query.where(Transacao.contexto == contexto)
     # Parcelas futuras (previsto=True) ficam de fora por padrão pra não poluir
     # os totais do "agora"; só entram quando pedido explicitamente (ex: visão
     # por mês no Fluxo de caixa).
@@ -309,6 +314,7 @@ def criar_minha_transacao(
         valor=valor,
         tipo=dados.tipo,
         origem="cartao" if conta.natureza == "cartao" else "conta",
+        contexto="PJ" if dados.contexto == "PJ" else "PF",
         categoria_id=dados.categoria_id,
         subcategoria_id=dados.subcategoria_id,
         conciliado=True,
@@ -378,6 +384,68 @@ def excluir_minha_transacao(
     if not transacao:
         raise HTTPException(status_code=404, detail="Transação não encontrada")
     db.delete(transacao)
+
+
+@router.post("/eu/transacoes/{transacao_id}/empresa", response_model=TransacaoResposta)
+def enviar_transacao_empresa(
+    transacao_id: uuid.UUID,
+    dados: EnviarEmpresa,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    """Manda um gasto pro controle da empresa (PJ). 'mover' muda o contexto do
+    próprio lançamento; 'copiar' cria uma cópia em PJ (deixando o original em
+    PF). A cópia usa hash_dedup com sufixo '|empresa', então copiar de novo o
+    mesmo lançamento não duplica."""
+    if dados.acao not in ("copiar", "mover"):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Ação deve ser 'copiar' ou 'mover'")
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente or not cliente.cnpj:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cliente não tem CNPJ cadastrado")
+
+    transacao = db.scalar(
+        select(Transacao).where(Transacao.id == transacao_id, Transacao.cliente_id == cliente_id)
+    )
+    if not transacao:
+        raise HTTPException(status_code=404, detail="Transação não encontrada")
+
+    if dados.acao == "mover":
+        transacao.contexto = "PJ"
+        db.flush()
+        db.refresh(transacao)
+        return transacao
+
+    # copiar -- cópia idempotente em PJ (sufixo no hash pra não colidir com o
+    # original PF e pra re-copiar não gerar 2 cópias).
+    hash_copia = calcular_hash_dedup(
+        transacao.conta_conectada_id, transacao.data, float(transacao.valor),
+        (transacao.descricao or "") + "|empresa",
+    )
+    stmt = (
+        pg_insert(Transacao)
+        .values(
+            conta_conectada_id=transacao.conta_conectada_id,
+            cliente_id=cliente_id,
+            profissional_id=transacao.profissional_id,
+            data=transacao.data,
+            descricao=transacao.descricao,
+            valor=transacao.valor,
+            tipo=transacao.tipo,
+            origem=transacao.origem,
+            contexto="PJ",
+            categoria_id=transacao.categoria_id,
+            subcategoria_id=transacao.subcategoria_id,
+            conciliado=True,
+            hash_dedup=hash_copia,
+            mes_referencia=transacao.mes_referencia,
+        )
+        .on_conflict_do_nothing(index_elements=["conta_conectada_id", "hash_dedup"])
+        .returning(Transacao.id)
+    )
+    linha = db.execute(stmt).first()
+    db.flush()
+    copia = db.get(Transacao, linha[0]) if linha else transacao
+    return copia
 
 
 # ---------------------------------------------------------------------------

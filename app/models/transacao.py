@@ -26,6 +26,7 @@ class Transacao(Base):
     valor: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     tipo: Mapped[str] = mapped_column(String, nullable=False)  # entrada | saida
     origem: Mapped[str] = mapped_column(String, nullable=False)  # conta | cartao
+    contexto: Mapped[str] = mapped_column(String, default="PF")  # PF | PJ (controle da empresa)
     # categoria_id/subcategoria_id/instituicao_id ficam como UUID simples (sem
     # ForeignKey() no lado do SQLAlchemy) porque instituicao_id ainda aponta pra
     # uma tabela sem model Python -- se um dos três virar FK e os outros não, o

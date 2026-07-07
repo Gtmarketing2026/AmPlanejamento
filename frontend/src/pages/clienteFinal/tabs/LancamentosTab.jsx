@@ -9,6 +9,7 @@ import { Table, Thead, Th, Tr, Td } from "../../../components/ui/Table"
 import {
   atualizarMinhaTransacao,
   criarMinhaTransacao,
+  enviarTransacaoEmpresa,
   excluirMinhaTransacao,
   minhasCategorias,
   minhasSubcategorias,
@@ -17,7 +18,9 @@ import {
 import { formatarData, formatarMoeda } from "../../../lib/format"
 import { exportarCsv } from "../../../lib/exportar"
 
-export default function LancamentosTab({ token }) {
+const NOME_CATEGORIA_EMPRESA = "Empresa e autônomo"
+
+export default function LancamentosTab({ token, contexto = "PF", temCnpj = false }) {
   const qc = useQueryClient()
   const [busca, setBusca] = useState("")
   const [tipoFiltro, setTipoFiltro] = useState("")
@@ -36,6 +39,7 @@ export default function LancamentosTab({ token }) {
     busca: busca || undefined,
     tipo: tipoFiltro || undefined,
     incluir_previstos: verPrevistos ? "true" : undefined,
+    contexto,
   }
 
   const { data: transacoes = [] } = useQuery({
@@ -55,10 +59,13 @@ export default function LancamentosTab({ token }) {
   })
 
   const [mensagemReclassificacao, setMensagemReclassificacao] = useState(null)
+  const [promptEmpresa, setPromptEmpresa] = useState(null) // id da transação a mandar pro PJ
+
+  const empresaCategoriaId = (categorias || []).find((c) => c.nome === NOME_CATEGORIA_EMPRESA)?.id
 
   const atualizarTransacao = useMutation({
     mutationFn: ({ id, dados }) => atualizarMinhaTransacao(token, id, dados),
-    onSuccess: (resposta) => {
+    onSuccess: (resposta, variables) => {
       qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] })
       if (resposta?.quantidade_atualizada) {
         setMensagemReclassificacao(
@@ -66,6 +73,23 @@ export default function LancamentosTab({ token }) {
         )
         setTimeout(() => setMensagemReclassificacao(null), 3500)
       }
+      // Classificou como empresa e o cliente tem CNPJ: oferece mandar pro PJ.
+      if (
+        temCnpj &&
+        contexto === "PF" &&
+        empresaCategoriaId &&
+        variables?.dados?.categoria_id === empresaCategoriaId
+      ) {
+        setPromptEmpresa(variables.id)
+      }
+    },
+  })
+
+  const enviarEmpresa = useMutation({
+    mutationFn: ({ id, acao }) => enviarTransacaoEmpresa(token, id, acao),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] })
+      setPromptEmpresa(null)
     },
   })
 
@@ -82,6 +106,7 @@ export default function LancamentosTab({ token }) {
         valor: Number(novo.valor),
         tipo: novo.tipo,
         categoria_id: novo.categoria_id || null,
+        contexto,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] })
@@ -104,6 +129,29 @@ export default function LancamentosTab({ token }) {
 
   return (
     <Card>
+      {promptEmpresa && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={() => setPromptEmpresa(null)}>
+          <div className="bg-panel border border-line rounded-[12px] p-6 max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="text-[15px] font-medium mb-1">Lançar no controle da empresa?</div>
+            <p className="text-text-dim text-[13px] mb-4">
+              Esse gasto foi classificado como <strong>Empresa e autônomo</strong>. Você pode registrá-lo também no
+              controle da empresa (CNPJ).
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button onClick={() => enviarEmpresa.mutate({ id: promptEmpresa, acao: "copiar" })} disabled={enviarEmpresa.isPending}>
+                Copiar — fica no Pessoal e na Empresa
+              </Button>
+              <Button variant="ghost" onClick={() => enviarEmpresa.mutate({ id: promptEmpresa, acao: "mover" })} disabled={enviarEmpresa.isPending}>
+                Mover — só no controle da Empresa
+              </Button>
+              <button onClick={() => setPromptEmpresa(null)} className="text-text-faint hover:text-text text-[12.5px] mt-1">
+                Agora não
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
         <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono">
           Lançamentos · você pode ajustar a categoria sugerida

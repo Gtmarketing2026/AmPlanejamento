@@ -34,6 +34,9 @@ export const atualizarMinhaTransacao = (token, id, dados) =>
 export const excluirMinhaTransacao = (token, id) =>
   apiDelete(`/clientes/eu/transacoes/${id}`, undefined, { token })
 
+export const enviarTransacaoEmpresa = (token, id, acao) =>
+  apiPost(`/clientes/eu/transacoes/${id}/empresa`, { acao }, { token })
+
 const BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 export async function importarMeuExtrato(token, { tipoDocumento, senhaPdf, contaId, arquivo }) {

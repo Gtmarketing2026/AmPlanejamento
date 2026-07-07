@@ -6,7 +6,7 @@ import KpiStat from "../../components/ui/KpiStat"
 import BarRow from "../../components/ui/BarRow"
 import Button from "../../components/ui/Button"
 import Tabs from "../../components/ui/Tabs"
-import { minhasCategorias, minhasTransacoes } from "../../api/clientes"
+import { meuPerfilCliente, minhasCategorias, minhasTransacoes } from "../../api/clientes"
 import { listarMinhasTarefas, listarMinhasNotificacoes } from "../../api/patrimonio"
 import { formatarMoeda } from "../../lib/format"
 import { exportarCsv, exportarPdfViaImpressao } from "../../lib/exportar"
@@ -28,10 +28,19 @@ import SaudeFinanceiraCard from "./SaudeFinanceiraCard"
 export default function ClienteDashboardPage() {
   const { token } = useOutletContext()
   const [tab, setTab] = useState("fluxo")
+  const [contexto, setContexto] = useState("PF") // PF | PJ (controle da empresa)
+
+  const { data: perfil } = useQuery({
+    queryKey: ["cliente-eu-perfil", token],
+    queryFn: () => meuPerfilCliente(token),
+    enabled: !!token,
+  })
+  const temCnpj = !!perfil?.cnpj
+  const ctx = temCnpj ? contexto : "PF"
 
   const { data: transacoes = [] } = useQuery({
-    queryKey: ["cliente-eu-transacoes", token, {}],
-    queryFn: () => minhasTransacoes(token),
+    queryKey: ["cliente-eu-transacoes", token, { contexto: ctx }],
+    queryFn: () => minhasTransacoes(token, { contexto: ctx }),
     enabled: !!token,
   })
   const { data: categorias } = useQuery({
@@ -97,6 +106,25 @@ export default function ClienteDashboardPage() {
 
   return (
     <div className="max-w-[1080px] mx-auto px-8 py-10">
+      {temCnpj && (
+        <div className="flex items-center gap-1 bg-panel border border-line rounded-[10px] p-1 w-fit mb-5">
+          {[
+            { v: "PF", label: "Pessoal" },
+            { v: "PJ", label: `Empresa${perfil?.nome_pj ? ` · ${perfil.nome_pj}` : ""}` },
+          ].map((o) => (
+            <button
+              key={o.v}
+              onClick={() => setContexto(o.v)}
+              className={`px-4 py-2 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
+                ctx === o.v ? "bg-accent text-[#062019]" : "text-text-dim hover:text-text"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       <SaudeFinanceiraCard token={token} />
 
       <div className="mb-5">
@@ -158,7 +186,7 @@ export default function ClienteDashboardPage() {
         </>
       )}
 
-      {tab === "lancamentos" && <LancamentosTab token={token} />}
+      {tab === "lancamentos" && <LancamentosTab token={token} contexto={ctx} temCnpj={temCnpj} />}
       {tab === "orcamento" && <OrcamentoTab token={token} />}
       {tab === "clareza" && <ClarezaFinanceiraTab token={token} />}
       {tab === "metas" && <MetasTab token={token} />}

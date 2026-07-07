@@ -33,6 +33,10 @@ class TransacaoAtualizar(BaseModel):
     aplicar_a_todos_iguais: bool = False
 
 
+class EnviarEmpresa(BaseModel):
+    acao: str  # 'copiar' (fica nos dois) | 'mover' (só no PJ)
+
+
 class TransacaoCriar(BaseModel):
     """Lançamento manual (não veio de importação de arquivo) -- ex: o
     cliente digitando um gasto em dinheiro na hora."""
@@ -44,6 +48,7 @@ class TransacaoCriar(BaseModel):
     categoria_id: uuid.UUID | None = None
     subcategoria_id: uuid.UUID | None = None
     conta_conectada_id: uuid.UUID | None = None
+    contexto: str = "PF"  # PF | PJ
 
 
 class TransacaoResposta(BaseModel):
@@ -62,6 +67,7 @@ class TransacaoResposta(BaseModel):
     parcela_atual: int | None = None
     parcela_total: int | None = None
     previsto: bool = False
+    contexto: str = "PF"
     criado_em: datetime
     # Só preenchido quando a reclassificação usou aplicar_a_todos_iguais --
     # quantos outros lançamentos também foram atualizados junto.
