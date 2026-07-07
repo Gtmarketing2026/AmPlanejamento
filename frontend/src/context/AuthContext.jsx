@@ -41,8 +41,8 @@ export function AuthProvider({ children }) {
     await carregarPerfil()
   }
 
-  async function cadastrar(nome, email, senha, subdominio) {
-    const { access_token } = await authApi.cadastrar(nome, email, senha, subdominio)
+  async function cadastrar(nome, email, senha, extras = {}) {
+    const { access_token } = await authApi.cadastrar(nome, email, senha, extras)
     setToken(access_token)
     await carregarPerfil()
   }

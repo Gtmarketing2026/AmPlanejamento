@@ -9,7 +9,12 @@ class ProfissionalCadastro(BaseModel):
     nome: str
     email: EmailStr
     senha: str
-    subdominio: str
+    # Nome da empresa/escritório (usado na marca). O subdomínio é gerado a
+    # partir dele no cadastro; pode ser trocado depois na aba Marca.
+    nome_empresa: str | None = None
+    whatsapp: str | None = None
+    # Opcional: se não vier, geramos a partir do nome_empresa/nome.
+    subdominio: str | None = None
 
 
 class LoginRequest(BaseModel):

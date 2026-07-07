@@ -49,6 +49,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
 
     # Regras de negócio (centralizadas aqui para não espalhar "números mágicos" no código)
+    TRIAL_DIAS: int = 7  # trial concedido automaticamente no cadastro do planejador
     CLIENTES_INCLUSOS_PLANO_BASE: int = 4
     PRAZO_EXCLUSAO_SEM_COBRANCA_DIAS: int = 35
     PRAZO_CONGELAMENTO_APOS_INADIMPLENCIA_DIAS: int = 5
