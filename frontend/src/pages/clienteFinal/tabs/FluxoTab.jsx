@@ -41,11 +41,21 @@ export default function FluxoTab({ token, contexto = "PF" }) {
     () => Object.fromEntries(categorias.map((c) => [c.id, c.nome])),
     [categorias]
   )
+  // Categorias neutras = movimentação interna (transferências etc.): não somam
+  // no fluxo de caixa.
+  const neutras = useMemo(
+    () => new Set(categorias.filter((c) => c.tipo === "neutra").map((c) => c.id)),
+    [categorias]
+  )
+  const transacoesFluxo = useMemo(
+    () => transacoes.filter((t) => !neutras.has(t.categoria_id)),
+    [transacoes, neutras]
+  )
 
   // Série mensal (12 meses do ano selecionado): receitas e despesas.
   const serieMensal = useMemo(() => {
     const linha = MESES.map(() => ({ receitas: 0, despesas: 0 }))
-    for (const t of transacoes) {
+    for (const t of transacoesFluxo) {
       const ref = mesRefDe(t)
       const [y, m] = ref.split("-").map(Number)
       if (y !== ano) continue
@@ -55,19 +65,20 @@ export default function FluxoTab({ token, contexto = "PF" }) {
       else linha[idx].despesas += v
     }
     return linha
-  }, [transacoes, ano])
+  }, [transacoesFluxo, ano])
 
   const maxBarra = Math.max(1, ...serieMensal.flatMap((m) => [m.receitas, m.despesas]))
 
-  // Transações do período selecionado (mês específico ou ano todo).
+  // Transações do período selecionado (mês específico ou ano todo) -- já sem
+  // as neutras (movimentação interna não conta no fluxo).
   const doPeriodo = useMemo(
     () =>
-      transacoes.filter((t) => {
+      transacoesFluxo.filter((t) => {
         const [y, m] = mesRefDe(t).split("-").map(Number)
         if (y !== ano) return false
         return mesSelecionado === null || m - 1 === mesSelecionado
       }),
-    [transacoes, ano, mesSelecionado]
+    [transacoesFluxo, ano, mesSelecionado]
   )
 
   const receitas = doPeriodo.filter((t) => t.tipo === "entrada").reduce((s, t) => s + Math.abs(Number(t.valor)), 0)

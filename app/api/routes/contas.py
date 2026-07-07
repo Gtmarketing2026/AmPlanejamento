@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_cliente_id_atual, get_db_admin, get_db_com_rls
+from app.models.categoria import Categoria
 from app.models.cliente import Cliente
 from app.models.conta_conectada import ContaConectada
 from app.models.preferencia_cliente import PreferenciaCliente
@@ -73,12 +74,15 @@ def listar_minhas_contas(
     ).all()
 
     mes_atual = _mes_atual()
+    neutras = select(Categoria.id).where(Categoria.tipo == "neutra")
     usados_por_conta = dict(
         db.execute(
             select(Transacao.conta_conectada_id, sa_func.sum(sa_func.abs(Transacao.valor)))
             .where(
                 Transacao.cliente_id == cliente_id,
                 Transacao.tipo == "saida",
+                Transacao.previsto.is_(False),
+                (Transacao.categoria_id.is_(None)) | (Transacao.categoria_id.not_in(neutras)),
                 Transacao.mes_referencia == mes_atual,
             )
             .group_by(Transacao.conta_conectada_id)
@@ -160,10 +164,13 @@ def excluir_minha_conta(
 
 
 def _conta_para_resposta_agregada(db: Session, conta: ContaConectada) -> ContaResposta:
+    neutras = select(Categoria.id).where(Categoria.tipo == "neutra")
     valor_usado = db.scalar(
         select(sa_func.sum(sa_func.abs(Transacao.valor))).where(
             Transacao.conta_conectada_id == conta.id,
             Transacao.tipo == "saida",
+            Transacao.previsto.is_(False),
+            (Transacao.categoria_id.is_(None)) | (Transacao.categoria_id.not_in(neutras)),
             Transacao.mes_referencia == _mes_atual(),
         )
     )

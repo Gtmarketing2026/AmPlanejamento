@@ -47,8 +47,16 @@ export default function OrcamentoTab({ token, contexto = "PF" }) {
     enabled: !!token,
   })
 
+  // Categorias neutras (movimentação interna) não entram no fluxo.
+  const neutras = useMemo(
+    () => new Set((categorias || []).filter((c) => c.tipo === "neutra").map((c) => c.id)),
+    [categorias]
+  )
   const mesRef = `${ano}-${String(mes).padStart(2, "0")}`
-  const doMes = useMemo(() => transacoes.filter((t) => mesRefDe(t) === mesRef), [transacoes, mesRef])
+  const doMes = useMemo(
+    () => transacoes.filter((t) => mesRefDe(t) === mesRef && !t.previsto && !neutras.has(t.categoria_id)),
+    [transacoes, mesRef, neutras]
+  )
   const renda = doMes.filter((t) => t.tipo === "entrada").reduce((s, t) => s + Math.abs(Number(t.valor)), 0)
   const gastosReais = doMes.filter((t) => t.tipo === "saida").reduce((s, t) => s + Math.abs(Number(t.valor)), 0)
 

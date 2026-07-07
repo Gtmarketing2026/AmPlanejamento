@@ -394,17 +394,30 @@ def excluir_investimento(
 # ============================================================================
 
 
+def _condicoes_fluxo_real():
+    """Condições comuns pras somas de fluxo de caixa. Fora da conta:
+    - parcelas previstas (previsto=True): ainda não caíram, não são posição real;
+    - lançamentos de categoria neutra: movimentação financeira interna (ex:
+      transferência entre contas próprias, aplicação/resgate) -- não é receita
+      nem despesa de verdade, então não entra no fluxo. Ver categorias.tipo."""
+    neutras = select(Categoria.id).where(Categoria.tipo == "neutra")
+    return (
+        Transacao.previsto.is_(False),
+        (Transacao.categoria_id.is_(None)) | (Transacao.categoria_id.not_in(neutras)),
+    )
+
+
 def _calcular_patrimonio(db: Session, cliente_id: uuid.UUID) -> dict:
     # Não há saldo de conta persistido -- "saldo" é a posição de caixa
     # acumulada desde o início dos lançamentos (entradas - saídas).
     entradas = db.scalar(
         select(func.coalesce(func.sum(Transacao.valor), 0)).where(
-            Transacao.cliente_id == cliente_id, Transacao.tipo == "entrada"
+            Transacao.cliente_id == cliente_id, Transacao.tipo == "entrada", *_condicoes_fluxo_real()
         )
     )
     saidas = db.scalar(
         select(func.coalesce(func.sum(Transacao.valor), 0)).where(
-            Transacao.cliente_id == cliente_id, Transacao.tipo == "saida"
+            Transacao.cliente_id == cliente_id, Transacao.tipo == "saida", *_condicoes_fluxo_real()
         )
     )
     saldo_contas = float(entradas or 0) - float(abs(saidas or 0))
@@ -489,7 +502,8 @@ def obter_saude_financeira(
     entradas_mes = float(
         db.scalar(
             select(func.coalesce(func.sum(Transacao.valor), 0)).where(
-                Transacao.cliente_id == cliente_id, Transacao.tipo == "entrada", Transacao.data >= inicio_mes
+                Transacao.cliente_id == cliente_id, Transacao.tipo == "entrada",
+                Transacao.data >= inicio_mes, *_condicoes_fluxo_real()
             )
         )
         or 0
@@ -498,7 +512,8 @@ def obter_saude_financeira(
         abs(
             db.scalar(
                 select(func.coalesce(func.sum(Transacao.valor), 0)).where(
-                    Transacao.cliente_id == cliente_id, Transacao.tipo == "saida", Transacao.data >= inicio_mes
+                    Transacao.cliente_id == cliente_id, Transacao.tipo == "saida",
+                    Transacao.data >= inicio_mes, *_condicoes_fluxo_real()
                 )
             )
             or 0
@@ -637,6 +652,7 @@ def _calcular_realizado(db: Session, cliente_id: uuid.UUID, categoria_id: uuid.U
             Transacao.cliente_id == cliente_id,
             Transacao.categoria_id == categoria_id,
             Transacao.tipo == "saida",
+            Transacao.previsto.is_(False),  # parcela prevista não é gasto realizado
             func.extract("year", Transacao.data) == ano,
             func.extract("month", Transacao.data) == mes,
         )
@@ -894,7 +910,8 @@ def obter_minha_protecao(
     renda_mensal = float(
         db.scalar(
             select(func.coalesce(func.sum(Transacao.valor), 0)).where(
-                Transacao.cliente_id == cliente_id, Transacao.tipo == "entrada", Transacao.data >= inicio_mes
+                Transacao.cliente_id == cliente_id, Transacao.tipo == "entrada",
+                Transacao.data >= inicio_mes, *_condicoes_fluxo_real()
             )
         )
         or 0

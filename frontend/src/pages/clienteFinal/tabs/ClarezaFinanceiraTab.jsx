@@ -4,7 +4,7 @@ import Card from "../../../components/ui/Card"
 import Button from "../../../components/ui/Button"
 import { Select } from "../../../components/ui/Field"
 import { Table, Thead, Th, Tr, Td } from "../../../components/ui/Table"
-import { minhasTransacoes } from "../../../api/clientes"
+import { minhasCategorias, minhasTransacoes } from "../../../api/clientes"
 import { formatarMoeda } from "../../../lib/format"
 import { exportarCsv, exportarPdfViaImpressao } from "../../../lib/exportar"
 
@@ -19,10 +19,21 @@ export default function ClarezaFinanceiraTab({ token }) {
     queryFn: () => minhasTransacoes(token),
     enabled: !!token,
   })
+  const { data: categorias = [] } = useQuery({
+    queryKey: ["cliente-eu-categorias", token],
+    queryFn: () => minhasCategorias(token),
+    enabled: !!token,
+  })
+  // Categorias neutras (movimentação interna) não somam no fluxo.
+  const neutras = useMemo(
+    () => new Set(categorias.filter((c) => c.tipo === "neutra").map((c) => c.id)),
+    [categorias]
+  )
 
   const porMes = useMemo(() => {
     const meses = Array.from({ length: 12 }, (_, i) => ({ mes: i + 1, receitas: 0, despesas: 0 }))
     transacoes.forEach((t) => {
+      if (neutras.has(t.categoria_id)) return
       const [tAno, tMes] = t.data.split("-").map(Number)
       if (tAno !== ano) return
       const alvo = meses[tMes - 1]
@@ -30,7 +41,7 @@ export default function ClarezaFinanceiraTab({ token }) {
       else alvo.despesas += Math.abs(Number(t.valor))
     })
     return meses.map((m) => ({ ...m, resultado: m.receitas - m.despesas }))
-  }, [transacoes, ano])
+  }, [transacoes, ano, neutras])
 
   const totalReceitas = porMes.reduce((s, m) => s + m.receitas, 0)
   const totalDespesas = porMes.reduce((s, m) => s + m.despesas, 0)
