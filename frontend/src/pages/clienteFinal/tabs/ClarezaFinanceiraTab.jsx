@@ -12,7 +12,15 @@ import { exportarCsv, exportarPdfViaImpressao } from "../../../lib/exportar"
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
 const FILTROS_VAZIO = { categoria_id: "", conta_conectada_id: "", data_inicio: "", data_fim: "" }
 
-export default function ClarezaFinanceiraTab({ token, contexto = "PF" }) {
+function primeiroDiaMes(ano, mes) {
+  return `${ano}-${String(mes).padStart(2, "0")}-01`
+}
+function ultimoDiaMes(ano, mes) {
+  const ultimo = new Date(ano, mes, 0).getDate()
+  return `${ano}-${String(mes).padStart(2, "0")}-${String(ultimo).padStart(2, "0")}`
+}
+
+export default function ClarezaFinanceiraTab({ token, contexto = "PF", onVerLancamentos }) {
   const hoje = new Date()
   const [ano, setAno] = useState(hoje.getFullYear())
   const [f, setF] = useState(FILTROS_VAZIO)
@@ -60,6 +68,17 @@ export default function ClarezaFinanceiraTab({ token, contexto = "PF" }) {
   const totalReceitas = porMes.reduce((s, m) => s + m.receitas, 0)
   const totalDespesas = porMes.reduce((s, m) => s + m.despesas, 0)
   const totalResultado = totalReceitas - totalDespesas
+
+  function verLancamentosDoMes(mes, tipo) {
+    if (!onVerLancamentos) return
+    onVerLancamentos({
+      tipo,
+      data_inicio: primeiroDiaMes(ano, mes),
+      data_fim: ultimoDiaMes(ano, mes),
+      categoria_id: f.categoria_id || "",
+      conta_conectada_id: f.conta_conectada_id || "",
+    })
+  }
 
   function exportarPlanilha() {
     exportarCsv(
@@ -200,8 +219,24 @@ export default function ClarezaFinanceiraTab({ token, contexto = "PF" }) {
                   <Td className="font-mono text-text-dim">
                     {MESES_ABREV[m.mes - 1]}/{ano}
                   </Td>
-                  <Td className="text-right font-mono text-accent">{formatarMoeda(m.receitas)}</Td>
-                  <Td className="text-right font-mono text-red">{formatarMoeda(m.despesas)}</Td>
+                  <Td className="text-right font-mono text-accent">
+                    {m.receitas > 0 && onVerLancamentos ? (
+                      <button onClick={() => verLancamentosDoMes(m.mes, "entrada")} className="hover:underline">
+                        {formatarMoeda(m.receitas)}
+                      </button>
+                    ) : (
+                      formatarMoeda(m.receitas)
+                    )}
+                  </Td>
+                  <Td className="text-right font-mono text-red">
+                    {m.despesas > 0 && onVerLancamentos ? (
+                      <button onClick={() => verLancamentosDoMes(m.mes, "saida")} className="hover:underline">
+                        {formatarMoeda(m.despesas)}
+                      </button>
+                    ) : (
+                      formatarMoeda(m.despesas)
+                    )}
+                  </Td>
                   <Td className={`text-right font-mono ${m.resultado >= 0 ? "text-text" : "text-red"}`}>
                     {formatarMoeda(m.resultado)}
                   </Td>

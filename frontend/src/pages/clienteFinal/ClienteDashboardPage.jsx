@@ -22,6 +22,20 @@ export default function ClienteDashboardPage() {
   const { token } = useOutletContext()
   const [tab, setTab] = useState("fluxo")
   const [contexto, setContexto] = useState("PF") // PF | PJ (controle da empresa)
+  // Filtros herdados quando o usuário clica num valor do Resumo Financeiro
+  // (ex: "Despesas de julho") -- abre os Lançamentos já filtrados por
+  // período/tipo/categoria. Navegação normal do menu limpa isso (ver mudarTab).
+  const [filtrosLancamentos, setFiltrosLancamentos] = useState(null)
+
+  function mudarTab(novaTab) {
+    setTab(novaTab)
+    setFiltrosLancamentos(null)
+  }
+
+  function irParaLancamentosComFiltro(filtros) {
+    setFiltrosLancamentos(filtros)
+    setTab("lancamentos")
+  }
 
   const { data: perfil } = useQuery({
     queryKey: ["cliente-eu-perfil", token],
@@ -98,14 +112,18 @@ export default function ClienteDashboardPage() {
             },
           ]}
           active={tab}
-          onChange={setTab}
+          onChange={mudarTab}
         />
       </div>
 
       {tab === "fluxo" && <FluxoTab token={token} contexto={ctx} />}
-      {tab === "lancamentos" && <LancamentosTab token={token} contexto={ctx} temCnpj={temCnpj} />}
+      {tab === "lancamentos" && (
+        <LancamentosTab token={token} contexto={ctx} temCnpj={temCnpj} filtrosIniciais={filtrosLancamentos} />
+      )}
       {tab === "orcamento" && <OrcamentoTab token={token} contexto={ctx} />}
-      {tab === "clareza" && <ClarezaFinanceiraTab token={token} contexto={ctx} />}
+      {tab === "clareza" && (
+        <ClarezaFinanceiraTab token={token} contexto={ctx} onVerLancamentos={irParaLancamentosComFiltro} />
+      )}
       {tab === "metas" && <MetasTab token={token} />}
       {tab === "futuro" && <MeuFuturoTab token={token} />}
       {tab === "investimentos" && <InvestimentosTab token={token} />}

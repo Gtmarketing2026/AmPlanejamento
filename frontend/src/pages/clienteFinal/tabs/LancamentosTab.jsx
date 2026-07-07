@@ -29,11 +29,13 @@ const FILTROS_VAZIO = {
   data_fim: "",
 }
 
-export default function LancamentosTab({ token, contexto = "PF", temCnpj = false }) {
+export default function LancamentosTab({ token, contexto = "PF", temCnpj = false, filtrosIniciais = null }) {
   const qc = useQueryClient()
   const [busca, setBusca] = useState("")
-  const [f, setF] = useState(FILTROS_VAZIO)
-  const [mostrarFiltros, setMostrarFiltros] = useState(false)
+  // Vindo do Resumo Financeiro (clicou numa Receita/Despesa de um mês): já
+  // chega com período/tipo/categoria/conta preenchidos e o painel aberto.
+  const [f, setF] = useState(() => ({ ...FILTROS_VAZIO, ...(filtrosIniciais || {}) }))
+  const [mostrarFiltros, setMostrarFiltros] = useState(!!filtrosIniciais)
   const [verPrevistos, setVerPrevistos] = useState(false)
   const [mostrarForm, setMostrarForm] = useState(false)
   const [erro, setErro] = useState(null)
