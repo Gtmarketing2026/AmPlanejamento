@@ -1,3 +1,4 @@
+import re
 import uuid
 from datetime import date
 
@@ -16,9 +17,12 @@ from app.api.deps import (
 )
 from app.api.routes.importacoes import (
     _calcular_mes_referencia,
+    _estabelecimento,
+    _hash_parcela,
     _obter_conta_do_upload,
     gerar_parcelas_futuras,
     processar_upload,
+    projetar_parcelas_de_origem,
 )
 from app.core.config import settings
 from app.core.security import criar_access_token, hash_senha, verificar_senha
@@ -293,7 +297,21 @@ def criar_minha_transacao(
 
     conta = _obter_conta_do_upload(db, cliente_id, cliente.profissional_id, dados.conta_conectada_id)
     valor = abs(dados.valor) if dados.tipo == "entrada" else -abs(dados.valor)
-    hash_dedup = calcular_hash_dedup(conta.id, dados.data, valor, dados.descricao)
+    # Compra parcelada manual (ex: parcelas=6): o valor informado é o TOTAL,
+    # então cada parcela vale total/parcelas. A descrição vira "... (1/6)" e as
+    # parcelas 2..6 são geradas como previstas nos meses seguintes (mesma lógica
+    # da importação, ver projetar_parcelas_de_origem).
+    parcelas = max(1, dados.parcelas)
+    descricao = dados.descricao
+    parcela_atual = parcela_total = hash_parcela = None
+    if parcelas > 1:
+        valor = round(valor / parcelas, 2)
+        parcela_atual, parcela_total = 1, parcelas
+        if not re.search(r"\(\d+\s*/\s*\d+\)", descricao):
+            descricao = f"{descricao} (1/{parcelas})"
+        hash_parcela = _hash_parcela(conta.id, _estabelecimento(descricao), parcela_total, valor, 1)
+
+    hash_dedup = calcular_hash_dedup(conta.id, dados.data, valor, descricao)
 
     ja_existe = db.scalar(
         select(Transacao).where(Transacao.conta_conectada_id == conta.id, Transacao.hash_dedup == hash_dedup)
@@ -310,7 +328,7 @@ def criar_minha_transacao(
         cliente_id=cliente_id,
         profissional_id=cliente.profissional_id,
         data=dados.data,
-        descricao=dados.descricao,
+        descricao=descricao,
         valor=valor,
         tipo=dados.tipo,
         origem="cartao" if conta.natureza == "cartao" else "conta",
@@ -320,9 +338,15 @@ def criar_minha_transacao(
         conciliado=True,
         hash_dedup=hash_dedup,
         mes_referencia=mes_referencia,
+        parcela_atual=parcela_atual,
+        parcela_total=parcela_total,
+        hash_parcela=hash_parcela,
     )
     db.add(transacao)
     db.flush()
+    if parcelas > 1:
+        db.refresh(transacao)
+        projetar_parcelas_de_origem(db, transacao, modo_visualizacao)
     db.refresh(transacao)
     return transacao
 

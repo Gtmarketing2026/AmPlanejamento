@@ -33,6 +33,7 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
     valor: "",
     tipo: "saida",
     categoria_id: "",
+    parcelas: 1,
   })
 
   const filtros = {
@@ -107,10 +108,11 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
         tipo: novo.tipo,
         categoria_id: novo.categoria_id || null,
         contexto,
+        parcelas: Math.max(1, Number(novo.parcelas) || 1),
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] })
-      setNovo({ data: new Date().toISOString().slice(0, 10), descricao: "", valor: "", tipo: "saida", categoria_id: "" })
+      setNovo({ data: new Date().toISOString().slice(0, 10), descricao: "", valor: "", tipo: "saida", categoria_id: "", parcelas: 1 })
       setMostrarForm(false)
       setErro(null)
     },
@@ -252,7 +254,24 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
                   ))}
               </Select>
             </div>
+            {novo.tipo === "saida" && (
+              <div className="w-28">
+                <Field
+                  label="Parcelas"
+                  type="number"
+                  min="1"
+                  value={novo.parcelas}
+                  onChange={(e) => setNovo((n) => ({ ...n, parcelas: e.target.value }))}
+                />
+              </div>
+            )}
           </div>
+          {novo.tipo === "saida" && Number(novo.parcelas) > 1 && Number(novo.valor) > 0 && (
+            <p className="text-text-faint text-[11.5px] mb-2">
+              {novo.parcelas}x de {formatarMoeda(Number(novo.valor) / Number(novo.parcelas))} · total{" "}
+              {formatarMoeda(Number(novo.valor))} — as parcelas futuras aparecem como “previstas”.
+            </p>
+          )}
           {erro && <p className="text-red text-[12.5px] mb-2">{erro}</p>}
           <Button type="submit" disabled={!novo.descricao.trim() || !novo.valor || criar.isPending}>
             {criar.isPending ? "Adicionando…" : "Adicionar"}

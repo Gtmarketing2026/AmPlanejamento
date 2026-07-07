@@ -49,6 +49,7 @@ class TransacaoCriar(BaseModel):
     subcategoria_id: uuid.UUID | None = None
     conta_conectada_id: uuid.UUID | None = None
     contexto: str = "PF"  # PF | PJ
+    parcelas: int = 1  # >1 gera as parcelas futuras (previstas) automaticamente
 
 
 class TransacaoResposta(BaseModel):

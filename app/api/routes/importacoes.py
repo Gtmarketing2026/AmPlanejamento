@@ -157,6 +157,54 @@ def _somar_meses(d: date, meses: int) -> date:
     return date(ano, mes, min(d.day, ultimo_dia))
 
 
+def projetar_parcelas_de_origem(db: Session, origem: Transacao, modo_visualizacao: str) -> int:
+    """Gera as parcelas futuras (previsto=True) de UMA compra parcelada real
+    (origem com parcela_atual < parcela_total). Idempotente pelo hash_parcela.
+    Reaproveitado pela importação de arquivo e pelo lançamento manual."""
+    if not origem.parcela_total or origem.parcela_atual >= origem.parcela_total:
+        return 0
+    conta = db.get(ContaConectada, origem.conta_conectada_id)
+    estab = _estabelecimento(origem.descricao)
+    valor = float(origem.valor)
+    criadas = 0
+    for numero in range(origem.parcela_atual + 1, origem.parcela_total + 1):
+        hp = _hash_parcela(conta.id, estab, origem.parcela_total, valor, numero)
+        ja_existe = db.scalar(
+            select(Transacao.id).where(
+                Transacao.conta_conectada_id == conta.id, Transacao.hash_parcela == hp
+            )
+        )
+        if ja_existe:
+            continue
+        data_proj = _somar_meses(origem.data, numero - origem.parcela_atual)
+        desc_proj = _PADRAO_PARCELA.sub(f"({numero}/{origem.parcela_total})", origem.descricao)
+        mes_ref = _calcular_mes_referencia(data_proj, conta.natureza, conta.dia_virada, modo_visualizacao)
+        db.add(
+            Transacao(
+                conta_conectada_id=conta.id,
+                cliente_id=origem.cliente_id,
+                profissional_id=origem.profissional_id,
+                data=data_proj,
+                descricao=desc_proj,
+                valor=origem.valor,
+                tipo=origem.tipo,
+                origem=origem.origem,
+                contexto=origem.contexto,
+                categoria_id=origem.categoria_id,
+                subcategoria_id=origem.subcategoria_id,
+                parcela_atual=numero,
+                parcela_total=origem.parcela_total,
+                previsto=True,
+                hash_parcela=hp,
+                hash_dedup=calcular_hash_dedup(conta.id, data_proj, valor, desc_proj),
+                mes_referencia=mes_ref,
+            )
+        )
+        criadas += 1
+    db.flush()
+    return criadas
+
+
 def gerar_parcelas_futuras(db: Session, importacao_id: uuid.UUID, cliente_id: uuid.UUID) -> int:
     """Cria as parcelas futuras (previsto=True) das compras parceladas de uma
     importação. Idempotente: pula qualquer parcela que já exista (real ou
@@ -172,50 +220,9 @@ def gerar_parcelas_futuras(db: Session, importacao_id: uuid.UUID, cliente_id: uu
     ).all()
     if not origens:
         return 0
-
-    conta = db.get(ContaConectada, origens[0].conta_conectada_id)
     preferencia = db.get(PreferenciaCliente, cliente_id)
     modo_visualizacao = preferencia.visualizacao_lancamento if preferencia else "data_compra"
-
-    criadas = 0
-    for origem in origens:
-        estab = _estabelecimento(origem.descricao)
-        valor = float(origem.valor)
-        for numero in range(origem.parcela_atual + 1, origem.parcela_total + 1):
-            hp = _hash_parcela(conta.id, estab, origem.parcela_total, valor, numero)
-            ja_existe = db.scalar(
-                select(Transacao.id).where(
-                    Transacao.conta_conectada_id == conta.id, Transacao.hash_parcela == hp
-                )
-            )
-            if ja_existe:
-                continue
-            data_proj = _somar_meses(origem.data, numero - origem.parcela_atual)
-            desc_proj = _PADRAO_PARCELA.sub(f"({numero}/{origem.parcela_total})", origem.descricao)
-            mes_ref = _calcular_mes_referencia(data_proj, conta.natureza, conta.dia_virada, modo_visualizacao)
-            db.add(
-                Transacao(
-                    conta_conectada_id=conta.id,
-                    cliente_id=cliente_id,
-                    profissional_id=origem.profissional_id,
-                    data=data_proj,
-                    descricao=desc_proj,
-                    valor=origem.valor,
-                    tipo=origem.tipo,
-                    origem=origem.origem,
-                    categoria_id=origem.categoria_id,
-                    subcategoria_id=origem.subcategoria_id,
-                    parcela_atual=numero,
-                    parcela_total=origem.parcela_total,
-                    previsto=True,
-                    hash_parcela=hp,
-                    hash_dedup=calcular_hash_dedup(conta.id, data_proj, valor, desc_proj),
-                    mes_referencia=mes_ref,
-                )
-            )
-            criadas += 1
-    db.flush()
-    return criadas
+    return sum(projetar_parcelas_de_origem(db, origem, modo_visualizacao) for origem in origens)
 
 
 def processar_upload(
