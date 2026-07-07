@@ -14,6 +14,11 @@ import {
   minhasTransacoes,
 } from "../../api/clientes"
 import { formatarData, formatarMoeda } from "../../lib/format"
+import MetasTab from "./tabs/MetasTab"
+import DividasTab from "./tabs/DividasTab"
+import InvestimentosTab from "./tabs/InvestimentosTab"
+import PatrimonioTab from "./tabs/PatrimonioTab"
+import MeuFuturoTab from "./tabs/MeuFuturoTab"
 
 export default function ClienteDashboardPage() {
   const { token } = useOutletContext()
@@ -58,13 +63,17 @@ export default function ClienteDashboardPage() {
   const maxGasto = Math.max(1, ...gastoPorCategoria.map((g) => g.valor))
 
   return (
-    <div className="max-w-[900px] mx-auto px-8 py-10">
+    <div className="max-w-[1080px] mx-auto px-8 py-10">
       <div className="mb-5">
         <Tabs
           options={[
             { value: "fluxo", n: "A", label: "Fluxo de caixa" },
             { value: "lancamentos", n: "B", label: "Lançamentos" },
-            { value: "patrimonio", n: "C", label: "Patrimônio & Metas" },
+            { value: "metas", n: "C", label: "Metas" },
+            { value: "futuro", n: "D", label: "Meu Futuro" },
+            { value: "investimentos", n: "E", label: "Investimentos" },
+            { value: "patrimonio", n: "F", label: "Patrimônio" },
+            { value: "dividas", n: "G", label: "Dívidas" },
           ]}
           active={tab}
           onChange={setTab}
@@ -144,17 +153,11 @@ export default function ClienteDashboardPage() {
         </Card>
       )}
 
-      {tab === "patrimonio" && (
-        <Card>
-          <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
-            Patrimônio & Metas
-          </div>
-          <p className="text-text-dim text-sm">
-            Suas metas e projeção de patrimônio aparecem aqui — essa parte é montada junto com seu
-            planejador e entra numa próxima etapa.
-          </p>
-        </Card>
-      )}
+      {tab === "metas" && <MetasTab token={token} />}
+      {tab === "futuro" && <MeuFuturoTab token={token} />}
+      {tab === "investimentos" && <InvestimentosTab token={token} />}
+      {tab === "patrimonio" && <PatrimonioTab token={token} />}
+      {tab === "dividas" && <DividasTab token={token} />}
     </div>
   )
 }

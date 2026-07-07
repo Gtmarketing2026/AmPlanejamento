@@ -1,6 +1,6 @@
 export default function Tabs({ options, active, onChange }) {
   return (
-    <div className="inline-flex gap-1 bg-panel border border-line rounded-[10px] p-1">
+    <div className="inline-flex flex-wrap gap-1 bg-panel border border-line rounded-[10px] p-1">
       {options.map((opt) => (
         <button
           key={opt.value}

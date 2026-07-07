@@ -12,6 +12,7 @@ from app.api.routes import (
     importacoes,
     marca,
     negocio,
+    patrimonio,
     webhooks,
 )
 from app.core.config import settings
@@ -41,6 +42,7 @@ app.include_router(analytics.router)
 app.include_router(assinatura.router)
 app.include_router(crm.router)
 app.include_router(marca.router)
+app.include_router(patrimonio.router)
 
 
 @app.get("/health")
