@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { createPortal } from "react-dom"
 import ConfiguracoesTab from "../../pages/clienteFinal/tabs/ConfiguracoesTab"
 
 // Engrenagem no topo (junto do perfil) que abre as Configurações num modal --
@@ -16,25 +17,32 @@ export default function MenuConfiguracoes({ token }) {
         <span className="text-[15px]">⚙️</span>
       </button>
 
-      {aberto && (
-        <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 overflow-y-auto"
-          onClick={() => setAberto(false)}
-        >
+      {aberto &&
+        createPortal(
+          // Portal pro <body>: a barra do topo usa backdrop-blur, e um
+          // ancestral com backdrop-filter vira o "containing block" de
+          // elementos position:fixed (bug conhecido do CSS) -- sem o
+          // portal, esse modal ficava preso dentro da faixa estreita da
+          // barra em vez de cobrir a tela toda.
           <div
-            className="bg-panel border border-line rounded-[14px] p-5 max-w-lg w-full mt-16"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 overflow-y-auto"
+            onClick={() => setAberto(false)}
           >
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display text-[16px] font-semibold">Configurações</h3>
-              <button onClick={() => setAberto(false)} className="text-text-faint hover:text-text text-[15px]">
-                ✕
-              </button>
+            <div
+              className="bg-panel border border-line rounded-[14px] p-5 max-w-lg w-full mt-16"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display text-[16px] font-semibold">Configurações</h3>
+                <button onClick={() => setAberto(false)} className="text-text-faint hover:text-text text-[15px]">
+                  ✕
+                </button>
+              </div>
+              <ConfiguracoesTab token={token} />
             </div>
-            <ConfiguracoesTab token={token} />
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   )
 }

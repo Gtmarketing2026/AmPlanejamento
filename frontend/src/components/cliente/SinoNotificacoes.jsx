@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { createPortal } from "react-dom"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   listarMinhasNotificacoes,
@@ -48,7 +49,13 @@ export default function SinoNotificacoes({ token }) {
 
       {aberto && (
         <>
-          <div className="fixed inset-0 z-40" onClick={() => setAberto(false)} />
+          {/* Portal pro <body>: a barra do topo usa backdrop-blur, que vira o
+          "containing block" de elementos position:fixed -- sem o portal, esse
+          catcher de clique-fora ficava confinado à faixa estreita da barra. */}
+          {createPortal(
+            <div className="fixed inset-0 z-40" onClick={() => setAberto(false)} />,
+            document.body
+          )}
           <div className="absolute right-0 mt-2 w-[340px] max-h-[70vh] overflow-y-auto bg-panel border border-line rounded-[12px] shadow-xl z-50 p-3">
             <div className="flex items-center justify-between mb-2 px-1">
               <div className="text-[12px] font-semibold">Notificações</div>
