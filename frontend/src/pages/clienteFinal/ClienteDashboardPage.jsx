@@ -68,7 +68,7 @@ export default function ClienteDashboardPage() {
               label: "Visão geral",
               itens: [
                 { value: "fluxo", label: "Fluxo de caixa" },
-                { value: "clareza", label: "Clareza Financeira" },
+                { value: "clareza", label: "Resumo Financeiro" },
                 { value: "tarefas", label: "Tarefas", badge: tarefasPendentes },
               ],
             },

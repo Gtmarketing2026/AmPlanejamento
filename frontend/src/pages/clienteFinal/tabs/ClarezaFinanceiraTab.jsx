@@ -2,17 +2,22 @@ import { useMemo, useState } from "react"
 import { useQuery } from "@tanstack/react-query"
 import Card from "../../../components/ui/Card"
 import Button from "../../../components/ui/Button"
-import { Select } from "../../../components/ui/Field"
+import Field, { Select } from "../../../components/ui/Field"
 import { Table, Thead, Th, Tr, Td } from "../../../components/ui/Table"
 import { minhasCategorias, minhasTransacoes } from "../../../api/clientes"
+import { listarMinhasContas } from "../../../api/contas"
 import { formatarMoeda } from "../../../lib/format"
 import { exportarCsv, exportarPdfViaImpressao } from "../../../lib/exportar"
 
 const MESES_ABREV = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+const FILTROS_VAZIO = { categoria_id: "", conta_conectada_id: "", data_inicio: "", data_fim: "" }
 
 export default function ClarezaFinanceiraTab({ token, contexto = "PF" }) {
   const hoje = new Date()
   const [ano, setAno] = useState(hoje.getFullYear())
+  const [f, setF] = useState(FILTROS_VAZIO)
+  const [mostrarFiltros, setMostrarFiltros] = useState(false)
+  const filtrosAtivos = Object.values(f).filter(Boolean).length
 
   const { data: transacoes = [], isLoading } = useQuery({
     queryKey: ["cliente-eu-transacoes-todas", token, contexto],
@@ -22,6 +27,11 @@ export default function ClarezaFinanceiraTab({ token, contexto = "PF" }) {
   const { data: categorias = [] } = useQuery({
     queryKey: ["cliente-eu-categorias", token],
     queryFn: () => minhasCategorias(token),
+    enabled: !!token,
+  })
+  const { data: contas = [] } = useQuery({
+    queryKey: ["cliente-eu-contas", token],
+    queryFn: () => listarMinhasContas(token),
     enabled: !!token,
   })
   // Categorias neutras (movimentação interna) não somam no fluxo.
@@ -34,6 +44,10 @@ export default function ClarezaFinanceiraTab({ token, contexto = "PF" }) {
     const meses = Array.from({ length: 12 }, (_, i) => ({ mes: i + 1, receitas: 0, despesas: 0 }))
     transacoes.forEach((t) => {
       if (neutras.has(t.categoria_id)) return
+      if (f.categoria_id && t.categoria_id !== f.categoria_id) return
+      if (f.conta_conectada_id && t.conta_conectada_id !== f.conta_conectada_id) return
+      if (f.data_inicio && t.data < f.data_inicio) return
+      if (f.data_fim && t.data > f.data_fim) return
       const [tAno, tMes] = t.data.split("-").map(Number)
       if (tAno !== ano) return
       const alvo = meses[tMes - 1]
@@ -41,7 +55,7 @@ export default function ClarezaFinanceiraTab({ token, contexto = "PF" }) {
       else alvo.despesas += Math.abs(Number(t.valor))
     })
     return meses.map((m) => ({ ...m, resultado: m.receitas - m.despesas }))
-  }, [transacoes, ano, neutras])
+  }, [transacoes, ano, neutras, f])
 
   const totalReceitas = porMes.reduce((s, m) => s + m.receitas, 0)
   const totalDespesas = porMes.reduce((s, m) => s + m.despesas, 0)
@@ -49,7 +63,7 @@ export default function ClarezaFinanceiraTab({ token, contexto = "PF" }) {
 
   function exportarPlanilha() {
     exportarCsv(
-      `clareza-financeira-${ano}.csv`,
+      `resumo-financeiro-${ano}.csv`,
       porMes.map((m) => ({
         mes: MESES_ABREV[m.mes - 1],
         receitas: m.receitas.toFixed(2),
@@ -71,7 +85,7 @@ export default function ClarezaFinanceiraTab({ token, contexto = "PF" }) {
       )
       .join("")
     exportarPdfViaImpressao(
-      `Clareza Financeira ${ano}`,
+      `Resumo Financeiro ${ano}`,
       `<table><thead><tr><th>Mês</th><th class="right">Receitas</th><th class="right">Despesas</th><th class="right">Resultado</th></tr></thead>
        <tbody>${linhas}<tr><td><strong>Total</strong></td><td class="right"><strong>${formatarMoeda(
          totalReceitas
@@ -83,14 +97,29 @@ export default function ClarezaFinanceiraTab({ token, contexto = "PF" }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <Select label="Ano" value={ano} onChange={(e) => setAno(Number(e.target.value))} className="w-28">
-          {[hoje.getFullYear() - 1, hoje.getFullYear(), hoje.getFullYear() + 1].map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </Select>
+      <div className="flex items-end justify-between flex-wrap gap-3">
+        <div className="flex items-end gap-2">
+          <Select label="Ano" value={ano} onChange={(e) => setAno(Number(e.target.value))} className="w-28">
+            {[hoje.getFullYear() - 2, hoje.getFullYear() - 1, hoje.getFullYear(), hoje.getFullYear() + 1].map((a) => (
+              <option key={a} value={a}>
+                {a}
+              </option>
+            ))}
+          </Select>
+          <button
+            onClick={() => setMostrarFiltros((v) => !v)}
+            className={`px-3.5 py-2.5 rounded-[9px] border text-[13px] flex items-center gap-2 mb-3 ${
+              filtrosAtivos ? "border-accent/60 text-accent" : "border-line text-text-dim hover:text-text"
+            }`}
+          >
+            Filtros
+            {filtrosAtivos > 0 && (
+              <span className="text-[10px] font-mono rounded-full px-1.5 py-0.5 leading-none bg-accent/20 text-accent">
+                {filtrosAtivos}
+              </span>
+            )}
+          </button>
+        </div>
         <div className="flex gap-2">
           <Button variant="ghost" onClick={exportarPdf}>
             Exportar PDF
@@ -100,6 +129,43 @@ export default function ClarezaFinanceiraTab({ token, contexto = "PF" }) {
           </Button>
         </div>
       </div>
+
+      {mostrarFiltros && (
+        <div className="border border-line rounded-[9px] p-4 grid grid-cols-4 gap-3 max-md:grid-cols-1">
+          <Select
+            label="Categoria"
+            value={f.categoria_id}
+            onChange={(e) => setF((x) => ({ ...x, categoria_id: e.target.value }))}
+          >
+            <option value="">Todas</option>
+            {categorias.map((c) => (
+              <option key={c.id} value={c.id}>{c.nome}</option>
+            ))}
+          </Select>
+          <Select
+            label="Conta / cartão"
+            value={f.conta_conectada_id}
+            onChange={(e) => setF((x) => ({ ...x, conta_conectada_id: e.target.value }))}
+          >
+            <option value="">Todas</option>
+            {contas.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.nome_exibicao || (c.natureza === "cartao" ? "Cartão" : "Conta")}
+                {c.natureza === "cartao" ? " (cartão)" : ""}
+              </option>
+            ))}
+          </Select>
+          <Field label="De" type="date" value={f.data_inicio} onChange={(e) => setF((x) => ({ ...x, data_inicio: e.target.value }))} />
+          <Field label="Até" type="date" value={f.data_fim} onChange={(e) => setF((x) => ({ ...x, data_fim: e.target.value }))} />
+          {filtrosAtivos > 0 && (
+            <div className="col-span-4 max-md:col-span-1">
+              <button onClick={() => setF(FILTROS_VAZIO)} className="text-text-faint hover:text-text text-[12px]">
+                Limpar filtros
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-4 max-md:grid-cols-1">
         <Card>
