@@ -29,6 +29,24 @@ const FILTROS_VAZIO = {
   data_fim: "",
 }
 
+function IconeFunil({ className = "" }) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width="13"
+      height="13"
+      className={className}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M2 3h12l-4.5 5.5V13l-3 1.5V8.5L2 3z" />
+    </svg>
+  )
+}
+
 export default function LancamentosTab({ token, contexto = "PF", temCnpj = false, filtrosIniciais = null }) {
   const qc = useQueryClient()
   const [busca, setBusca] = useState("")
@@ -60,6 +78,27 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
     contexto,
   }
   const filtrosAtivos = Object.values(f).filter(Boolean).length
+
+  // Atalho rápido de mês, acima do painel de Filtros detalhado -- reflete
+  // De/Até quando eles formam um mês inteiro; escolher aqui já preenche os
+  // dois, e abrir "Filtros" permite refinar (data parcial, outro campo etc.).
+  const mesFiltro = (() => {
+    if (!f.data_inicio || !f.data_fim) return ""
+    const [ano, mes, dia] = f.data_inicio.split("-").map(Number)
+    if (dia !== 1) return ""
+    const ultimoDia = new Date(ano, mes, 0).getDate()
+    return f.data_fim === `${f.data_inicio.slice(0, 7)}-${String(ultimoDia).padStart(2, "0")}` ? f.data_inicio.slice(0, 7) : ""
+  })()
+
+  function aplicarMesFiltro(valorMes) {
+    if (!valorMes) {
+      setF((x) => ({ ...x, data_inicio: "", data_fim: "" }))
+      return
+    }
+    const [ano, mes] = valorMes.split("-").map(Number)
+    const ultimoDia = new Date(ano, mes, 0).getDate()
+    setF((x) => ({ ...x, data_inicio: `${valorMes}-01`, data_fim: `${valorMes}-${String(ultimoDia).padStart(2, "0")}` }))
+  }
 
   const { data: transacoes = [] } = useQuery({
     queryKey: ["cliente-eu-transacoes", token, filtros],
@@ -194,7 +233,7 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
         </div>
       </div>
 
-      <div className="flex gap-3 flex-wrap mb-4 items-center">
+      <div className="flex gap-3 flex-wrap mb-3 items-center">
         <input
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
@@ -203,11 +242,12 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
         />
         <button
           onClick={() => setMostrarFiltros((v) => !v)}
-          className={`px-3.5 py-2.5 rounded-[9px] border text-[13px] flex items-center gap-2 ${
+          title="Filtros"
+          className={`px-3 py-2.5 rounded-[9px] border text-[13px] flex items-center gap-1.5 ${
             filtrosAtivos ? "border-accent/60 text-accent" : "border-line text-text-dim hover:text-text"
           }`}
         >
-          Filtros
+          <IconeFunil />
           {filtrosAtivos > 0 && (
             <span className="text-[10px] font-mono rounded-full px-1.5 py-0.5 leading-none bg-accent/20 text-accent">
               {filtrosAtivos}
@@ -223,6 +263,23 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
           />
           Parcelas futuras
         </label>
+      </div>
+
+      <div className="mb-4">
+        <input
+          type="month"
+          value={mesFiltro}
+          onChange={(e) => aplicarMesFiltro(e.target.value)}
+          className="bg-bg border border-line rounded-[9px] px-3.5 py-2 text-[13px] text-text outline-none focus:border-accent/60"
+        />
+        {mesFiltro && (
+          <button
+            onClick={() => aplicarMesFiltro("")}
+            className="ml-2 text-text-faint hover:text-text text-[12px]"
+          >
+            Limpar mês
+          </button>
+        )}
       </div>
 
       {mostrarFiltros && (
