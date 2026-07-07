@@ -132,6 +132,11 @@ export default function FluxoTab({ token, contexto = "PF" }) {
 
   return (
     <div className="flex flex-col gap-5">
+      <p className="text-text-dim text-[13px] -mb-1">
+        Como você está indo neste mês (ou ano): quanto entrou, quanto saiu e com o quê — clique num mês do gráfico pra
+        ver o detalhe dele.
+      </p>
+
       {/* Filtros de período */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-1.5 flex-wrap">

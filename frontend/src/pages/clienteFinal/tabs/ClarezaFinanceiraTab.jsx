@@ -116,6 +116,10 @@ export default function ClarezaFinanceiraTab({ token, contexto = "PF", onVerLanc
 
   return (
     <div className="flex flex-col gap-5">
+      <p className="text-text-dim text-[13px] -mb-1">
+        Compare os meses do ano lado a lado e clique num valor de receita ou despesa pra ver os lançamentos por trás dele.
+      </p>
+
       <div className="flex items-end justify-between flex-wrap gap-3">
         <div className="flex items-end gap-2">
           <Select label="Ano" value={ano} onChange={(e) => setAno(Number(e.target.value))} className="w-28">
