@@ -35,7 +35,9 @@ class Cliente(Base):
     motivo_churn_detalhe: Mapped[str | None] = mapped_column(String, nullable=True)
     conexao_pausada: Mapped[bool] = mapped_column(Boolean, default=False)
     perfil_comportamental: Mapped[str | None] = mapped_column(String, nullable=True)
-    objetivo_principal: Mapped[str | None] = mapped_column(String, nullable=True)
+    objetivo_principal: Mapped[str | None] = mapped_column(String, nullable=True)  # "onde quero chegar"
+    historico: Mapped[str | None] = mapped_column(String, nullable=True)  # contexto/histórico do cliente (texto livre)
+    situacao_atual: Mapped[str | None] = mapped_column(String, nullable=True)  # "onde estou" (ponto de partida do mapa)
     valor_honorario_mensal: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
     criado_em: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

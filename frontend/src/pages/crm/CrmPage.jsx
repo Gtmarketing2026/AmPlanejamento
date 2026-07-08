@@ -9,19 +9,23 @@ import Field, { Label, Select } from "../../components/ui/Field"
 import { useAtualizarCliente, useClientes } from "../../hooks/useClientes"
 import {
   atualizarFollowUp,
+  atualizarPlanoEtapa,
   atualizarTarefaCliente,
   criarFollowUp,
   criarInteracao,
+  criarPlanoEtapa,
   criarTarefaCliente,
   enviarNotificacaoCliente,
   excluirFollowUp,
   excluirInteracao,
+  excluirPlanoEtapa,
   excluirTarefaCliente,
   googleConectar,
   googleDesconectar,
   googleStatus,
   listarFollowUpsCliente,
   listarInteracoes,
+  listarPlanoEtapas,
   listarTarefasCliente,
 } from "../../api/crm"
 import { formatarData, iniciais } from "../../lib/format"
@@ -47,6 +51,313 @@ function Textarea({ label, className = "", ...props }) {
   )
 }
 
+// ---------------------------------------------------------------------------
+// Questionário resumido pra AJUDAR a classificar o perfil comportamental.
+// É só um apoio: a sugestão preenche o campo, que continua totalmente editável.
+// ---------------------------------------------------------------------------
+const QUIZ_PERGUNTAS = [
+  {
+    q: "Se um investimento cai de valor, o cliente...",
+    opcoes: [
+      ["Vende com medo de perder mais", 1],
+      ["Espera e observa antes de decidir", 2],
+      ["Aproveita pra comprar mais barato", 3],
+    ],
+  },
+  {
+    q: "Quanto da renda ele consegue guardar por mês?",
+    opcoes: [
+      ["Quase nada", 1],
+      ["Um pouco, com esforço", 2],
+      ["Uma boa parte, com disciplina", 3],
+    ],
+  },
+  {
+    q: "O horizonte de planejamento dele é...",
+    opcoes: [
+      ["Curto — pensa mês a mês", 1],
+      ["Médio — alguns anos à frente", 2],
+      ["Longo — décadas, aposentadoria", 3],
+    ],
+  },
+  {
+    q: "Como ele encara dívidas?",
+    opcoes: [
+      ["Evita a todo custo", 1],
+      ["Usa com cautela", 2],
+      ["Usa de forma estratégica pra crescer", 3],
+    ],
+  },
+  {
+    q: "Conhecimento sobre finanças e investimentos?",
+    opcoes: [
+      ["Iniciante", 1],
+      ["Intermediário", 2],
+      ["Avançado", 3],
+    ],
+  },
+]
+
+function classificarPerfil(soma) {
+  // 5 perguntas × (1..3) => 5 a 15.
+  if (soma <= 8) return { rotulo: "Conservador", descricao: "prioriza segurança e evita riscos" }
+  if (soma <= 12) return { rotulo: "Moderado", descricao: "equilibra segurança e crescimento" }
+  return { rotulo: "Arrojado", descricao: "tolera mais risco em busca de retorno" }
+}
+
+function QuizPerfil({ onUsar }) {
+  const [respostas, setRespostas] = useState({})
+  const completo = Object.keys(respostas).length === QUIZ_PERGUNTAS.length
+  const soma = Object.values(respostas).reduce((s, v) => s + v, 0)
+  const sugestao = completo ? classificarPerfil(soma) : null
+
+  return (
+    <div className="border border-line rounded-[9px] p-4 mb-3 bg-panel/40">
+      <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
+        Ajuda pra classificar (opcional)
+      </div>
+      <div className="flex flex-col gap-3">
+        {QUIZ_PERGUNTAS.map((p, i) => (
+          <div key={i}>
+            <div className="text-[12.5px] text-text-dim mb-1.5">{p.q}</div>
+            <div className="flex flex-wrap gap-1.5">
+              {p.opcoes.map(([label, valor]) => (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setRespostas((r) => ({ ...r, [i]: valor }))}
+                  className={`px-2.5 py-1.5 rounded-[7px] text-[11.5px] border transition-colors ${
+                    respostas[i] === valor
+                      ? "bg-accent text-[#062019] border-accent"
+                      : "border-line text-text-dim hover:text-text"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      {sugestao && (
+        <div className="mt-4 flex items-center justify-between gap-3 flex-wrap bg-panel-2 rounded-[9px] px-3.5 py-3">
+          <div className="text-[12.5px]">
+            Sugestão: <strong className="text-accent">{sugestao.rotulo}</strong>{" "}
+            <span className="text-text-faint">— {sugestao.descricao}</span>
+          </div>
+          <Button type="button" onClick={() => onUsar(sugestao.rotulo)}>
+            Usar esta sugestão
+          </Button>
+        </div>
+      )}
+      {!completo && (
+        <p className="text-text-faint text-[11.5px] mt-3">Responda as 5 pra ver a sugestão — você pode editar depois.</p>
+      )}
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Plano de ação — caminho visível "onde estou -> onde quero chegar" com
+// etapas (mapeamento de tempo + ações) e status.
+// ---------------------------------------------------------------------------
+const STATUS_ETAPA = {
+  a_fazer: { label: "A fazer", cor: "var(--color-line)", texto: "text-text-faint", pill: "neutral" },
+  em_andamento: { label: "Em andamento", cor: "var(--color-amber)", texto: "text-amber", pill: "warn" },
+  concluida: { label: "Concluída", cor: "var(--color-accent)", texto: "text-accent", pill: "on" },
+}
+const PROXIMO_STATUS = { a_fazer: "em_andamento", em_andamento: "concluida", concluida: "a_fazer" }
+
+function NoMapa({ icone, titulo, sub, cor }) {
+  return (
+    <div className="flex flex-col items-center text-center min-w-[92px] max-w-[130px]">
+      <div
+        className="w-8 h-8 rounded-full border-2 flex items-center justify-center text-[13px] bg-panel z-10"
+        style={{ borderColor: cor }}
+      >
+        {icone}
+      </div>
+      <div className="text-[11.5px] font-medium mt-1.5 leading-tight">{titulo}</div>
+      {sub && <div className="text-text-faint text-[10px] mt-0.5 leading-tight">{sub}</div>}
+    </div>
+  )
+}
+
+function PlanoAcaoCard({ clienteId, cliente, qc }) {
+  const [novo, setNovo] = useState({ titulo: "", horizonte: "", descricao: "", status: "a_fazer" })
+
+  const { data: etapas = [], isLoading } = useQuery({
+    queryKey: ["crm-plano-etapas", clienteId],
+    queryFn: () => listarPlanoEtapas(clienteId),
+    enabled: !!clienteId,
+  })
+
+  const invalidar = () => qc.invalidateQueries({ queryKey: ["crm-plano-etapas", clienteId] })
+
+  const criar = useMutation({
+    mutationFn: () =>
+      criarPlanoEtapa(clienteId, {
+        titulo: novo.titulo,
+        horizonte: novo.horizonte || null,
+        descricao: novo.descricao || null,
+        status: novo.status,
+      }),
+    onSuccess: () => {
+      invalidar()
+      setNovo({ titulo: "", horizonte: "", descricao: "", status: "a_fazer" })
+    },
+  })
+  const mudarStatus = useMutation({
+    mutationFn: ({ id, status }) => atualizarPlanoEtapa(id, { status }),
+    onSuccess: invalidar,
+  })
+  const excluir = useMutation({
+    mutationFn: (id) => excluirPlanoEtapa(id),
+    onSuccess: invalidar,
+  })
+
+  const concluidas = etapas.filter((e) => e.status === "concluida").length
+  const progresso = etapas.length ? Math.round((concluidas / etapas.length) * 100) : 0
+
+  return (
+    <Card className="mb-5">
+      <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
+        Plano de ação — onde estou → onde quero chegar
+      </div>
+
+      {/* Mapa visual */}
+      {etapas.length > 0 && (
+        <div className="mb-5">
+          <div className="relative overflow-x-auto pb-2">
+            {/* linha de trás */}
+            <div className="absolute left-0 right-0 top-4 h-0.5 bg-line" />
+            <div className="flex items-start gap-3 relative">
+              <NoMapa
+                icone="📍"
+                titulo="Onde estou"
+                sub={cliente?.situacao_atual || "situação atual"}
+                cor="var(--color-blue)"
+              />
+              {etapas.map((e) => (
+                <NoMapa
+                  key={e.id}
+                  icone={e.status === "concluida" ? "✓" : ""}
+                  titulo={e.titulo}
+                  sub={e.horizonte || STATUS_ETAPA[e.status]?.label}
+                  cor={STATUS_ETAPA[e.status]?.cor || "var(--color-line)"}
+                />
+              ))}
+              <NoMapa
+                icone="🎯"
+                titulo="Onde quero chegar"
+                sub={cliente?.objetivo_principal || "objetivo principal"}
+                cor="var(--color-accent)"
+              />
+            </div>
+          </div>
+          <div className="flex items-center gap-3 mt-2">
+            <div className="flex-1 h-1.5 rounded-full bg-panel-2 overflow-hidden">
+              <div className="h-full rounded-full bg-accent" style={{ width: `${progresso}%` }} />
+            </div>
+            <span className="text-text-faint text-[11px] font-mono">
+              {concluidas}/{etapas.length} etapas · {progresso}%
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Form nova etapa */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (novo.titulo.trim()) criar.mutate()
+        }}
+        className="mb-4"
+      >
+        <div className="flex gap-3 flex-wrap items-start">
+          <div className="flex-1 min-w-[200px]">
+            <Field
+              label="Etapa / ação"
+              value={novo.titulo}
+              onChange={(e) => setNovo((n) => ({ ...n, titulo: e.target.value }))}
+              placeholder="ex: Formar reserva de emergência de 6 meses"
+            />
+          </div>
+          <div className="w-44">
+            <Field
+              label="Horizonte de tempo"
+              value={novo.horizonte}
+              onChange={(e) => setNovo((n) => ({ ...n, horizonte: e.target.value }))}
+              placeholder="ex: Próximos 3 meses"
+            />
+          </div>
+          <div className="w-40">
+            <Select
+              label="Status"
+              value={novo.status}
+              onChange={(e) => setNovo((n) => ({ ...n, status: e.target.value }))}
+            >
+              {Object.entries(STATUS_ETAPA).map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v.label}
+                </option>
+              ))}
+            </Select>
+          </div>
+        </div>
+        <Textarea
+          label="Detalhes (opcional)"
+          rows={2}
+          value={novo.descricao}
+          onChange={(e) => setNovo((n) => ({ ...n, descricao: e.target.value }))}
+          placeholder="Como fazer, marcos intermediários, o que observar…"
+        />
+        <Button type="submit" disabled={!novo.titulo.trim() || criar.isPending}>
+          {criar.isPending ? "Adicionando…" : "Adicionar etapa"}
+        </Button>
+      </form>
+
+      {isLoading && <p className="text-text-faint text-sm">Carregando…</p>}
+      {!isLoading && !etapas.length && (
+        <p className="text-text-faint text-[12.5px]">
+          Nenhuma etapa ainda — monte o caminho do cliente da situação atual até o objetivo.
+        </p>
+      )}
+      <div className="flex flex-col gap-2">
+        {etapas.map((e) => {
+          const meta = STATUS_ETAPA[e.status] || STATUS_ETAPA.a_fazer
+          return (
+            <div key={e.id} className="flex items-start gap-3 border border-line rounded-[9px] px-3.5 py-2.5">
+              <button
+                type="button"
+                onClick={() => mudarStatus.mutate({ id: e.id, status: PROXIMO_STATUS[e.status] })}
+                title="Clique pra mudar o status"
+                className="w-3 h-3 rounded-full mt-1 shrink-0"
+                style={{ background: meta.cor }}
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[13px] font-medium">{e.titulo}</span>
+                  {e.horizonte && <span className="text-text-faint text-[11px] font-mono">{e.horizonte}</span>}
+                  <Pill variant={meta.pill}>{meta.label}</Pill>
+                </div>
+                {e.descricao && <div className="text-text-dim text-[12px] mt-0.5">{e.descricao}</div>}
+              </div>
+              <button
+                onClick={() => excluir.mutate(e.id)}
+                className="text-text-faint hover:text-red text-[11.5px]"
+                title="Excluir"
+              >
+                ✕
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </Card>
+  )
+}
+
 export default function CrmPage() {
   const { data: clientes, isLoading } = useClientes()
   const atualizar = useAtualizarCliente()
@@ -54,8 +365,14 @@ export default function CrmPage() {
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [clienteId, setClienteId] = useState("")
-  const [form, setForm] = useState({ perfil_comportamental: "", objetivo_principal: "" })
+  const [form, setForm] = useState({
+    perfil_comportamental: "",
+    objetivo_principal: "",
+    historico: "",
+    situacao_atual: "",
+  })
   const [salvo, setSalvo] = useState(false)
+  const [quizAberto, setQuizAberto] = useState(false)
 
   const cliente = clientes?.find((c) => c.id === clienteId)
 
@@ -67,8 +384,11 @@ export default function CrmPage() {
       setForm({
         perfil_comportamental: cliente.perfil_comportamental || "",
         objetivo_principal: cliente.objetivo_principal || "",
+        historico: cliente.historico || "",
+        situacao_atual: cliente.situacao_atual || "",
       })
       setSalvo(false)
+      setQuizAberto(false)
     }
   }, [cliente])
 
@@ -79,6 +399,8 @@ export default function CrmPage() {
       dados: {
         perfil_comportamental: form.perfil_comportamental || null,
         objetivo_principal: form.objetivo_principal || null,
+        historico: form.historico || null,
+        situacao_atual: form.situacao_atual || null,
       },
     })
     setSalvo(true)
@@ -128,17 +450,52 @@ export default function CrmPage() {
                 </div>
 
                 <form onSubmit={onSalvar}>
+                  <div className="flex items-end gap-2">
+                    <div className="flex-1">
+                      <Field
+                        label="Perfil comportamental"
+                        value={form.perfil_comportamental}
+                        onChange={(e) => setForm((f) => ({ ...f, perfil_comportamental: e.target.value }))}
+                        placeholder="ex: Cauteloso, Arrojado, Disciplinado"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setQuizAberto((v) => !v)}
+                      className="mb-3 px-3 py-3 rounded-[9px] border border-line text-text-dim hover:text-text text-[12.5px] whitespace-nowrap"
+                    >
+                      {quizAberto ? "Fechar" : "Ajudar a classificar"}
+                    </button>
+                  </div>
+
+                  {quizAberto && (
+                    <QuizPerfil
+                      onUsar={(perfil) => {
+                        setForm((f) => ({ ...f, perfil_comportamental: perfil }))
+                        setQuizAberto(false)
+                      }}
+                    />
+                  )}
+
                   <Field
-                    label="Perfil comportamental"
-                    value={form.perfil_comportamental}
-                    onChange={(e) => setForm((f) => ({ ...f, perfil_comportamental: e.target.value }))}
-                    placeholder="ex: Cauteloso, Arrojado, Disciplinado"
-                  />
-                  <Field
-                    label="Objetivo principal"
+                    label="Objetivo principal (onde quero chegar)"
                     value={form.objetivo_principal}
                     onChange={(e) => setForm((f) => ({ ...f, objetivo_principal: e.target.value }))}
                     placeholder="ex: Aposentadoria aos 55, sair do aluguel"
+                  />
+                  <Textarea
+                    label="Situação atual (onde estou)"
+                    rows={2}
+                    value={form.situacao_atual}
+                    onChange={(e) => setForm((f) => ({ ...f, situacao_atual: e.target.value }))}
+                    placeholder="ex: reserva de 3 meses formada, ainda pagando financiamento do carro"
+                  />
+                  <Textarea
+                    label="Histórico do cliente"
+                    rows={3}
+                    value={form.historico}
+                    onChange={(e) => setForm((f) => ({ ...f, historico: e.target.value }))}
+                    placeholder="Contexto, como chegou, decisões importantes, mudanças de vida relevantes…"
                   />
                   <div className="flex items-center gap-3 mt-2">
                     <Button type="submit" disabled={atualizar.isPending}>
@@ -148,6 +505,8 @@ export default function CrmPage() {
                   </div>
                 </form>
               </Card>
+
+              <PlanoAcaoCard clienteId={clienteId} cliente={cliente} qc={qc} />
 
               <GoogleAgendaCard
                 searchParams={searchParams}

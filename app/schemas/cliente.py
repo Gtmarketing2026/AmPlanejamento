@@ -86,6 +86,8 @@ class ClienteResposta(BaseModel):
     valor_honorario_mensal: float | None
     perfil_comportamental: str | None
     objetivo_principal: str | None
+    historico: str | None = None
+    situacao_atual: str | None = None
     criado_em: datetime
 
     model_config = {"from_attributes": True}
@@ -100,6 +102,8 @@ class ClienteAtualizar(BaseModel):
     valor_honorario_mensal: float | None = None
     perfil_comportamental: str | None = None
     objetivo_principal: str | None = None
+    historico: str | None = None
+    situacao_atual: str | None = None
     nickname: str | None = None
     senha: str | None = None  # só re-hash se enviado
 

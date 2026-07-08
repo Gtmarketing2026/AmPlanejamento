@@ -90,3 +90,35 @@ class GoogleStatusResposta(BaseModel):
 
 class GoogleAuthUrlResposta(BaseModel):
     url: str
+
+
+# ---------- Plano de ação (roadmap "onde estou -> onde quero chegar") ----------
+STATUS_ETAPA = {"a_fazer", "em_andamento", "concluida"}
+
+
+class EtapaCriar(BaseModel):
+    titulo: str
+    descricao: str | None = None
+    horizonte: str | None = None
+    status: str = "a_fazer"
+
+
+class EtapaAtualizar(BaseModel):
+    titulo: str | None = None
+    descricao: str | None = None
+    horizonte: str | None = None
+    status: str | None = None
+    ordem: int | None = None
+
+
+class EtapaResposta(BaseModel):
+    id: uuid.UUID
+    cliente_id: uuid.UUID
+    ordem: int
+    titulo: str
+    descricao: str | None
+    horizonte: str | None
+    status: str
+    criado_em: datetime
+
+    model_config = {"from_attributes": True}

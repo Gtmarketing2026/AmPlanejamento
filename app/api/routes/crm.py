@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_cliente_id_atual, get_db_admin, get_db_com_rls, get_profissional_id_atual
@@ -22,10 +22,14 @@ from app.core.security import criar_state_oauth_google, decodificar_state_oauth_
 from app.db.base import SessionLocal
 from app.integrations import google_calendar as gcal
 from app.models.cliente import Cliente
-from app.models.crm import CredencialGoogle, FollowUp, InteracaoCrm, TarefaCliente
+from app.models.crm import CredencialGoogle, FollowUp, InteracaoCrm, PlanoEtapa, TarefaCliente
 from app.api.routes.notificacoes import notificar_cliente
 from app.schemas.crm import (
+    STATUS_ETAPA,
     TIPOS_INTERACAO,
+    EtapaAtualizar,
+    EtapaCriar,
+    EtapaResposta,
     FollowUpAtualizar,
     FollowUpCriar,
     FollowUpResposta,
@@ -189,6 +193,86 @@ def excluir_tarefa_cliente(
     if tarefa is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Tarefa não encontrada")
     db.delete(tarefa)
+
+
+# ============================================================================
+# Plano de ação (etapas do roadmap "onde estou -> onde quero chegar")
+# ============================================================================
+
+
+@router.get("/clientes/{cliente_id}/plano-etapas", response_model=list[EtapaResposta])
+def listar_plano_etapas(
+    cliente_id: uuid.UUID,
+    db: Session = Depends(get_db_com_rls),
+):
+    _exigir_cliente(db, cliente_id)
+    return db.scalars(
+        select(PlanoEtapa)
+        .where(PlanoEtapa.cliente_id == cliente_id)
+        .order_by(PlanoEtapa.ordem.asc(), PlanoEtapa.criado_em.asc())
+    ).all()
+
+
+@router.post(
+    "/clientes/{cliente_id}/plano-etapas",
+    response_model=EtapaResposta,
+    status_code=status.HTTP_201_CREATED,
+)
+def criar_plano_etapa(
+    cliente_id: uuid.UUID,
+    dados: EtapaCriar,
+    profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
+    db: Session = Depends(get_db_com_rls),
+):
+    _exigir_cliente(db, cliente_id)
+    if dados.status not in STATUS_ETAPA:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Status inválido: {dados.status}")
+    # Nova etapa entra no fim do caminho (maior ordem + 1).
+    ultima_ordem = db.scalar(
+        select(func.coalesce(func.max(PlanoEtapa.ordem), -1)).where(PlanoEtapa.cliente_id == cliente_id)
+    )
+    etapa = PlanoEtapa(
+        cliente_id=cliente_id,
+        profissional_id=profissional_id,
+        ordem=(ultima_ordem or 0) + 1,
+        titulo=dados.titulo,
+        descricao=dados.descricao,
+        horizonte=dados.horizonte,
+        status=dados.status,
+    )
+    db.add(etapa)
+    db.flush()
+    db.refresh(etapa)
+    return etapa
+
+
+@router.patch("/plano-etapas/{etapa_id}", response_model=EtapaResposta)
+def atualizar_plano_etapa(
+    etapa_id: uuid.UUID,
+    dados: EtapaAtualizar,
+    db: Session = Depends(get_db_com_rls),
+):
+    etapa = db.get(PlanoEtapa, etapa_id)
+    if etapa is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Etapa não encontrada")
+    if dados.status is not None and dados.status not in STATUS_ETAPA:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Status inválido: {dados.status}")
+    for campo, valor in dados.model_dump(exclude_unset=True).items():
+        setattr(etapa, campo, valor)
+    db.flush()
+    db.refresh(etapa)
+    return etapa
+
+
+@router.delete("/plano-etapas/{etapa_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_plano_etapa(
+    etapa_id: uuid.UUID,
+    db: Session = Depends(get_db_com_rls),
+):
+    etapa = db.get(PlanoEtapa, etapa_id)
+    if etapa is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Etapa não encontrada")
+    db.delete(etapa)
 
 
 # ============================================================================

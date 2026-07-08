@@ -36,6 +36,16 @@ export const atualizarFollowUp = (id, dados) => apiPatch(`/crm/follow-ups/${id}`
 
 export const excluirFollowUp = (id) => apiDelete(`/crm/follow-ups/${id}`)
 
+// ---------- Plano de ação (roadmap onde estou -> onde quero chegar) ----------
+export const listarPlanoEtapas = (clienteId) => apiGet(`/crm/clientes/${clienteId}/plano-etapas`)
+
+export const criarPlanoEtapa = (clienteId, dados) =>
+  apiPost(`/crm/clientes/${clienteId}/plano-etapas`, dados)
+
+export const atualizarPlanoEtapa = (id, dados) => apiPatch(`/crm/plano-etapas/${id}`, dados)
+
+export const excluirPlanoEtapa = (id) => apiDelete(`/crm/plano-etapas/${id}`)
+
 // ---------- Google Agenda ----------
 export const googleStatus = () => apiGet("/crm/google/status")
 

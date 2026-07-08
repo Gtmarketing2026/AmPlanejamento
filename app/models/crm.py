@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -70,6 +70,28 @@ class TarefaCliente(Base):
     prazo: Mapped[date | None] = mapped_column(Date, nullable=True)
     concluido: Mapped[bool] = mapped_column(Boolean, default=False)
     concluido_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class PlanoEtapa(Base):
+    """Etapa do plano de ação do cliente (roadmap "onde estou -> onde quero
+    chegar"). Cada etapa tem um horizonte de tempo e um status, e é ordenada
+    por `ordem`. O profissional cria/edita; renderizado como caminho no CRM."""
+
+    __tablename__ = "plano_etapas"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False
+    )
+    profissional_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
+    )
+    ordem: Mapped[int] = mapped_column(Integer, default=0)
+    titulo: Mapped[str] = mapped_column(String, nullable=False)
+    descricao: Mapped[str | None] = mapped_column(Text, nullable=True)
+    horizonte: Mapped[str | None] = mapped_column(String, nullable=True)  # ex: "Próximos 3 meses", "1 ano"
+    status: Mapped[str] = mapped_column(String, default="a_fazer")  # a_fazer | em_andamento | concluida
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
