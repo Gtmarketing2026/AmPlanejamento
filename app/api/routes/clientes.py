@@ -188,6 +188,22 @@ def excluir_cliente(
     }
 
 
+@router.post("/{cliente_id}/abrir-painel", response_model=TokenResponse)
+def abrir_painel_do_cliente(
+    cliente_id: uuid.UUID,
+    db: Session = Depends(get_db_com_rls),
+):
+    """O planejador abre o painel REAL do próprio cliente (não o mock antigo).
+    Emite um token de cliente_final para ESTE cliente — o RLS garante que
+    `db.get` só encontra clientes do profissional autenticado, então o
+    planejador nunca consegue abrir o painel de um cliente de outro tenant."""
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=404, detail="Cliente não encontrado")
+    token = criar_access_token(str(cliente_id), tipo="cliente_final")
+    return TokenResponse(access_token=token)
+
+
 @router.post("/login", response_model=TokenResponse)
 def login_cliente(dados: ClienteLoginRequest, db: Session = Depends(get_db_sem_rls)):
     # get_db_sem_rls já usa a conexão privilegiada — necessário aqui porque

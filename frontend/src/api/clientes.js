@@ -8,6 +8,9 @@ export const atualizarCliente = (id, dados) => apiPatch(`/clientes/${id}`, dados
 
 export const excluirCliente = (id, dados) => apiDelete(`/clientes/${id}`, dados)
 
+// Planejador abre o painel REAL do próprio cliente (emite token de cliente).
+export const abrirPainelCliente = (id) => apiPost(`/clientes/${id}/abrir-painel`, {})
+
 export const loginCliente = (nickname, senha) =>
   apiPost("/clientes/login", { nickname, senha }, { auth: false })
 

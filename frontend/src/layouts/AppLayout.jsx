@@ -1,12 +1,25 @@
+import { useEffect } from "react"
 import { Link, Outlet } from "react-router-dom"
 import Topbar from "../components/layout/Topbar"
 import BannerImpersonacao from "../components/negocio/BannerImpersonacao"
 import { useAuth } from "../context/AuthContext"
-import { getImpersonacao } from "../lib/impersonacao"
+import { getImpersonacao, getImpersonacaoOrigem, encerrarImpersonacao } from "../lib/impersonacao"
+import { setTokenCliente } from "../pages/clienteFinal/ClienteLoginPage"
 
 export default function AppLayout() {
   const { profissional } = useAuth()
   const impersonando = getImpersonacao() === "planejador"
+
+  // Ao voltar do painel de um cliente (o planejador abriu o painel real dele),
+  // limpamos SÓ o token do cliente e o flag — NUNCA o token do planejador
+  // (fluxo_token), que precisa continuar válido. Feito no mount daqui, só
+  // depois de já termos aterrissado em /clientes (mesmo padrão do NegocioLayout).
+  useEffect(() => {
+    if (getImpersonacao() === "cliente" && getImpersonacaoOrigem() === "planejador") {
+      encerrarImpersonacao()
+      setTokenCliente(null)
+    }
+  }, [])
   // Paywall: enquanto não tem plano ativo, o app fica visível mas as ações
   // estão travadas (o backend devolve 402). Banner fixo leva pra /assinatura.
   const semPlano = profissional && profissional.plano_ativo === false

@@ -24,7 +24,7 @@ export function useEntrarComo() {
       // volta pro /login.
       await entrarComToken(access_token)
       iniciarImpersonacao("planejador")
-      navigate("/dashboard")
+      navigate("/inicio")
     } finally {
       setCarregando(false)
     }

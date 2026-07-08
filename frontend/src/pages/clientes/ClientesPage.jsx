@@ -7,6 +7,9 @@ import Field, { Select } from "../../components/ui/Field"
 import Pill from "../../components/ui/Pill"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import { useAtualizarCliente, useClientes, useCriarCliente, useExcluirCliente } from "../../hooks/useClientes"
+import { abrirPainelCliente } from "../../api/clientes"
+import { setTokenCliente } from "../clienteFinal/ClienteLoginPage"
+import { iniciarImpersonacao } from "../../lib/impersonacao"
 import { formatarData, formatarMoeda, iniciais } from "../../lib/format"
 
 const CLIENTES_INCLUSOS = 4
@@ -117,6 +120,23 @@ export default function ClientesPage() {
   async function onExcluir(id) {
     if (!confirm("Excluir este cliente?")) return
     await excluir.mutateAsync({ id, dados: {} })
+  }
+
+  // Abre o painel REAL do cliente (não o mock): pega um token de cliente
+  // escopado (o backend só emite para clientes deste planejador) e entra na
+  // SPA do cliente, com banner "voltar aos meus clientes".
+  const [abrindoId, setAbrindoId] = useState(null)
+  async function onAbrirPainel(cliente) {
+    setAbrindoId(cliente.id)
+    try {
+      const { access_token } = await abrirPainelCliente(cliente.id)
+      setTokenCliente(access_token)
+      iniciarImpersonacao("cliente", "planejador")
+      navigate("/cliente/dashboard")
+    } catch (err) {
+      setErro(err.message)
+      setAbrindoId(null)
+    }
   }
 
   const total = clientes?.length ?? 0
@@ -235,7 +255,7 @@ export default function ClientesPage() {
             <tbody>
               {clientes?.map((c) => (
                 <Fragment key={c.id}>
-                  <Tr className="cursor-pointer hover:bg-panel" onClick={() => navigate(`/dashboard/${c.id}`)}>
+                  <Tr className="cursor-pointer hover:bg-panel" onClick={() => onAbrirPainel(c)}>
                     <Td>
                       <div className="flex items-center gap-2.5">
                         <div className="w-8 h-8 rounded-full bg-panel border border-line flex items-center justify-center text-[11px] font-mono">
@@ -271,9 +291,19 @@ export default function ClientesPage() {
                           e.stopPropagation()
                           onExcluir(c.id)
                         }}
-                        className="text-red text-[12px] hover:underline"
+                        className="text-red text-[12px] hover:underline mr-3"
                       >
                         Excluir
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          onAbrirPainel(c)
+                        }}
+                        disabled={abrindoId === c.id}
+                        className="text-accent text-[12px] hover:underline disabled:text-text-faint"
+                      >
+                        {abrindoId === c.id ? "Abrindo…" : "Abrir painel →"}
                       </button>
                     </Td>
                   </Tr>
