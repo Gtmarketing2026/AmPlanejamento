@@ -208,22 +208,16 @@ export default function PlanejadoresPage() {
                       <div className="text-text-faint text-[11.5px] font-mono">{p.email}</div>
                     </Td>
                     <Td>
-                      <div className="flex gap-1">
-                        {["ativa", "congelada", "cancelada"].map((s) => (
-                          <button
-                            key={s}
-                            disabled={p.status === s || atualizarStatus.isPending}
-                            onClick={() => atualizarStatus.mutate({ id: p.id, status: s })}
-                            className={`px-2 py-1 rounded text-[10.5px] font-mono border ${
-                              p.status === s
-                                ? "border-line text-text-faint opacity-40 cursor-default"
-                                : "border-line text-text-dim hover:text-text hover:border-text-faint"
-                            }`}
-                          >
-                            {s}
-                          </button>
-                        ))}
-                      </div>
+                      <select
+                        value={p.status}
+                        disabled={atualizarStatus.isPending}
+                        onChange={(e) => atualizarStatus.mutate({ id: p.id, status: e.target.value })}
+                        className="bg-panel border border-line rounded-[7px] px-2.5 py-1.5 text-[12px] text-text-dim outline-none focus:border-accent/60 disabled:opacity-50"
+                      >
+                        <option value="ativa">ativa</option>
+                        <option value="congelada">congelada</option>
+                        <option value="cancelada">cancelada</option>
+                      </select>
                     </Td>
                     <Td className="text-text-dim">{p.tipo_plano_atual || "—"}</Td>
                     <Td className="font-mono">{p.clientes_ativos}</Td>

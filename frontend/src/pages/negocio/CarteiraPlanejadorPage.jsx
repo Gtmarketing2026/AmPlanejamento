@@ -127,22 +127,16 @@ export default function CarteiraPlanejadorPage() {
                     <Td className="font-mono text-text-dim">{formatarData(c.data_cadastro)}</Td>
                     <Td className="font-mono text-text-dim">{formatarMoeda(c.valor_honorario_mensal)}</Td>
                     <Td>
-                      <div className="flex gap-1" onClick={(e) => e.stopPropagation()}>
-                        {["ativo", "excluido"].map((s) => (
-                          <button
-                            key={s}
-                            disabled={c.status === s || atualizarStatus.isPending}
-                            onClick={() => atualizarStatus.mutate({ id: c.id, status: s })}
-                            className={`px-2 py-1 rounded text-[10.5px] font-mono border ${
-                              c.status === s
-                                ? "border-line text-text-faint opacity-40 cursor-default"
-                                : "border-line text-text-dim hover:text-text hover:border-text-faint"
-                            }`}
-                          >
-                            {s}
-                          </button>
-                        ))}
-                      </div>
+                      <select
+                        value={c.status}
+                        disabled={atualizarStatus.isPending}
+                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e) => atualizarStatus.mutate({ id: c.id, status: e.target.value })}
+                        className="bg-panel border border-line rounded-[7px] px-2.5 py-1.5 text-[12px] text-text-dim outline-none focus:border-accent/60 disabled:opacity-50"
+                      >
+                        <option value="ativo">ativo</option>
+                        <option value="excluido">excluido</option>
+                      </select>
                     </Td>
                     <Td className="text-right whitespace-nowrap">
                       <button onClick={(e) => onEditar(e, c)} className="text-blue text-[12px] hover:underline mr-3">
