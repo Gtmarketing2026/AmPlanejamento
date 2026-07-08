@@ -25,6 +25,7 @@ from app.schemas.cliente import LoginRequest, TokenResponse
 from app.schemas.negocio import (
     AdminAtualizar,
     AdminPerfilResposta,
+    CapacidadeItem,
     ClienteDoPlanejadorResposta,
     CredenciaisClienteAtualizar,
     CredenciaisClienteResposta,
@@ -103,8 +104,131 @@ def atualizar_perfil_admin(
 
 @router.get("/metricas", response_model=MetricasNegocioResposta)
 def metricas_negocio(db: Session = Depends(get_db_negocio)):
-    linha = db.execute(text("SELECT * FROM vw_metricas_negocio")).mappings().first()
-    return dict(linha)
+    dados = dict(db.execute(text("SELECT * FROM vw_metricas_negocio")).mappings().first())
+
+    # Churn / retenção — calculados fora da view (evita migração da view em
+    # produção; a view segue só com os KPIs originais).
+    extra = db.execute(
+        text("""
+            SELECT
+              (SELECT COUNT(*) FROM profissionais WHERE status = 'congelada') AS planejadores_congelados,
+              (SELECT COUNT(*) FROM profissionais WHERE status = 'cancelada') AS planejadores_cancelados,
+              (SELECT COUNT(*) FROM profissionais) AS planejadores_total,
+              (SELECT COUNT(*) FROM clientes WHERE status = 'excluido') AS clientes_excluidos_total,
+              (SELECT COALESCE(ROUND(SUM(valor_base + valor_extras), 2), 0)
+                 FROM faturas WHERE status = 'paga') AS receita_acumulada,
+              -- Vida média em meses: ativos contam até hoje; cancelados até o
+              -- cancelamento (fallback: última atividade). ~30.44 dias/mês.
+              (SELECT ROUND(AVG(meses)::numeric, 1) FROM (
+                  SELECT EXTRACT(EPOCH FROM (
+                            CASE WHEN p.status = 'cancelada'
+                                 THEN COALESCE(a.data_cancelamento::timestamp, now())
+                                 ELSE now() END
+                            - p.criado_em
+                         )) / (30.44 * 86400) AS meses
+                  FROM profissionais p
+                  LEFT JOIN LATERAL (
+                      SELECT data_cancelamento FROM assinaturas
+                      WHERE profissional_id = p.id ORDER BY criado_em DESC LIMIT 1
+                  ) a ON true
+              ) t) AS tempo_medio_assinatura_meses
+        """)
+    ).mappings().first()
+    dados.update(dict(extra))
+
+    total = dados.pop("planejadores_total", 0) or 0
+    cancelados = dados.get("planejadores_cancelados", 0) or 0
+    dados["churn_pct"] = round(cancelados / total * 100, 1) if total else None
+
+    ticket = float(dados.get("ticket_medio") or 0)
+    tempo = float(dados.get("tempo_medio_assinatura_meses") or 0)
+    dados["ltv"] = round(ticket * tempo, 2) if ticket and tempo else None
+
+    return dados
+
+
+@router.get("/capacidade", response_model=list[CapacidadeItem])
+def capacidade_e_limites(db: Session = Depends(get_db_negocio)):
+    """Limites dos serviços externos que podem travar o sistema ao crescer.
+    Onde dá, medimos o uso atual; onde não, marcamos como referência (info).
+    Os limites são do tier de entrada de cada serviço -- se o plano pago for
+    contratado, o teto sobe (a observação diz qual)."""
+    # --- Medições reais ---
+    google_conectados = db.scalar(text("SELECT COUNT(*) FROM credenciais_google")) or 0
+    planejadores_total = db.scalar(text("SELECT COUNT(*) FROM profissionais")) or 0
+    clientes_total = db.scalar(text("SELECT COUNT(*) FROM clientes")) or 0
+    contas_of = db.scalar(
+        text("SELECT COUNT(*) FROM contas_conectadas WHERE modo = 'open_finance'")
+    ) or 0
+    db_bytes = db.scalar(text("SELECT pg_database_size(current_database())")) or 0
+    db_mb = round(db_bytes / (1024 * 1024), 1)
+
+    def nivel(uso, limite, at=0.7, crit=0.9):
+        if not limite:
+            return "info"
+        r = uso / limite
+        return "critico" if r >= crit else "atencao" if r >= at else "ok"
+
+    itens = [
+        CapacidadeItem(
+            servico="Google Agenda (OAuth)",
+            recurso="Usuários no app em modo Teste",
+            uso_atual=float(google_conectados),
+            limite=100,
+            unidade="planejadores conectados",
+            nivel=nivel(google_conectados, 100),
+            observacao=(
+                "O app OAuth está em modo Teste: no máximo 100 usuários podem conectar o Google Agenda. "
+                "Pra ir além, publicar/verificar o app no Google Cloud (processo de verificação)."
+            ),
+        ),
+        CapacidadeItem(
+            servico="Supabase (banco Postgres)",
+            recurso="Tamanho do banco de dados",
+            uso_atual=db_mb,
+            limite=500,
+            unidade="MB",
+            nivel=nivel(db_mb, 500),
+            observacao="Limite do plano Free (500 MB). No plano Pro sobe pra 8 GB. Também pausa o projeto após 1 semana sem uso no Free.",
+        ),
+        CapacidadeItem(
+            servico="Supabase",
+            recurso="Conexões conectadas via Open Finance",
+            uso_atual=float(contas_of),
+            limite=None,
+            unidade="contas",
+            nivel="info",
+            observacao="Depende do plano da Pluggy quando o Open Finance for ativado (hoje a importação é por arquivo).",
+        ),
+        CapacidadeItem(
+            servico="Vercel (hospedagem)",
+            recurso="Plano / uso comercial",
+            uso_atual=None,
+            limite=None,
+            unidade="",
+            nivel="info",
+            observacao="Plano Hobby é só p/ uso não-comercial e tem 100 GB de banda/mês + limite de execução das funções. Uso comercial exige o plano Pro.",
+        ),
+        CapacidadeItem(
+            servico="OpenAI (classificação por IA)",
+            recurso="Requisições por minuto / custo por token",
+            uso_atual=None,
+            limite=None,
+            unidade="",
+            nivel="info",
+            observacao="Tem limite de requisições/minuto por tier e custo por token — escala com o volume de importações. Monitorar custo conforme cresce.",
+        ),
+        CapacidadeItem(
+            servico="Plataforma",
+            recurso="Planejadores cadastrados",
+            uso_atual=float(planejadores_total),
+            limite=None,
+            unidade="planejadores",
+            nivel="info",
+            observacao=f"{planejadores_total} planejadores e {clientes_total} clientes finais hoje. Sem limite fixo no sistema — o gargalo aparece antes nos serviços acima.",
+        ),
+    ]
+    return itens
 
 
 @router.get("/planejadores", response_model=list[PlanejadorResposta])

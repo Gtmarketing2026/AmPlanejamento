@@ -12,6 +12,26 @@ class MetricasNegocioResposta(BaseModel):
     ticket_medio: float | None
     receita_mes_atual: float
     despesa_mes_atual: float
+    # Churn / retenção (novos)
+    planejadores_congelados: int = 0
+    planejadores_cancelados: int = 0
+    clientes_excluidos_total: int = 0
+    churn_pct: float | None = None  # % de planejadores cancelados sobre o total já cadastrado
+    tempo_medio_assinatura_meses: float | None = None  # vida média (ativos: até hoje; cancelados: até o cancelamento)
+    ltv: float | None = None  # ticket médio × tempo médio de assinatura
+    receita_acumulada: float = 0  # todas as faturas pagas, desde sempre
+
+
+class CapacidadeItem(BaseModel):
+    """Um limite de serviço externo que pode travar o sistema ao crescer."""
+
+    servico: str
+    recurso: str
+    uso_atual: float | None  # None quando não é medível automaticamente
+    limite: float | None
+    unidade: str
+    nivel: str  # ok | atencao | critico | info
+    observacao: str
 
 
 class PlanejadorResposta(BaseModel):

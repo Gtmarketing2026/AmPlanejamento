@@ -35,6 +35,8 @@ export const buscarMetricasNegocio = () => comToken(apiGet("/negocio/metricas", 
 
 export const listarPlanejadores = () => comToken(apiGet("/negocio/planejadores", auth()))
 
+export const buscarCapacidade = () => comToken(apiGet("/negocio/capacidade", auth()))
+
 export const listarClientesDoPlanejador = (id) =>
   comToken(apiGet(`/negocio/planejadores/${id}/clientes`, auth()))
 

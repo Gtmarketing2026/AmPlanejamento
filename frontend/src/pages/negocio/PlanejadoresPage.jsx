@@ -26,6 +26,9 @@ export default function PlanejadoresPage() {
   const [editandoId, setEditandoId] = useState(null)
   const [form, setForm] = useState({ email: "", senha: "" })
   const [trialInputs, setTrialInputs] = useState({})
+  const [filtroStatus, setFiltroStatus] = useState("todos") // todos|ativa|congelada|cancelada|trial
+  const [filtroPlano, setFiltroPlano] = useState("todos") // todos|essencial|completo|sem
+  const [busca, setBusca] = useState("")
 
   const atualizarCredenciais = useMutation({
     mutationFn: ({ id, dados }) => atualizarCredenciaisPlanejador(id, dados),
@@ -66,12 +69,75 @@ export default function PlanejadoresPage() {
     trial.mutate({ id, trial_ate: data })
   }
 
+  const listaFiltrada = (planejadores || []).filter((p) => {
+    if (filtroStatus === "trial" && !p.em_trial) return false
+    if (["ativa", "congelada", "cancelada"].includes(filtroStatus) && p.status !== filtroStatus) return false
+    if (filtroPlano === "sem" && p.tipo_plano_atual) return false
+    if (["essencial", "completo"].includes(filtroPlano) && p.tipo_plano_atual !== filtroPlano) return false
+    if (busca) {
+      const q = busca.toLowerCase()
+      if (!p.nome.toLowerCase().includes(q) && !p.email.toLowerCase().includes(q)) return false
+    }
+    return true
+  })
+
+  const contagem = (planejadores || []).reduce((acc, p) => {
+    acc[p.status] = (acc[p.status] || 0) + 1
+    return acc
+  }, {})
+
+  const OPCOES_STATUS = [
+    { v: "todos", label: `Todos (${planejadores?.length || 0})` },
+    { v: "ativa", label: `Ativos (${contagem.ativa || 0})` },
+    { v: "trial", label: "Em teste" },
+    { v: "congelada", label: `Congelados (${contagem.congelada || 0})` },
+    { v: "cancelada", label: `Cancelados (${contagem.cancelada || 0})` },
+  ]
+  const OPCOES_PLANO = [
+    { v: "todos", label: "Todos os planos" },
+    { v: "essencial", label: "Essencial" },
+    { v: "completo", label: "Completo" },
+    { v: "sem", label: "Sem plano" },
+  ]
+
   return (
     <Stage
       eyebrow="Nível Negócio · Admin"
       title="Planejadores"
       description="Todos os profissionais da plataforma — ativar, congelar, cancelar acesso, conceder período de teste. 'Entrar como' abre o app de verdade dele, sem precisar da senha."
     >
+      {!isLoading && !error && (
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
+          <div className="flex gap-1 bg-panel border border-line rounded-[9px] p-1 flex-wrap">
+            {OPCOES_STATUS.map((o) => (
+              <button
+                key={o.v}
+                onClick={() => setFiltroStatus(o.v)}
+                className={`px-2.5 py-1 rounded-[6px] text-[11.5px] font-medium ${
+                  filtroStatus === o.v ? "bg-accent text-[#062019]" : "text-text-dim hover:text-text"
+                }`}
+              >
+                {o.label}
+              </button>
+            ))}
+          </div>
+          <select
+            value={filtroPlano}
+            onChange={(e) => setFiltroPlano(e.target.value)}
+            className="bg-panel border border-line rounded-[9px] px-3 py-1.5 text-[12px] text-text-dim outline-none"
+          >
+            {OPCOES_PLANO.map((o) => (
+              <option key={o.v} value={o.v}>{o.label}</option>
+            ))}
+          </select>
+          <input
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar nome ou e-mail…"
+            className="bg-panel border border-line rounded-[9px] px-3 py-1.5 text-[12px] text-text outline-none focus:border-accent/60 flex-1 min-w-[180px]"
+          />
+        </div>
+      )}
       <Card>
         {isLoading && <p className="text-text-faint text-sm">Carregando…</p>}
         {error && <p className="text-red text-sm">Não foi possível carregar os planejadores.</p>}
@@ -87,7 +153,7 @@ export default function PlanejadoresPage() {
               <Th>Ações</Th>
             </Thead>
             <tbody>
-              {planejadores?.map((p) => (
+              {listaFiltrada.map((p) => (
                 <Fragment key={p.id}>
                   <Tr>
                     <Td>
@@ -203,10 +269,10 @@ export default function PlanejadoresPage() {
                   )}
                 </Fragment>
               ))}
-              {!planejadores?.length && (
+              {!listaFiltrada.length && (
                 <Tr>
                   <Td colSpan={7} className="text-text-faint text-center py-6">
-                    Nenhum planejador cadastrado ainda.
+                    {planejadores?.length ? "Nenhum planejador com esse filtro." : "Nenhum planejador cadastrado ainda."}
                   </Td>
                 </Tr>
               )}
