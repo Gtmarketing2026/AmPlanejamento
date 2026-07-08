@@ -11,7 +11,7 @@ import uuid
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_cliente_id_atual, get_db_admin
@@ -487,6 +487,27 @@ def obter_resumo_patrimonial(
 # ============================================================================
 
 
+# Classificação de cor da saúde financeira. Regras determinísticas e
+# transparentes (o cliente vê um disclaimer de como é calculado). Combina
+# reserva de emergência (meses de gasto cobertos) + taxa de poupança do mês.
+# Ver defaults documentados no disclaimer do SaudeFinanceiraCard (frontend).
+def _classificar_saude(tem_dados, entradas_mes, despesas_mes, reserva_meses, taxa_poupanca_pct):
+    if not tem_dados:
+        return "neutro"
+    # Gastando mais do que ganha, ou reserva cobre menos de 3 meses -> vermelho.
+    if entradas_mes > 0 and despesas_mes > entradas_mes:
+        return "vermelho"
+    rm = reserva_meses if reserva_meses is not None else 0
+    poup = taxa_poupanca_pct if taxa_poupanca_pct is not None else 0
+    if rm < 3:
+        return "vermelho"
+    if poup >= 30 and rm >= 12:
+        return "azul"  # excelente / rumo à independência
+    if poup >= 15 and rm >= 6:
+        return "verde"  # saudável
+    return "amarelo"  # regular / dá pra melhorar
+
+
 @router.get("/saude-financeira", response_model=SaudeFinanceiraResposta)
 def obter_saude_financeira(
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)
@@ -580,10 +601,37 @@ def obter_saude_financeira(
                 )
             )
 
+    # Reserva de emergência = saldo de caixa disponível (todas as entradas -
+    # saídas reais, sem previstos/neutras). Quantos meses de gasto ela cobre.
+    saldo_caixa = float(
+        db.scalar(
+            select(
+                func.coalesce(
+                    func.sum(
+                        case(
+                            (Transacao.tipo == "entrada", func.abs(Transacao.valor)),
+                            else_=-func.abs(Transacao.valor),
+                        )
+                    ),
+                    0,
+                )
+            ).where(Transacao.cliente_id == cliente_id, *_condicoes_fluxo_real())
+        )
+        or 0
+    )
+    reserva_meses = round(max(0.0, saldo_caixa) / despesas_mes, 1) if despesas_mes > 0 else None
+    taxa_poupanca_pct = (
+        round((entradas_mes - despesas_mes) / entradas_mes * 100, 1) if entradas_mes > 0 else None
+    )
+    classificacao = _classificar_saude(tem_dados, entradas_mes, despesas_mes, reserva_meses, taxa_poupanca_pct)
+
     cliente = db.get(Cliente, cliente_id)
     profissional = db.get(Profissional, cliente.profissional_id) if cliente else None
 
     return SaudeFinanceiraResposta(
+        classificacao=classificacao,
+        reserva_meses=reserva_meses,
+        taxa_poupanca_pct=taxa_poupanca_pct,
         tem_dados=tem_dados,
         score=score,
         receitas_mes=entradas_mes,

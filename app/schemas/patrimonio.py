@@ -292,6 +292,9 @@ class MensagemSaudeFinanceira(BaseModel):
 class SaudeFinanceiraResposta(BaseModel):
     tem_dados: bool
     score: int  # 0-100, usado pra posicionar o ponteiro do termômetro
+    classificacao: str = "neutro"  # vermelho | amarelo | verde | azul | neutro
+    reserva_meses: float | None = None  # quantos meses de gasto a reserva de caixa cobre
+    taxa_poupanca_pct: float | None = None  # (entradas - despesas) / entradas do mês
     receitas_mes: float
     despesas_mes: float
     gasto_acima_renda_pct: float | None  # None se não está gastando mais do que ganha

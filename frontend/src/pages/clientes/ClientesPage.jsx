@@ -312,7 +312,7 @@ export default function ClientesPage() {
                     </div>
                   </Td>
                   <Td colSpan={2} className="text-text-faint">
-                    {CLIENTES_INCLUSOS}ª vaga incluída no plano base — livre
+                    {total + i + 1}ª vaga incluída no plano base — livre
                   </Td>
                   <Td></Td>
                 </Tr>

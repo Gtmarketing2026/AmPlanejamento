@@ -5,7 +5,7 @@ import KpiStat from "../../../components/ui/KpiStat"
 import Button from "../../../components/ui/Button"
 import DonutMultiChart from "../../../components/ui/DonutMultiChart"
 import { minhasCategorias, minhasTransacoes } from "../../../api/clientes"
-import { formatarMoeda } from "../../../lib/format"
+import { formatarData, formatarMoeda } from "../../../lib/format"
 import { exportarCsv, exportarPdfViaImpressao } from "../../../lib/exportar"
 
 const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
@@ -101,6 +101,12 @@ export default function FluxoTab({ token, contexto = "PF" }) {
     if (resto.length) top.push({ label: "Outros", valor: resto.reduce((s, x) => s + x.valor, 0) })
     return top.map((f, i) => ({ ...f, cor: CORES_CATEGORIA[i % CORES_CATEGORIA.length] }))
   }, [doPeriodo, nomePorCategoria])
+
+  // Lançamentos mais recentes do período (últimas conciliações).
+  const ultimasConciliacoes = useMemo(
+    () => [...doPeriodo].sort((a, b) => (a.data < b.data ? 1 : -1)).slice(0, 6),
+    [doPeriodo]
+  )
 
   const rotuloPeriodo = mesSelecionado === null ? `${ano}` : `${MESES[mesSelecionado]}/${ano}`
 
@@ -224,23 +230,69 @@ export default function FluxoTab({ token, contexto = "PF" }) {
         )}
       </Card>
 
-      {/* Gasto por categoria (donut) */}
+      {/* Gasto por categoria: donut + barras lado a lado */}
       <Card>
         <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-4">
           Gasto por categoria · {rotuloPeriodo}
         </div>
         {fatias.length ? (
-          <DonutMultiChart
-            fatias={fatias}
-            centroLabel="Despesas"
-            centroValor={formatarMoeda(despesas)}
-          />
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] gap-6 items-center max-md:grid-cols-1">
+            <DonutMultiChart fatias={fatias} centroLabel="Despesas" centroValor={formatarMoeda(despesas)} />
+            <div className="flex flex-col gap-2.5">
+              {fatias.map((c) => {
+                const maxV = Math.max(...fatias.map((f) => f.valor), 1)
+                return (
+                  <div key={c.label} className="flex items-center gap-3">
+                    <span className="w-24 shrink-0 text-[12px] text-text-dim truncate" title={c.label}>
+                      {c.label}
+                    </span>
+                    <div className="flex-1 h-2 rounded-full bg-bg overflow-hidden">
+                      <div
+                        className="h-full rounded-full"
+                        style={{ width: `${(c.valor / maxV) * 100}%`, background: c.cor }}
+                      />
+                    </div>
+                    <span className="w-20 shrink-0 text-right text-[12px] font-mono text-text">
+                      {formatarMoeda(c.valor)}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         ) : (
           <p className="text-text-faint text-sm">
             Sem gastos nesse período — importe um extrato ou adicione lançamentos.
           </p>
         )}
       </Card>
+
+      {/* Últimas conciliações (lançamentos mais recentes do período) */}
+      {ultimasConciliacoes.length > 0 && (
+        <Card>
+          <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
+            Últimas conciliações
+          </div>
+          {ultimasConciliacoes.map((t) => (
+            <div
+              key={t.id}
+              className="flex items-center justify-between py-2 border-b border-line last:border-0"
+            >
+              <div className="flex items-center gap-2.5 text-[12.5px] text-text-dim min-w-0">
+                <span
+                  className={`w-2 h-2 rounded-sm shrink-0 ${t.tipo === "entrada" ? "bg-accent" : "bg-red"}`}
+                />
+                <span className="truncate">{t.descricao}</span>
+                <span className="text-text-faint text-[11px] font-mono shrink-0">{formatarData(t.data)}</span>
+              </div>
+              <span className={`font-mono text-[12.5px] shrink-0 ${t.tipo === "entrada" ? "text-accent" : "text-text"}`}>
+                {t.tipo === "entrada" ? "+ " : "- "}
+                {formatarMoeda(Math.abs(Number(t.valor)))}
+              </span>
+            </div>
+          ))}
+        </Card>
+      )}
     </div>
   )
 }
