@@ -59,7 +59,7 @@ export default function FinanceiroPlataformaPage() {
     <Stage
       eyebrow="Nível Negócio · Admin"
       title="Financeiro da plataforma"
-      description="Cobrança recebida dos planejadores (via Asaas) e custos de operar o próprio negócio Fluxo."
+      description="Cobrança recebida dos planejadores (via Asaas) e custos de operar o próprio negócio AMplanejador."
     >
       <div className="grid grid-cols-[1.2fr_1fr] gap-5">
         <Card>

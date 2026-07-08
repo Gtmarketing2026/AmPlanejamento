@@ -48,7 +48,7 @@ export default function InicioPage() {
               Trial — {restam} {restam === 1 ? "dia" : "dias"}
             </Pill>
             <span className="text-text-dim text-[13px]">
-              Você está testando o Fluxo. Escolha um plano quando quiser continuar sem interrupção.
+              Você está testando o AMplanejador. Escolha um plano quando quiser continuar sem interrupção.
             </span>
           </div>
           <Link
@@ -80,7 +80,7 @@ export default function InicioPage() {
           <div className="font-medium text-[13.5px]">Comunidade no WhatsApp</div>
         </div>
         <p className="text-text-dim text-[12.5px] mb-3">
-          Conecte-se com outros planejadores, troque experiências e receba avisos da equipe Fluxo.
+          Conecte-se com outros planejadores, troque experiências e receba avisos da equipe AMplanejador.
         </p>
         <span className="inline-block px-3 py-1.5 rounded-[7px] bg-panel-2 border border-line text-text-faint text-[12px]">
           Link da comunidade em breve

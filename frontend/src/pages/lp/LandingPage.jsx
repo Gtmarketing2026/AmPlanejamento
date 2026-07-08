@@ -8,26 +8,13 @@ import KpiStat from "../../components/ui/KpiStat"
 import BarRow from "../../components/ui/BarRow"
 import DonutMultiChart from "../../components/ui/DonutMultiChart"
 import Termometro from "../../components/ui/Termometro"
+import Logo from "../../components/ui/Logo"
 import { catalogoPlanos } from "../../api/assinatura"
 import { formatarMoeda } from "../../lib/format"
 
 // Todos os números aqui são FICTÍCIOS (cliente demo "Marina Costa") -- servem
 // só pra mostrar como as telas ficam preenchidas de verdade, não são dados
 // reais de nenhum cliente.
-
-function Logo({ tamanho = 26 }) {
-  return (
-    <div className="flex items-center gap-2.5">
-      <div
-        className="rounded-[7px] bg-gradient-to-br from-accent to-blue relative shrink-0"
-        style={{ width: tamanho, height: tamanho }}
-      >
-        <div className="absolute rounded-[3px] bg-bg" style={{ inset: tamanho * 0.27 }} />
-      </div>
-      <div className="text-[15px] font-semibold">Fluxo</div>
-    </div>
-  )
-}
 
 function JanelaApp({ titulo, children }) {
   return (
@@ -528,13 +515,13 @@ export default function LandingPage() {
       {/* Footer */}
       <footer className="border-t border-line">
         <div className="max-w-[1180px] mx-auto px-6 py-8 flex items-center justify-between flex-wrap gap-4">
-          <Logo tamanho={20} />
+          <Logo size={20} />
           <div className="flex items-center gap-5 text-text-faint text-[12px]">
             <a href="#recursos" className="hover:text-text-dim">Recursos</a>
             <a href="#planos" className="hover:text-text-dim">Planos</a>
             <Link to="/login" className="hover:text-text-dim">Entrar</Link>
           </div>
-          <div className="text-text-faint text-[11.5px]">© {new Date().getFullYear()} Fluxo · Planejamento Financeiro</div>
+          <div className="text-text-faint text-[11.5px]">© {new Date().getFullYear()} AMplanejador · Planejamento Financeiro</div>
         </div>
       </footer>
     </div>

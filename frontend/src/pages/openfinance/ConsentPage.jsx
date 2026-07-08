@@ -14,7 +14,7 @@ export default function ConsentPage() {
     <Stage
       eyebrow="Etapa 03"
       title="Cliente final autoriza o Open Finance"
-      description="Fluxo mobile, sem intermediário do profissional — regulado pelo Banco Central. Prévia de como o cliente final vê essa tela (dado ilustrativo, ainda não conectado ao backend)."
+      description="Tela mobile, sem intermediário do profissional — regulado pelo Banco Central. Prévia de como o cliente final vê essa tela (dado ilustrativo, ainda não conectado ao backend)."
     >
       <div className="relative">
         {bloqueado && (
@@ -27,7 +27,7 @@ export default function ConsentPage() {
             <p className="text-text-dim text-[12.5px] mb-1">
               {m.planejadorNome} (sua planejadora) vai acompanhar seus dados financeiros.
             </p>
-            <p className="text-text-faint text-[11px] font-mono mb-5">app.{m.subdominio}.fluxo.com.br</p>
+            <p className="text-text-faint text-[11px] font-mono mb-5">app.{m.subdominio}.amplanejador.com.br</p>
 
             <Card className="mb-3 text-left">
               <div className="font-medium text-[13px] mb-1">Banco selecionado</div>
@@ -38,7 +38,7 @@ export default function ConsentPage() {
 
             <Card accent className="mb-3 text-left">
               <div className="text-[13px] mb-1">🔒 Só leitura, nunca movimentação</div>
-              <p className="text-text-dim text-[12px]">Fluxo apenas lê seus dados — nunca faz transações.</p>
+              <p className="text-text-dim text-[12px]">O AMplanejador apenas lê seus dados — nunca faz transações.</p>
             </Card>
 
             <Card className="mb-4 text-left">

@@ -17,7 +17,7 @@ export default function OnboardingPage() {
   const navigate = useNavigate()
 
   return (
-    <Stage eyebrow="Fluxo completo" title="Onboarding do profissional" description="Do cadastro até o primeiro cliente conectado — em etapas.">
+    <Stage eyebrow="Passo a passo" title="Onboarding do profissional" description="Do cadastro até o primeiro cliente conectado — em etapas.">
       <div className="flex gap-1 mb-2 max-w-lg">
         {PASSOS.map((p) => (
           <div

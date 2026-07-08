@@ -19,7 +19,7 @@ export default function AppLayout() {
         <div className="bg-amber/10 border-b border-amber/30 px-8 py-2.5 flex items-center justify-between flex-wrap gap-2">
           <span className="text-amber text-[12.5px]">
             ⚠️ Sua conta ainda não tem um plano ativo — você pode navegar, mas cadastrar clientes e usar o
-            Fluxo só depois de escolher e pagar um plano.
+            AMplanejador só depois de escolher e pagar um plano.
           </span>
           <Link
             to="/assinatura"

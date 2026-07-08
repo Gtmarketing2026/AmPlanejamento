@@ -1,5 +1,6 @@
 import { NavLink } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
+import Logo from "../ui/Logo"
 
 const tabClass = ({ isActive }) =>
   `px-3.5 py-2 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
@@ -12,15 +13,7 @@ export default function Topbar() {
 
   return (
     <div className="sticky top-0 z-40 bg-bg/92 backdrop-blur border-b border-line px-8 py-[18px] flex items-center justify-between flex-wrap gap-3.5">
-      <div className="flex items-center gap-2.5">
-        <div className="w-[26px] h-[26px] rounded-[7px] bg-gradient-to-br from-accent to-blue relative">
-          <div className="absolute inset-[7px] rounded-[3px] bg-bg" />
-        </div>
-        <div>
-          <div className="text-[15px] font-semibold -tracking-wide">Fluxo</div>
-          <div className="text-[11px] text-text-faint font-mono">{profissional?.subdominio}.fluxo.com.br</div>
-        </div>
-      </div>
+      <Logo sub={profissional?.subdominio ? `${profissional.subdominio}.amplanejador.com.br` : null} />
 
       <div className="flex items-center gap-1 bg-panel border border-line rounded-[10px] p-1 flex-wrap">
         <NavLink to="/inicio" className={tabClass}>Início</NavLink>

@@ -19,7 +19,7 @@ from app.api.routes import (
 )
 from app.core.config import settings
 
-app = FastAPI(title="Fluxo API", version="0.1.0")
+app = FastAPI(title="AMplanejador API", version="0.1.0")
 
 _origins_liberadas = ["http://localhost:5173"]
 if settings.FRONTEND_URL:

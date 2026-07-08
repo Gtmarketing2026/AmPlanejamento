@@ -6,6 +6,7 @@ import { getTokenAdmin, setTokenAdmin } from "../api/negocio"
 import { setToken } from "../api/client"
 import { setTokenCliente } from "../pages/clienteFinal/ClienteLoginPage"
 import { getImpersonacao, encerrarImpersonacao } from "../lib/impersonacao"
+import Logo from "../components/ui/Logo"
 
 const NAV = [
   { to: "/negocio", label: "Painel do Negócio", end: true },
@@ -55,15 +56,7 @@ export default function NegocioLayout() {
       <div className="min-h-screen bg-bg text-text">
         <div className="sticky top-0 z-40 bg-bg/92 backdrop-blur border-b border-line">
           <div className="max-w-[1360px] mx-auto px-8 py-3 flex items-center gap-4">
-            <div className="flex items-center gap-2.5">
-              <div className="w-[26px] h-[26px] rounded-[7px] bg-gradient-to-br from-accent to-blue relative">
-                <div className="absolute inset-[7px] rounded-[3px] bg-bg" />
-              </div>
-              <div>
-                <div className="text-[14px] font-semibold leading-none">Fluxo</div>
-                <div className="text-[10px] text-text-faint font-mono mt-0.5">nível Negócio · admin</div>
-              </div>
-            </div>
+            <Logo sub="nível Negócio · admin" />
             <nav className="flex items-center gap-1 ml-4">
               {NAV.map((n) => (
                 <NavLink key={n.to} to={n.to} end={n.end} className={linkClasse}>
