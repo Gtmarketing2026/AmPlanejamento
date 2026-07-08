@@ -254,6 +254,56 @@ function TelaCrm() {
   )
 }
 
+function TelaPlanoAcao() {
+  // Mapa visual "onde estou → onde quero chegar" do CRM (roadmap do cliente).
+  const etapas = [
+    { titulo: "Montar reserva de 6 meses", prazo: "3 meses", status: "concluida" },
+    { titulo: "Investir 20% da renda todo mês", prazo: "em andamento", status: "em_andamento" },
+    { titulo: "Quitar financiamento do carro", prazo: "12 meses", status: "a_fazer" },
+  ]
+  const COR = { concluida: "#26D9A8", em_andamento: "#F0A63C", a_fazer: "#5A6570" }
+  return (
+    <JanelaApp titulo="Plano de ação · CRM do planejador">
+      <div className="flex items-center justify-between mb-3">
+        <div className="text-[10.5px] text-text-faint uppercase tracking-wide font-mono">
+          Marina Costa · caminho do planejamento
+        </div>
+        <span className="text-accent text-[11px] font-mono">33% concluído</span>
+      </div>
+      <div className="h-1.5 rounded-full bg-panel-2 overflow-hidden mb-4">
+        <div className="h-full rounded-full bg-accent" style={{ width: "33%" }} />
+      </div>
+      <div className="flex flex-col gap-0">
+        <div className="flex items-center gap-2.5 mb-1">
+          <span className="text-[15px]">📍</span>
+          <div className="text-[12.5px]">
+            <span className="text-text-faint">Onde estou: </span>
+            <span className="text-text">gastando quase toda a renda, sem reserva</span>
+          </div>
+        </div>
+        {etapas.map((e) => (
+          <div key={e.titulo} className="flex items-center gap-2.5 pl-[6px] border-l-2 border-line ml-[7px] py-2">
+            <span className="w-3 h-3 rounded-full shrink-0 -ml-[13px]" style={{ background: COR[e.status] }} />
+            <div className="flex items-center justify-between flex-1">
+              <span className={`text-[12.5px] ${e.status === "concluida" ? "text-text-faint line-through" : "text-text"}`}>
+                {e.titulo}
+              </span>
+              <span className="text-text-faint text-[10.5px] font-mono">{e.prazo}</span>
+            </div>
+          </div>
+        ))}
+        <div className="flex items-center gap-2.5 mt-1">
+          <span className="text-[15px]">🎯</span>
+          <div className="text-[12.5px]">
+            <span className="text-text-faint">Onde quero chegar: </span>
+            <span className="text-accent font-medium">aposentadoria antecipada aos 50</span>
+          </div>
+        </div>
+      </div>
+    </JanelaApp>
+  )
+}
+
 const TELAS_CARROSSEL = [
   { key: "fluxo", label: "Fluxo de caixa", render: TelaFluxoCaixa },
   { key: "planejamento", label: "Planejamento", render: TelaPlanejamento },
@@ -262,6 +312,7 @@ const TELAS_CARROSSEL = [
   { key: "patrimonio", label: "Patrimônio", render: TelaPatrimonio },
   { key: "lancamentos", label: "Lançamentos", render: TelaLancamentos },
   { key: "crm", label: "CRM do planejador", render: TelaCrm },
+  { key: "plano-acao", label: "Plano de ação (CRM)", render: TelaPlanoAcao },
 ]
 
 function CarrosselTelas() {
@@ -313,6 +364,12 @@ const DESTAQUES = [
     texto:
       "Configure a data de fechamento do cartão pra que cada compra conte no mês em que será paga, não no mês em que foi feita — mapeando o gasto real do mês. É opcional e editável: a data da compra continua visível, só muda em qual mês ela é somada.",
   },
+  {
+    icone: "🗺️",
+    titulo: "Plano de ação visual pra cada cliente",
+    texto:
+      "Monte no CRM o caminho de “onde estou → onde quero chegar”: etapas com prazo e status, quiz de perfil comportamental e histórico do cliente — com uma barra de progresso que mostra o quanto ele já avançou. Vira uma conversa clara sobre o planejamento.",
+  },
 ]
 
 const RECURSOS = [
@@ -326,7 +383,7 @@ const RECURSOS = [
   { icone: "🛡️", titulo: "Proteção", texto: "Cobertura de seguro de vida atual vs. recomendada, com apólices cadastradas." },
   { icone: "💳", titulo: "Contas e cartões", texto: "Saldo atualizado automaticamente pelos lançamentos, com virada de fatura configurável." },
   { icone: "🏷️", titulo: "Categorias sob medida", texto: "Categorias padrão prontas, mais as que você e cada cliente quiserem criar." },
-  { icone: "🤝", titulo: "CRM com Google Agenda", texto: "Timeline de cada cliente, follow-ups sincronizados com o Google Agenda e checklist de tarefas." },
+  { icone: "🤝", titulo: "CRM com plano de ação e Google Agenda", texto: "Perfil comportamental, histórico, roadmap “onde estou → onde quero chegar”, follow-ups sincronizados com o Google Agenda e checklist de tarefas." },
   { icone: "🎨", titulo: "Sua marca (white label)", texto: "Subdomínio, cor e logo próprios — seu cliente vê o painel com a cara do seu escritório." },
 ]
 
@@ -451,7 +508,7 @@ export default function LandingPage() {
           <div className="text-accent text-[11px] uppercase tracking-wide font-mono mb-2">O que faz diferença</div>
           <h2 className="font-display text-[28px] font-bold">Menos trabalho manual, mais planejamento</h2>
         </div>
-        <div className="grid md:grid-cols-3 gap-5">
+        <div className="grid md:grid-cols-2 gap-5">
           {DESTAQUES.map((d) => (
             <Card key={d.titulo} className="p-6">
               <div className="text-[26px] mb-3">{d.icone}</div>
