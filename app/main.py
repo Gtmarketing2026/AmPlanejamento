@@ -1,3 +1,4 @@
+import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -19,6 +20,18 @@ from app.api.routes import (
     webhooks,
 )
 from app.core.config import settings
+
+# Monitoramento de erros (só liga se SENTRY_DSN estiver configurado nas env
+# vars da Vercel). send_default_pii=False -> não manda dados pessoais/headers
+# de auth; traces baixos pra não custar/vazar. Inicializado ANTES do app pra a
+# integração FastAPI/ASGI envolver as rotas.
+if settings.SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=settings.SENTRY_DSN,
+        environment=settings.SENTRY_ENVIRONMENT,
+        send_default_pii=False,
+        traces_sample_rate=0.1,
+    )
 
 app = FastAPI(title="AMplanejador API", version="0.1.0")
 

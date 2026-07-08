@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     # OpenAI -- classificação automática de categoria/subcategoria
     OPENAI_API_KEY: str = ""
 
+    # Sentry -- monitoramento de erros. Vazio = desligado (no-op). Preencher
+    # SENTRY_DSN nas env vars da Vercel pra ativar; sem PII por padrão.
+    SENTRY_DSN: str = ""
+    SENTRY_ENVIRONMENT: str = "production"
+
     # Regras de negócio (centralizadas aqui para não espalhar "números mágicos" no código)
     TRIAL_DIAS: int = 7  # trial concedido automaticamente no cadastro do planejador
     CLIENTES_INCLUSOS_PLANO_BASE: int = 4

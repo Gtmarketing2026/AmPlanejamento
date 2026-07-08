@@ -25,6 +25,7 @@ dependencies = [
     "ofxparse==0.21",
     "pdfplumber==0.11.10",
     "python-dateutil==2.9.0.post0",
+    "sentry-sdk[fastapi]==2.19.2",
 ]
 
 # Só para rodar a suíte de testes localmente -- nunca instalado no build da
