@@ -11,6 +11,7 @@ import { useEntrarComo } from "../../hooks/useEntrarComo"
 import {
   atualizarCredenciaisCliente,
   atualizarStatusCliente,
+  excluirClienteNegocio,
   listarClientesDoPlanejador,
   listarPlanejadores,
 } from "../../api/negocio"
@@ -44,6 +45,21 @@ export default function CarteiraPlanejadorPage() {
     mutationFn: ({ id, status: novoStatus }) => atualizarStatusCliente(id, { status: novoStatus }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["negocio-clientes", planejadorId] }),
   })
+
+  const excluir = useMutation({
+    mutationFn: (id) => excluirClienteNegocio(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["negocio-clientes", planejadorId] }),
+  })
+
+  function onExcluirCliente(e, c) {
+    e.stopPropagation()
+    const ok = window.confirm(
+      `EXCLUIR PERMANENTEMENTE o cliente "${c.nome}"?\n\n` +
+        `Apaga em cascata os lançamentos, importações e contas dele. NÃO dá pra desfazer.\n\n` +
+        `Pra apenas desativar, use o status "excluido".`
+    )
+    if (ok) excluir.mutate(c.id)
+  }
 
   // Deep-link/refresh: se o contexto não bate com a URL, backfill do nome a
   // partir da lista de planejadores já carregada.
@@ -132,7 +148,14 @@ export default function CarteiraPlanejadorPage() {
                       <button onClick={(e) => onEditar(e, c)} className="text-blue text-[12px] hover:underline mr-3">
                         Editar login
                       </button>
-                      <span className="text-accent text-[12px]">Entrar como cliente →</span>
+                      <span className="text-accent text-[12px] mr-3">Entrar como cliente →</span>
+                      <button
+                        onClick={(e) => onExcluirCliente(e, c)}
+                        disabled={excluir.isPending}
+                        className="text-red text-[12px] hover:underline"
+                      >
+                        Excluir
+                      </button>
                     </Td>
                   </Tr>
                   {editandoId === c.id && (

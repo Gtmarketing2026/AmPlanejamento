@@ -617,6 +617,59 @@ def conceder_vagas(
     }
 
 
+@router.delete("/planejadores/{profissional_id}")
+def excluir_planejador_permanente(
+    profissional_id: uuid.UUID,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    """Exclusão PERMANENTE do planejador (e, em cascata, de todos os clientes,
+    lançamentos, importações, contas, assinaturas etc. dele). Diferente de
+    'cancelar' (status reversível). Use com cuidado — não dá pra desfazer.
+    Pensado pra o admin limpar contas de teste/junk."""
+    profissional = db.get(Profissional, profissional_id)
+    if not profissional:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Planejador não encontrado")
+    email = profissional.email
+    # Rastro: profissional_id vira NULL na cascata (FK SET NULL em auditoria_log),
+    # mas o detalhe guarda quem foi excluído e por qual admin.
+    db.execute(
+        text("""
+            INSERT INTO auditoria_log (profissional_id, ator_tipo, acao, entidade, entidade_id, detalhe)
+            VALUES (NULL, 'sistema', 'ADMIN_PLANEJADOR_EXCLUIDO_PERMANENTE', 'profissional', :pid,
+                    jsonb_build_object('admin_id', :admin_id, 'email', :email))
+        """),
+        {"pid": str(profissional_id), "admin_id": str(admin_id), "email": email},
+    )
+    db.delete(profissional)  # cascata no banco cuida do resto
+    db.flush()
+    return {"ok": True, "excluido": str(profissional_id)}
+
+
+@router.delete("/clientes/{cliente_id}")
+def excluir_cliente_permanente(
+    cliente_id: uuid.UUID,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    """Exclusão PERMANENTE do cliente (e, em cascata, lançamentos/importações/
+    contas dele). Diferente de marcar status 'excluido' (reversível)."""
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    db.execute(
+        text("""
+            INSERT INTO auditoria_log (profissional_id, cliente_id, ator_tipo, acao, entidade, entidade_id, detalhe)
+            VALUES (:pid, NULL, 'sistema', 'ADMIN_CLIENTE_EXCLUIDO_PERMANENTE', 'cliente', :cid,
+                    jsonb_build_object('admin_id', :admin_id, 'nome', :nome))
+        """),
+        {"pid": str(cliente.profissional_id), "cid": str(cliente_id), "admin_id": str(admin_id), "nome": cliente.nome},
+    )
+    db.delete(cliente)
+    db.flush()
+    return {"ok": True, "excluido": str(cliente_id)}
+
+
 @router.patch("/clientes/{cliente_id}/status")
 def atualizar_status_cliente(
     cliente_id: uuid.UUID,

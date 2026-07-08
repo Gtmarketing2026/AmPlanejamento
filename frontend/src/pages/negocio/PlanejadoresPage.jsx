@@ -12,6 +12,7 @@ import {
   atualizarStatusPlanejador,
   concederTrial,
   concederVagas,
+  excluirPlanejadorNegocio,
   listarPlanejadores,
 } from "../../api/negocio"
 import { formatarData, formatarMoeda } from "../../lib/format"
@@ -58,6 +59,20 @@ export default function PlanejadoresPage() {
     },
   })
   const [editVagasId, setEditVagasId] = useState(null)
+
+  const excluir = useMutation({
+    mutationFn: (id) => excluirPlanejadorNegocio(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["negocio-planejadores"] }),
+  })
+
+  function onExcluirPlanejador(p) {
+    const ok = window.confirm(
+      `EXCLUIR PERMANENTEMENTE o planejador "${p.nome}" (${p.email})?\n\n` +
+        `Isso apaga em cascata TODOS os clientes, lançamentos, importações e dados dele. ` +
+        `NÃO dá pra desfazer.\n\nPra apenas suspender, use "cancelada" no status.`
+    )
+    if (ok) excluir.mutate(p.id)
+  }
 
   function abrirVagas(p) {
     setEditVagasId((atual) => (atual === p.id ? null : p.id))
@@ -274,9 +289,16 @@ export default function PlanejadoresPage() {
                       <button
                         onClick={() => entrarPlanejador(p.id)}
                         disabled={p.status === "cancelada" || carregando}
-                        className="text-accent text-[12px] hover:underline disabled:text-text-faint disabled:no-underline disabled:cursor-not-allowed"
+                        className="text-accent text-[12px] hover:underline disabled:text-text-faint disabled:no-underline disabled:cursor-not-allowed mr-3"
                       >
                         Entrar como →
+                      </button>
+                      <button
+                        onClick={() => onExcluirPlanejador(p)}
+                        disabled={excluir.isPending}
+                        className="text-red text-[12px] hover:underline"
+                      >
+                        Excluir
                       </button>
                     </Td>
                   </Tr>

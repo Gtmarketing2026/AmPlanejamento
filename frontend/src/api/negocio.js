@@ -76,3 +76,7 @@ export const concederVagas = (id, dados) => comToken(apiPatch(`/negocio/planejad
 
 export const atualizarStatusCliente = (id, dados) =>
   comToken(apiPatch(`/negocio/clientes/${id}/status`, dados, auth()))
+
+// Exclusão PERMANENTE (admin) — cascata no banco. Diferente do status reversível.
+export const excluirPlanejadorNegocio = (id) => comToken(apiDelete(`/negocio/planejadores/${id}`, undefined, auth()))
+export const excluirClienteNegocio = (id) => comToken(apiDelete(`/negocio/clientes/${id}`, undefined, auth()))
