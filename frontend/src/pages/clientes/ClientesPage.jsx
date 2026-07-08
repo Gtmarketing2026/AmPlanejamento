@@ -1,5 +1,6 @@
 import { Fragment, useState } from "react"
 import { useNavigate } from "react-router-dom"
+import { useAuth } from "../../context/AuthContext"
 import Stage from "../../components/layout/Stage"
 import Card from "../../components/ui/Card"
 import Button from "../../components/ui/Button"
@@ -12,7 +13,7 @@ import { setTokenCliente } from "../clienteFinal/ClienteLoginPage"
 import { iniciarImpersonacao } from "../../lib/impersonacao"
 import { formatarData, formatarMoeda, iniciais } from "../../lib/format"
 
-const CLIENTES_INCLUSOS = 4
+const VAGAS_PADRAO = 4
 const FORM_VAZIO = {
   nome: "",
   tipo: "PF",
@@ -28,6 +29,7 @@ const FORM_VAZIO = {
 
 export default function ClientesPage() {
   const navigate = useNavigate()
+  const { profissional } = useAuth()
   const { data: clientes, isLoading, error } = useClientes()
   const criar = useCriarCliente()
   const atualizar = useAtualizarCliente()
@@ -37,6 +39,7 @@ export default function ClientesPage() {
   const [verId, setVerId] = useState(null)
   const [form, setForm] = useState(FORM_VAZIO)
   const [erro, setErro] = useState(null)
+  const [recadastro, setRecadastro] = useState(null) // { dados, info } quando CPF já teve cadastro excluído
   // Enquanto true, o nickname segue automaticamente o CPF digitado — some
   // assim que o usuário edita o nickname manualmente (padrão só é sugestão).
   const [nicknameAuto, setNicknameAuto] = useState(true)
@@ -113,6 +116,25 @@ export default function ClientesPage() {
       }
       onCancelar()
     } catch (err) {
+      // CPF já teve cadastro EXCLUÍDO -> pergunta: recuperar histórico ou zerar.
+      if (err?.status === 409 && err?.detail?.codigo === "cliente_excluido_existe") {
+        setRecadastro({ dados: { ...dadosComuns, senha: form.senha }, info: err.detail })
+      } else {
+        setErro(err.message)
+      }
+    }
+  }
+
+  // Resolve o recadastro depois da escolha do planejador (recuperar_historico
+  // true = reativa o cadastro antigo; false = começa do zero).
+  async function resolverRecadastro(recuperar) {
+    const { dados } = recadastro
+    setRecadastro(null)
+    setErro(null)
+    try {
+      await criar.mutateAsync({ ...dados, recuperar_historico: recuperar })
+      onCancelar()
+    } catch (err) {
       setErro(err.message)
     }
   }
@@ -139,12 +161,38 @@ export default function ClientesPage() {
     }
   }
 
+  // Vagas inclusas efetivas (o admin pode conceder mais por planejador).
+  const CLIENTES_INCLUSOS = profissional?.vagas_inclusas ?? VAGAS_PADRAO
   const total = clientes?.length ?? 0
   const vagasLivres = Math.max(0, CLIENTES_INCLUSOS - total)
   const salvando = criar.isPending || atualizar.isPending
 
   return (
     <Stage eyebrow="Etapa 02" title="Profissional cadastra um cliente" description="Clique num cliente pra entrar no dash dele.">
+      {recadastro && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setRecadastro(null)}>
+          <Card className="max-w-md w-full" onClick={(e) => e.stopPropagation()}>
+            <div className="font-display font-semibold mb-1">Cadastro anterior encontrado</div>
+            <p className="text-text-dim text-[13px] leading-relaxed mb-4">
+              Já existe um cadastro deste CPF (<strong className="text-text">{recadastro.info.nome}</strong>) que foi
+              excluído{recadastro.info.data_exclusao ? ` em ${formatarData(recadastro.info.data_exclusao)}` : ""}. O que
+              você quer fazer?
+            </p>
+            <div className="flex flex-col gap-2">
+              <Button onClick={() => resolverRecadastro(true)}>
+                Recuperar histórico (traz os dados de volta)
+              </Button>
+              <Button variant="ghost" onClick={() => resolverRecadastro(false)}>
+                Começar do zero (novo cadastro, sem histórico)
+              </Button>
+              <button onClick={() => setRecadastro(null)} className="text-text-faint text-[12.5px] mt-1 hover:text-text-dim">
+                Cancelar
+              </button>
+            </div>
+          </Card>
+        </div>
+      )}
+
       <div className="flex items-center justify-between mb-4">
         <div>
           <div className="font-display font-semibold text-lg">Meus clientes</div>
@@ -158,9 +206,12 @@ export default function ClientesPage() {
       {total >= CLIENTES_INCLUSOS && (
         <Card className="mb-4" style={{ borderColor: "rgba(240,166,60,0.3)", background: "rgba(240,166,60,0.08)" }}>
           <p className="text-amber text-[12.5px] leading-relaxed">
-            ⚠️ Você já usou as {CLIENTES_INCLUSOS} vagas incluídas no plano. Cadastrar mais um cliente
-            gera cobrança de <strong>cliente extra</strong> no próximo ciclo — o prazo de 35 dias evita
-            essa cobrança, não reembolsa o cliente já incluso.
+            ⚠️ Você já usou as {CLIENTES_INCLUSOS} vagas incluídas
+            {profissional?.valor_vaga_extra === 0
+              ? " — clientes extras liberados sem custo pelo seu plano."
+              : profissional?.valor_vaga_extra != null
+                ? ` — cada cliente extra custa ${formatarMoeda(profissional.valor_vaga_extra)}/mês.`
+                : ". Cadastrar mais um cliente gera cobrança de cliente extra no próximo ciclo."}
           </p>
         </Card>
       )}

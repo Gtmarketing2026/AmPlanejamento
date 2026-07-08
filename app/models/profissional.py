@@ -37,3 +37,10 @@ class Profissional(Base):
     saude_verde_poupanca_pct: Mapped[float] = mapped_column(Numeric(5, 1), nullable=False, default=15)
     saude_azul_reserva_meses: Mapped[float] = mapped_column(Numeric(5, 1), nullable=False, default=12)
     saude_azul_poupanca_pct: Mapped[float] = mapped_column(Numeric(5, 1), nullable=False, default=30)
+
+    # Vagas de clientes concedidas pelo admin (por planejador):
+    # vagas_inclusas = quantas entram sem cobrança (padrão 4);
+    # valor_vaga_extra = R$/mês por cliente acima das inclusas (None = padrão do
+    # plano; 0 = extras grátis; >0 = preço custom). Ver migration_vagas_planejador.sql.
+    vagas_inclusas: Mapped[int] = mapped_column(nullable=False, default=4)
+    valor_vaga_extra: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)

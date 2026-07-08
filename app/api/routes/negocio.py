@@ -50,6 +50,7 @@ from app.schemas.negocio import (
     StatusPlanejadorAtualizar,
     TransacaoNegocioResposta,
     TrialAtualizar,
+    VagasAtualizar,
 )
 
 router = APIRouter(prefix="/negocio", tags=["negocio"])
@@ -340,6 +341,7 @@ def listar_planejadores(db: Session = Depends(get_db_negocio)):
         text("""
             SELECT
                 p.id, p.nome, p.email, p.subdominio, p.status, p.criado_em, p.trial_ate,
+                p.vagas_inclusas, p.valor_vaga_extra,
                 (p.trial_ate IS NOT NULL AND p.trial_ate >= CURRENT_DATE) AS em_trial,
                 atual.tipo_plano AS tipo_plano_atual,
                 COALESCE(qtd.clientes_ativos, 0) AS clientes_ativos,
@@ -566,6 +568,53 @@ def conceder_trial(
 
     db.flush()
     return {"id": profissional_id, "trial_ate": dados.trial_ate}
+
+
+@router.patch("/planejadores/{profissional_id}/vagas")
+def conceder_vagas(
+    profissional_id: uuid.UUID,
+    dados: VagasAtualizar,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    """Admin concede vagas de clientes: `vagas_inclusas` (quantas grátis) e/ou
+    `valor_vaga_extra` (R$/mês por cliente acima das inclusas; null = padrão do
+    plano, 0 = extras grátis). Só altera o que for enviado."""
+    profissional = db.get(Profissional, profissional_id)
+    if not profissional:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Planejador não encontrado")
+
+    informados = dados.model_dump(exclude_unset=True)
+    if "vagas_inclusas" in informados:
+        v = informados["vagas_inclusas"]
+        if v is None or v < 0:
+            raise HTTPException(status_code=422, detail="vagas_inclusas deve ser 0 ou mais")
+        profissional.vagas_inclusas = v
+    if "valor_vaga_extra" in informados:
+        vv = informados["valor_vaga_extra"]
+        if vv is not None and vv < 0:
+            raise HTTPException(status_code=422, detail="valor_vaga_extra não pode ser negativo")
+        profissional.valor_vaga_extra = vv  # None = volta ao padrão do plano
+
+    db.add(profissional)
+    db.execute(
+        text("""
+            INSERT INTO auditoria_log (profissional_id, ator_tipo, acao, entidade, entidade_id, detalhe)
+            VALUES (:pid, 'sistema', 'ADMIN_VAGAS_CONCEDIDAS', 'profissional', :pid,
+                    jsonb_build_object('admin_id', :admin_id, 'vagas_inclusas', :vi, 'valor_vaga_extra', :vv))
+        """),
+        {
+            "pid": str(profissional_id), "admin_id": str(admin_id),
+            "vi": profissional.vagas_inclusas,
+            "vv": float(profissional.valor_vaga_extra) if profissional.valor_vaga_extra is not None else None,
+        },
+    )
+    db.flush()
+    return {
+        "id": profissional_id,
+        "vagas_inclusas": profissional.vagas_inclusas,
+        "valor_vaga_extra": float(profissional.valor_vaga_extra) if profissional.valor_vaga_extra is not None else None,
+    }
 
 
 @router.patch("/clientes/{cliente_id}/status")

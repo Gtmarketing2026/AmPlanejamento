@@ -11,6 +11,7 @@ import {
   atualizarCredenciaisPlanejador,
   atualizarStatusPlanejador,
   concederTrial,
+  concederVagas,
   listarPlanejadores,
 } from "../../api/negocio"
 import { formatarData, formatarMoeda } from "../../lib/format"
@@ -47,6 +48,36 @@ export default function PlanejadoresPage() {
     mutationFn: ({ id, trial_ate }) => concederTrial(id, { trial_ate }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["negocio-planejadores"] }),
   })
+
+  const [vagasInputs, setVagasInputs] = useState({}) // { [id]: { inclusas, extra } }
+  const vagas = useMutation({
+    mutationFn: ({ id, dados }) => concederVagas(id, dados),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["negocio-planejadores"] })
+      setEditVagasId(null)
+    },
+  })
+  const [editVagasId, setEditVagasId] = useState(null)
+
+  function abrirVagas(p) {
+    setEditVagasId((atual) => (atual === p.id ? null : p.id))
+    setVagasInputs((f) => ({
+      ...f,
+      [p.id]: {
+        inclusas: String(p.vagas_inclusas ?? 4),
+        extra: p.valor_vaga_extra == null ? "" : String(p.valor_vaga_extra),
+      },
+    }))
+  }
+
+  function salvarVagas(id) {
+    const v = vagasInputs[id] || {}
+    const dados = {}
+    if (v.inclusas !== "" && v.inclusas != null) dados.vagas_inclusas = Number(v.inclusas)
+    // extra vazio = volta ao padrão do plano (null); número (incl. 0) = custom
+    dados.valor_vaga_extra = v.extra === "" || v.extra == null ? null : Number(v.extra)
+    vagas.mutate({ id, dados })
+  }
 
   function onEditar(p) {
     setEditandoId((atual) => (atual === p.id ? null : p.id))
@@ -148,6 +179,7 @@ export default function PlanejadoresPage() {
               <Th>Status</Th>
               <Th>Plano</Th>
               <Th>Clientes</Th>
+              <Th>Vagas</Th>
               <Th>MRR</Th>
               <Th>Teste</Th>
               <Th>Ações</Th>
@@ -180,6 +212,21 @@ export default function PlanejadoresPage() {
                     </Td>
                     <Td className="text-text-dim">{p.tipo_plano_atual || "—"}</Td>
                     <Td className="font-mono">{p.clientes_ativos}</Td>
+                    <Td>
+                      <div className="text-[12px]">
+                        <span className="font-mono">{p.vagas_inclusas ?? 4}</span>
+                        <span className="text-text-faint"> incl.</span>
+                      </div>
+                      <div className="text-[10.5px] text-text-faint">
+                        extra: {p.valor_vaga_extra == null ? "padrão do plano" : p.valor_vaga_extra === 0 ? "grátis" : `${formatarMoeda(p.valor_vaga_extra)}/mês`}
+                      </div>
+                      <button
+                        onClick={() => abrirVagas(p)}
+                        className="text-blue text-[11px] hover:underline mt-0.5"
+                      >
+                        gerenciar vagas
+                      </button>
+                    </Td>
                     <Td className="font-mono text-accent">{formatarMoeda(p.mrr_contribuido)}</Td>
                     <Td>
                       <div className="flex flex-col gap-1.5 min-w-[190px]">
@@ -235,7 +282,7 @@ export default function PlanejadoresPage() {
                   </Tr>
                   {editandoId === p.id && (
                     <Tr className="bg-panel/40">
-                      <Td colSpan={7}>
+                      <Td colSpan={8}>
                         <form onSubmit={(e) => onSalvar(e, p.id)} className="flex items-end gap-3 py-1">
                           <div className="w-64">
                             <Field
@@ -267,11 +314,43 @@ export default function PlanejadoresPage() {
                       </Td>
                     </Tr>
                   )}
+                  {editVagasId === p.id && (
+                    <Tr className="bg-panel/40">
+                      <Td colSpan={8}>
+                        <div className="flex items-end gap-4 py-1 flex-wrap">
+                          <div>
+                            <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-1">Vagas inclusas (grátis)</div>
+                            <input
+                              type="number" min="0"
+                              className="bg-bg border border-line rounded px-3 py-2 text-[13px] text-text w-28"
+                              value={vagasInputs[p.id]?.inclusas ?? ""}
+                              onChange={(e) => setVagasInputs((f) => ({ ...f, [p.id]: { ...f[p.id], inclusas: e.target.value } }))}
+                            />
+                          </div>
+                          <div>
+                            <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-1">R$/mês por vaga extra</div>
+                            <input
+                              type="number" min="0" step="0.01"
+                              placeholder="vazio = padrão do plano"
+                              className="bg-bg border border-line rounded px-3 py-2 text-[13px] text-text w-52"
+                              value={vagasInputs[p.id]?.extra ?? ""}
+                              onChange={(e) => setVagasInputs((f) => ({ ...f, [p.id]: { ...f[p.id], extra: e.target.value } }))}
+                            />
+                          </div>
+                          <Button onClick={() => salvarVagas(p.id)} disabled={vagas.isPending} className="mb-0.5">
+                            {vagas.isPending ? "Salvando…" : "Salvar vagas"}
+                          </Button>
+                          <Button variant="ghost" onClick={() => setEditVagasId(null)} className="mb-0.5">Cancelar</Button>
+                          <span className="text-text-faint text-[11px] mb-2">0 = extras grátis · vazio = usa o valor do plano</span>
+                        </div>
+                      </Td>
+                    </Tr>
+                  )}
                 </Fragment>
               ))}
               {!listaFiltrada.length && (
                 <Tr>
-                  <Td colSpan={7} className="text-text-faint text-center py-6">
+                  <Td colSpan={8} className="text-text-faint text-center py-6">
                     {planejadores?.length ? "Nenhum planejador com esse filtro." : "Nenhum planejador cadastrado ainda."}
                   </Td>
                 </Tr>

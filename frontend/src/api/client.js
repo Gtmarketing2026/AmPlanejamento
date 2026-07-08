@@ -2,8 +2,13 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL
 
 class ApiError extends Error {
   constructor(status, detail) {
-    super(detail || `Erro ${status}`)
+    // detail pode ser string (mensagem) ou objeto estruturado (ex: 409 de
+    // recadastro de cliente excluído, com `codigo`). Guardamos os dois:
+    // `message` sempre uma string legível, `detail` o valor cru.
+    const msg = typeof detail === "string" ? detail : detail?.mensagem || `Erro ${status}`
+    super(msg)
     this.status = status
+    this.detail = detail
   }
 }
 

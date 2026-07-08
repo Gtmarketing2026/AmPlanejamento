@@ -45,7 +45,16 @@ class PlanejadorResposta(BaseModel):
     mrr_contribuido: float
     trial_ate: date | None
     em_trial: bool
+    vagas_inclusas: int = 4
+    valor_vaga_extra: float | None = None
     criado_em: datetime
+
+
+class VagasAtualizar(BaseModel):
+    # Só os campos ENVIADOS são alterados (exclude_unset no backend). Enviar
+    # valor_vaga_extra=null zera o custom (volta ao padrão do plano); 0 = grátis.
+    vagas_inclusas: int | None = None
+    valor_vaga_extra: float | None = None
 
 
 class ClienteDoPlanejadorResposta(BaseModel):

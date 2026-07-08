@@ -124,4 +124,6 @@ def perfil_atual(
         plano_ativo=tem_plano_ativo(db, profissional),
         tem_assinatura=assinatura is not None,
         tipo_plano=tipo_plano,
+        vagas_inclusas=profissional.vagas_inclusas,
+        valor_vaga_extra=float(profissional.valor_vaga_extra) if profissional.valor_vaga_extra is not None else None,
     )

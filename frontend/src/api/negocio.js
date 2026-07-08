@@ -72,5 +72,7 @@ export const atualizarStatusPlanejador = (id, dados) =>
 
 export const concederTrial = (id, dados) => comToken(apiPatch(`/negocio/planejadores/${id}/trial`, dados, auth()))
 
+export const concederVagas = (id, dados) => comToken(apiPatch(`/negocio/planejadores/${id}/vagas`, dados, auth()))
+
 export const atualizarStatusCliente = (id, dados) =>
   comToken(apiPatch(`/negocio/clientes/${id}/status`, dados, auth()))

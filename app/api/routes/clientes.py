@@ -108,7 +108,22 @@ def criar_cliente(
         raise HTTPException(status_code=400, detail="Você já tem um cliente ativo com esse CPF.")
 
     reativar = next((c for c in mesmos_cpf if c.status == "excluido"), None)
-    if reativar is not None:
+    # Existe um cadastro anterior EXCLUÍDO com esse CPF e o planejador ainda
+    # não escolheu o que fazer -> devolve 409 pedindo a decisão (o frontend
+    # pergunta "recuperar histórico" ou "começar do zero").
+    if reativar is not None and dados.recuperar_historico is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "codigo": "cliente_excluido_existe",
+                "mensagem": "Já existe um cadastro anterior deste CPF, que foi excluído.",
+                "cliente_id": str(reativar.id),
+                "nome": reativar.nome,
+                "data_exclusao": reativar.data_exclusao.isoformat() if reativar.data_exclusao else None,
+            },
+        )
+
+    if reativar is not None and dados.recuperar_historico is True:
         if _nickname_em_uso(dados.nickname, ignorar_id=reativar.id):
             raise HTTPException(status_code=400, detail="Nickname já está em uso")
         validar_senha_forte(dados.senha)

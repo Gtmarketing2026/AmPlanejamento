@@ -46,6 +46,9 @@ class ProfissionalPerfil(BaseModel):
     plano_ativo: bool = False
     tem_assinatura: bool = False
     tipo_plano: str | None = None
+    # Vagas de clientes (admin pode conceder mais / preço custom por extra)
+    vagas_inclusas: int = 4
+    valor_vaga_extra: float | None = None
 
     model_config = {"from_attributes": True}
 
@@ -71,6 +74,11 @@ class ClienteCriar(BaseModel):
     objetivo_principal: str | None = None
     nickname: str  # login do cliente final
     senha: str
+    # Quando o CPF já teve um cadastro EXCLUÍDO deste planejador: None = ainda
+    # não decidiu (a API responde 409 pedindo a escolha); True = reativar o
+    # cadastro antigo (recupera histórico); False = começar do zero (novo
+    # cadastro, o antigo permanece excluído).
+    recuperar_historico: bool | None = None
 
 
 class ClienteResposta(BaseModel):
