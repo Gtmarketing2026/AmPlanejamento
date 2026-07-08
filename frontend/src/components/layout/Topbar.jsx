@@ -13,7 +13,7 @@ export default function Topbar() {
 
   return (
     <div className="sticky top-0 z-40 bg-bg/92 backdrop-blur border-b border-line px-8 py-[18px] flex items-center justify-between flex-wrap gap-3.5">
-      <Logo sub={profissional?.subdominio ? `${profissional.subdominio}.amplanejador.com.br` : null} />
+      <Logo />
 
       <div className="flex items-center gap-1 bg-panel border border-line rounded-[10px] p-1 flex-wrap">
         <NavLink to="/inicio" className={tabClass}>Início</NavLink>

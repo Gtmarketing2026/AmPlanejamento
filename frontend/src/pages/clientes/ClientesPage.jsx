@@ -7,7 +7,7 @@ import Field, { Select } from "../../components/ui/Field"
 import Pill from "../../components/ui/Pill"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import { useAtualizarCliente, useClientes, useCriarCliente, useExcluirCliente } from "../../hooks/useClientes"
-import { formatarData, formatarMoeda, iniciais, somarDias } from "../../lib/format"
+import { formatarData, formatarMoeda, iniciais } from "../../lib/format"
 
 const CLIENTES_INCLUSOS = 4
 const FORM_VAZIO = {
@@ -230,7 +230,6 @@ export default function ClientesPage() {
               <Th>Cliente</Th>
               <Th>Tipo</Th>
               <Th>Cadastrado em</Th>
-              <Th>Prazo p/ evitar cobrança do próximo ciclo</Th>
               <Th></Th>
             </Thead>
             <tbody>
@@ -248,7 +247,6 @@ export default function ClientesPage() {
                     </Td>
                     <Td>{c.tipo}</Td>
                     <Td className="font-mono text-text-dim">{formatarData(c.data_cadastro)}</Td>
-                    <Td className="font-mono text-text-dim">{formatarData(somarDias(c.data_cadastro, 35))}</Td>
                     <Td className="text-right whitespace-nowrap">
                       <button
                         onClick={(e) => {
@@ -281,7 +279,7 @@ export default function ClientesPage() {
                   </Tr>
                   {verId === c.id && (
                     <Tr onClick={(e) => e.stopPropagation()} className="cursor-default bg-panel/40">
-                      <Td colSpan={5}>
+                      <Td colSpan={4}>
                         <div className="grid grid-cols-4 gap-4 text-[12.5px] py-1">
                           <div>
                             <div className="text-text-faint text-[11px] uppercase font-mono mb-1">CPF</div>
@@ -313,7 +311,7 @@ export default function ClientesPage() {
                       Vaga disponível
                     </div>
                   </Td>
-                  <Td colSpan={3} className="text-text-faint">
+                  <Td colSpan={2} className="text-text-faint">
                     {CLIENTES_INCLUSOS}ª vaga incluída no plano base — livre
                   </Td>
                   <Td></Td>

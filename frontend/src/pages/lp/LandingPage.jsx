@@ -345,6 +345,46 @@ const FAQ = [
   { p: "E o Open Finance?", r: "Disponível no Plano Completo. Hoje a importação é por arquivo (PDF/OFX/CSV); a conexão automática com bancos está em ativação." },
 ]
 
+// Botão "Entrar" que abre a escolha entre login do planejador e do cliente
+// (são áreas separadas). `paraCima` posiciona o menu acima do gatilho (footer).
+function EntrarMenu({ triggerClassName, children, paraCima = false }) {
+  const [aberto, setAberto] = useState(false)
+  return (
+    <div className="relative inline-block">
+      <button type="button" onClick={() => setAberto((v) => !v)} className={triggerClassName}>
+        {children}
+      </button>
+      {aberto && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setAberto(false)} />
+          <div
+            className={`absolute right-0 w-60 bg-panel border border-line rounded-[10px] shadow-xl z-50 p-1.5 ${
+              paraCima ? "bottom-full mb-2" : "mt-2"
+            }`}
+          >
+            <Link
+              to="/login"
+              onClick={() => setAberto(false)}
+              className="block rounded-[7px] px-3 py-2.5 hover:bg-panel-2 text-left"
+            >
+              <div className="text-[13px] font-medium text-text">Entrar como planejador</div>
+              <div className="text-text-faint text-[11px]">Painel do meu escritório e clientes</div>
+            </Link>
+            <Link
+              to="/cliente/login"
+              onClick={() => setAberto(false)}
+              className="block rounded-[7px] px-3 py-2.5 hover:bg-panel-2 text-left"
+            >
+              <div className="text-[13px] font-medium text-text">Entrar como cliente</div>
+              <div className="text-text-faint text-[11px]">Acompanhar meu planejamento</div>
+            </Link>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 export default function LandingPage() {
   const navigate = useNavigate()
 
@@ -366,9 +406,9 @@ export default function LandingPage() {
             <a href="#faq" className="hover:text-text">Perguntas frequentes</a>
           </nav>
           <div className="flex items-center gap-3">
-            <Link to="/login" className="text-[13px] text-text-dim hover:text-text hidden sm:block">
-              Entrar
-            </Link>
+            <EntrarMenu triggerClassName="text-[13px] text-text-dim hover:text-text hidden sm:flex items-center gap-1">
+              Entrar <span className="text-[9px]">▾</span>
+            </EntrarMenu>
             <Link to="/cadastro">
               <Button className="!px-4 !py-2.5 !text-[12.5px]">Comece grátis</Button>
             </Link>
@@ -391,9 +431,9 @@ export default function LandingPage() {
             <Link to="/cadastro">
               <Button>Comece grátis por 7 dias →</Button>
             </Link>
-            <Link to="/login">
-              <Button variant="ghost">Já tenho conta</Button>
-            </Link>
+            <EntrarMenu triggerClassName="inline-flex items-center justify-center gap-2 px-5 py-3 rounded-[9px] font-semibold text-[13.5px] transition-colors bg-transparent border border-line text-text-dim hover:text-text hover:border-text-faint">
+              Já tenho conta <span className="text-[9px]">▾</span>
+            </EntrarMenu>
           </div>
           <p className="text-text-faint text-[11.5px] mt-4">Sem cartão de crédito pra testar. Cancele quando quiser.</p>
         </div>
@@ -519,7 +559,9 @@ export default function LandingPage() {
           <div className="flex items-center gap-5 text-text-faint text-[12px]">
             <a href="#recursos" className="hover:text-text-dim">Recursos</a>
             <a href="#planos" className="hover:text-text-dim">Planos</a>
-            <Link to="/login" className="hover:text-text-dim">Entrar</Link>
+            <EntrarMenu triggerClassName="hover:text-text-dim flex items-center gap-1" paraCima>
+              Entrar <span className="text-[9px]">▾</span>
+            </EntrarMenu>
           </div>
           <div className="text-text-faint text-[11.5px]">© {new Date().getFullYear()} AMplanejador · Planejamento Financeiro</div>
         </div>
