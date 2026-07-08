@@ -52,11 +52,12 @@ export const enviarTransacaoEmpresa = (token, id, acao) =>
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL
 
-export async function importarMeuExtrato(token, { tipoDocumento, senhaPdf, contaId, arquivo }) {
+export async function importarMeuExtrato(token, { tipoDocumento, senhaPdf, contaId, contexto, arquivo }) {
   const form = new FormData()
   form.append("tipo_documento", tipoDocumento)
   if (senhaPdf) form.append("senha_pdf", senhaPdf)
   if (contaId) form.append("conta_conectada_id", contaId)
+  if (contexto) form.append("contexto", contexto)
   form.append("arquivo", arquivo)
   const res = await fetch(`${BASE_URL}/clientes/eu/importacoes`, {
     method: "POST",

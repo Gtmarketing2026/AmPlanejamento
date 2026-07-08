@@ -7,6 +7,7 @@ class TopClienteResposta(BaseModel):
     cliente_id: uuid.UUID
     nome: str
     tipo: str
+    tem_pj: bool = False  # cliente também tem contexto PJ (CNPJ cadastrado)
     valor_honorario_mensal: float | None
     meses_relacionamento: float | None
     ltv_realizado: float | None

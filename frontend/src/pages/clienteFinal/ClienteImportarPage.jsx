@@ -18,15 +18,18 @@ import { formatarData } from "../../lib/format"
 const STATUS_VARIANT = { processado: "on", processando: "warn", pendente: "warn", erro: "off" }
 
 export default function ClienteImportarPage() {
-  const { token } = useOutletContext()
+  const { token, perfil } = useOutletContext()
   const qc = useQueryClient()
   const inputRef = useRef(null)
   const [tipoDocumento, setTipoDocumento] = useState("extrato")
   const [arquivo, setArquivo] = useState(null)
   const [senhaPdf, setSenhaPdf] = useState("")
   const [contaId, setContaId] = useState("")
+  const [contexto, setContexto] = useState("PF")
   const [erro, setErro] = useState(null)
   const ehPdf = arquivo?.name?.toLowerCase().endsWith(".pdf")
+  // Só faz sentido escolher PF/PJ quando o cliente também tem empresa (CNPJ).
+  const temPJ = !!perfil?.cnpj
 
   const { data: importacoes = [] } = useQuery({
     queryKey: ["cliente-eu-importacoes", token],
@@ -43,7 +46,13 @@ export default function ClienteImportarPage() {
 
   const importar = useMutation({
     mutationFn: () =>
-      importarMeuExtrato(token, { tipoDocumento, senhaPdf: senhaPdf || null, contaId: contaId || null, arquivo }),
+      importarMeuExtrato(token, {
+        tipoDocumento,
+        senhaPdf: senhaPdf || null,
+        contaId: contaId || null,
+        contexto: temPJ ? contexto : "PF",
+        arquivo,
+      }),
     onSuccess: async (imp) => {
       // Compras parceladas: pergunta se quer projetar as parcelas futuras.
       if (imp?.parcelamentos_detectados > 0) {
@@ -100,6 +109,12 @@ export default function ClienteImportarPage() {
             <option value="extrato">Extrato de conta</option>
             <option value="fatura_cartao">Fatura de cartão</option>
           </Select>
+          {temPJ && (
+            <Select label="Entra em" value={contexto} onChange={(e) => setContexto(e.target.value)}>
+              <option value="PF">Pessoal (PF)</option>
+              <option value="PJ">Empresa (PJ)</option>
+            </Select>
+          )}
           {!!contasCompativeis.length && (
             <Select label={naturezaEsperada === "cartao" ? "Cartão" : "Conta"} value={contaId} onChange={(e) => setContaId(e.target.value)}>
               <option value="">Sem conta específica</option>

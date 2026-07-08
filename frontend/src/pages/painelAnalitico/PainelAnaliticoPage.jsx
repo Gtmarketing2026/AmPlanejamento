@@ -33,7 +33,7 @@ export default function PainelAnaliticoPage() {
       <Stage
         eyebrow="Visão agregada"
         title="Painel analítico do profissional"
-        description="Visão de carteira — todos os seus clientes juntos."
+        description="Uma visão geral da sua carteira — todos os seus clientes juntos."
       >
         <Card>
           <p className="text-text-dim text-sm">
@@ -49,7 +49,7 @@ export default function PainelAnaliticoPage() {
     <Stage
       eyebrow="Visão agregada"
       title="Painel analítico do profissional"
-      description="Visão de carteira — todos os seus clientes juntos. Dados reais das views vw_metricas_carteira / vw_retencao_clientes."
+      description="Uma visão geral da sua carteira — todos os seus clientes juntos, com ticket médio, LTV e churn."
     >
       <div className="grid grid-cols-3 gap-4 mb-6">
         <KpiStat label="Clientes ativos" value={m.clientes_ativos} />
@@ -87,7 +87,7 @@ export default function PainelAnaliticoPage() {
               <Tr key={c.cliente_id}>
                 <Td className="font-mono text-text-faint">{i + 1}</Td>
                 <Td>{c.nome}</Td>
-                <Td>{c.tipo}</Td>
+                <Td>{c.tem_pj ? "PF e PJ" : c.tipo}</Td>
                 <Td className="font-mono text-text-dim">{c.meses_relacionamento ?? "—"}</Td>
                 <Td className="font-mono">{formatarMoeda(c.valor_honorario_mensal)}</Td>
                 <Td className="text-right font-mono text-accent">{formatarMoeda(c.ltv_realizado)}</Td>

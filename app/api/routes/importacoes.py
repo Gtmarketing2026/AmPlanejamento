@@ -245,7 +245,10 @@ def processar_upload(
     enviado_por: str,  # 'profissional' | 'cliente_final'
     senha_pdf: str | None = None,
     conta_conectada_id: uuid.UUID | None = None,
+    contexto: str = "PF",  # PF | PJ — em qual contexto os lançamentos entram
 ) -> ImportacaoExtrato:
+    if contexto not in ("PF", "PJ"):
+        raise HTTPException(status_code=422, detail="contexto inválido (use PF ou PJ)")
     """Núcleo do upload de extrato/fatura, compartilhado entre a rota do
     planejador (/importacoes) e a do cliente final (/clientes/eu/importacoes):
     valida formato, salva no storage, faz parse + dedup + classificação por IA.
@@ -360,6 +363,7 @@ def processar_upload(
                 valor=t["valor"],
                 tipo=t["tipo"],
                 origem=origem,
+                contexto=contexto,
                 importacao_id=importacao.id,
                 hash_dedup=hash_dedup,
                 mes_referencia=mes_referencia,
@@ -425,6 +429,7 @@ async def criar_importacao(
     periodo_fim: date | None = Form(None),
     senha_pdf: str | None = Form(None),
     conta_conectada_id: uuid.UUID | None = Form(None),
+    contexto: str = Form("PF"),
     arquivo: UploadFile = File(...),
     db: Session = Depends(get_db_com_rls),
     profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
@@ -438,7 +443,7 @@ async def criar_importacao(
     return processar_upload(
         db, cliente_id, profissional_id, tipo_documento,
         arquivo.filename or "arquivo", conteudo, periodo_inicio, periodo_fim, "profissional",
-        senha_pdf=senha_pdf or None, conta_conectada_id=conta_conectada_id,
+        senha_pdf=senha_pdf or None, conta_conectada_id=conta_conectada_id, contexto=contexto,
     )
 
 

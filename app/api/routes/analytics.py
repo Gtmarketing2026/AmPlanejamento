@@ -38,11 +38,13 @@ def metricas_carteira(
 
     top = db.execute(
         text("""
-            SELECT cliente_id, nome, tipo, valor_honorario_mensal,
-                   meses_relacionamento, ltv_realizado
-            FROM vw_retencao_clientes
-            WHERE profissional_id = :pid AND status = 'ativo'
-            ORDER BY ltv_realizado DESC NULLS LAST
+            SELECT r.cliente_id, r.nome, r.tipo, r.valor_honorario_mensal,
+                   r.meses_relacionamento, r.ltv_realizado,
+                   (c.cnpj IS NOT NULL AND c.cnpj <> '') AS tem_pj
+            FROM vw_retencao_clientes r
+            LEFT JOIN clientes c ON c.id = r.cliente_id
+            WHERE r.profissional_id = :pid AND r.status = 'ativo'
+            ORDER BY r.ltv_realizado DESC NULLS LAST
             LIMIT 10
         """),
         {"pid": str(profissional_id)},
