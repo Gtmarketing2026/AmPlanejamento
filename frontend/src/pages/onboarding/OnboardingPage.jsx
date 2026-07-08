@@ -41,8 +41,8 @@ export default function OnboardingPage() {
           app.<span className="text-accent">{profissional?.subdominio}</span>.fluxo.com.br
         </StaticField>
         <div className="flex flex-col gap-2 mt-4">
-          <Button onClick={() => navigate("/dashboard")}>Concluir e ir para o painel</Button>
-          <Button variant="ghost" onClick={() => navigate("/dashboard")}>
+          <Button onClick={() => navigate("/clientes")}>Concluir e ir para meus clientes</Button>
+          <Button variant="ghost" onClick={() => navigate("/inicio")}>
             Pular por agora
           </Button>
         </div>

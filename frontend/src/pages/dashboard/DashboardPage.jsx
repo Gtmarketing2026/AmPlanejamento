@@ -1,95 +1,53 @@
-import { useState } from "react"
-import { useParams } from "react-router-dom"
-import Stage from "../../components/layout/Stage"
-import Card from "../../components/ui/Card"
-import Pill from "../../components/ui/Pill"
-import DonutChart from "../../components/ui/DonutChart"
-import Tabs from "../../components/ui/Tabs"
-import { useClientes } from "../../hooks/useClientes"
-import { dashboardMock as m } from "../../mocks/dashboard.mock"
-import FluxoCaixaTab from "./FluxoCaixaTab"
-import LancamentosTab from "./LancamentosTab"
-import PatrimonioMetasTab from "./PatrimonioMetasTab"
+import { useEffect, useState } from "react"
+import { useNavigate, useParams } from "react-router-dom"
+import { abrirPainelCliente } from "../../api/clientes"
+import { setTokenCliente } from "../clienteFinal/ClienteLoginPage"
+import { iniciarImpersonacao } from "../../lib/impersonacao"
 
+// A antiga tela mockada ("Etapa 04", dado ilustrativo) foi aposentada. Qualquer
+// acesso a /dashboard/:clienteId agora abre o PAINEL REAL e completo do cliente
+// (mesma SPA que o cliente usa), via token escopado + impersonação de origem
+// "planejador". Assim não há mais como cair no mock, nem por URL/bookmark.
 export default function DashboardPage() {
   const { clienteId } = useParams()
-  const { data: clientes } = useClientes()
-  const [subtab, setSubtab] = useState("fluxo")
-  const [contexto, setContexto] = useState("pessoal")
+  const navigate = useNavigate()
+  const [erro, setErro] = useState(null)
 
-  const clienteAtual = clienteId ? clientes?.find((c) => c.id === clienteId) : clientes?.[0]
-  const temContextoPJ = !!clienteAtual?.cnpj
+  useEffect(() => {
+    let cancelado = false
+    async function abrir() {
+      if (!clienteId) {
+        navigate("/clientes", { replace: true })
+        return
+      }
+      try {
+        const { access_token } = await abrirPainelCliente(clienteId)
+        if (cancelado) return
+        setTokenCliente(access_token)
+        iniciarImpersonacao("cliente", "planejador")
+        navigate("/cliente/dashboard", { replace: true })
+      } catch (e) {
+        if (!cancelado) setErro(e.message || "Não foi possível abrir o painel do cliente.")
+      }
+    }
+    abrir()
+    return () => {
+      cancelado = true
+    }
+  }, [clienteId, navigate])
 
   return (
-    <Stage eyebrow="Etapa 04" title="Dashboard de conciliação e planejamento" description="Visão do profissional sobre um cliente específico.">
-      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <div>
-          <div className="flex items-center gap-3">
-            <span className="font-display font-semibold text-lg">
-              {clienteAtual ? clienteAtual.nome : "Nenhum cliente cadastrado ainda"}
-            </span>
-            {temContextoPJ && (
-              <Tabs
-                options={[
-                  { value: "pessoal", label: "Pessoal" },
-                  { value: "pj", label: `PJ · ${clienteAtual.nome_pj || "empresa"}` },
-                ]}
-                active={contexto}
-                onChange={setContexto}
-              />
-            )}
-          </div>
-          <div className="text-text-faint text-[12px] font-mono">Julho 2026</div>
+    <div className="min-h-[60vh] flex items-center justify-center">
+      {erro ? (
+        <div className="text-center">
+          <p className="text-red text-sm mb-3">{erro}</p>
+          <button onClick={() => navigate("/clientes")} className="text-accent text-[13px] hover:underline">
+            ← Voltar aos meus clientes
+          </button>
         </div>
-        <Pill variant="on" pulse>sincronizado há 4 min</Pill>
-      </div>
-
-      {!clienteAtual && (
-        <Card className="mb-5">
-          <p className="text-text-dim text-sm">
-            Cadastre um cliente em <strong>Cadastros → Cliente</strong> pra ver o dashboard dele.
-          </p>
-        </Card>
+      ) : (
+        <p className="text-text-faint text-sm">Abrindo o painel do cliente…</p>
       )}
-
-      {clienteAtual && (
-        <>
-          <Card accent className="mb-5">
-            <div className="flex items-center gap-4">
-              <DonutChart pct={m.saudeFinanceira.pct} />
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="font-display font-semibold">
-                    Saúde financeira: {m.saudeFinanceira.status}
-                  </span>
-                  <Pill variant="on">reserva OK</Pill>
-                </div>
-                <p className="text-text-dim text-[12.5px] mt-1">
-                  Reserva de emergência cobre {m.saudeFinanceira.reservaMeses} meses de gastos · taxa de
-                  poupança de {m.saudeFinanceira.taxaPoupanca}% no mês (dado ilustrativo)
-                  {temContextoPJ && ` — contexto: ${contexto === "pessoal" ? "Pessoal" : "PJ"} (dado ilustrativo, ainda não separado por contexto de verdade)`}
-                </p>
-              </div>
-            </div>
-          </Card>
-
-          <div className="mb-5">
-            <Tabs
-              options={[
-                { value: "fluxo", n: "A", label: "Fluxo de caixa" },
-                { value: "lancamentos", n: "B", label: "Lançamentos" },
-                { value: "patrimonio", n: "C", label: "Patrimônio & Metas" },
-              ]}
-              active={subtab}
-              onChange={setSubtab}
-            />
-          </div>
-
-          {subtab === "fluxo" && <FluxoCaixaTab />}
-          {subtab === "lancamentos" && <LancamentosTab clienteId={clienteAtual?.id} />}
-          {subtab === "patrimonio" && <PatrimonioMetasTab />}
-        </>
-      )}
-    </Stage>
+    </div>
   )
 }
