@@ -100,7 +100,7 @@ export default function MarcaPage() {
           </div>
 
           <div className="mb-3">
-            <Label>Subdomínio</Label>
+            <Label>Identificador do escritório (endereço próprio)</Label>
             <div className="flex items-center gap-1.5">
               <span className="text-text-faint text-[13px] font-mono">app.</span>
               <input
@@ -109,9 +109,13 @@ export default function MarcaPage() {
                 disabled={bloqueado}
                 className="bg-bg border border-line rounded-[9px] px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent/60 w-40 disabled:opacity-60"
               />
-              <span className="text-text-faint text-[13px] font-mono">.fluxo.com.br</span>
+              <span className="text-text-faint text-[13px] font-mono">.…</span>
             </div>
-            <p className="text-text-faint text-[11px] mt-1">Apenas letras e números, sem espaços.</p>
+            <p className="text-text-faint text-[11px] mt-1">
+              Apenas letras e números, sem espaços. Fica <strong>reservado</strong> pra virar o endereço próprio do seu
+              painel quando o domínio personalizado for ativado (em breve). Hoje o acesso é pelo endereço padrão do
+              AMplanejador.
+            </p>
           </div>
 
           <Field
@@ -147,7 +151,7 @@ export default function MarcaPage() {
               <div className="w-9 h-9 rounded-lg mx-auto mb-3" style={{ background: form.cor_marca }} />
               <div className="font-semibold text-[12.5px]">{nomeExibido}</div>
               <div className="text-text-faint text-[9.5px] font-mono mb-4">
-                app.{form.subdominio || profissional?.subdominio}.fluxo.com.br
+                app.{form.subdominio || profissional?.subdominio}
               </div>
               <Card className="mb-3 text-left p-3">
                 <div className="text-[10px] text-text-faint mb-1">SALDO CONCILIADO</div>
