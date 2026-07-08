@@ -21,6 +21,7 @@ export default function Topbar() {
         <NavLink to="/crm" className={tabClass}>CRM</NavLink>
         <NavLink to="/painel-analitico" className={tabClass}>Painel Analítico</NavLink>
         {podeMarca && <NavLink to="/marca" className={tabClass}>Marca</NavLink>}
+        <NavLink to="/configuracoes" className={tabClass}>Configurações</NavLink>
       </div>
 
       <div className="flex items-center gap-2">

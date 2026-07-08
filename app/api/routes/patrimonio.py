@@ -42,6 +42,7 @@ from app.schemas.patrimonio import (
     ApoliceResposta,
     BemCriar,
     BemResposta,
+    CriteriosSaude,
     DividaAtualizar,
     DividaCriar,
     DividaResposta,
@@ -491,21 +492,32 @@ def obter_resumo_patrimonial(
 # transparentes (o cliente vê um disclaimer de como é calculado). Combina
 # reserva de emergência (meses de gasto cobertos) + taxa de poupança do mês.
 # Ver defaults documentados no disclaimer do SaudeFinanceiraCard (frontend).
-def _classificar_saude(tem_dados, entradas_mes, despesas_mes, reserva_meses, taxa_poupanca_pct):
+def _classificar_saude(tem_dados, entradas_mes, despesas_mes, reserva_meses, taxa_poupanca_pct, criterios):
     if not tem_dados:
         return "neutro"
-    # Gastando mais do que ganha, ou reserva cobre menos de 3 meses -> vermelho.
+    # Gastando mais do que ganha, ou reserva abaixo do mínimo -> vermelho.
     if entradas_mes > 0 and despesas_mes > entradas_mes:
         return "vermelho"
     rm = reserva_meses if reserva_meses is not None else 0
     poup = taxa_poupanca_pct if taxa_poupanca_pct is not None else 0
-    if rm < 3:
+    if rm < criterios.reserva_min_meses:
         return "vermelho"
-    if poup >= 30 and rm >= 12:
+    if poup >= criterios.azul_poupanca_pct and rm >= criterios.azul_reserva_meses:
         return "azul"  # excelente / rumo à independência
-    if poup >= 15 and rm >= 6:
+    if poup >= criterios.verde_poupanca_pct and rm >= criterios.verde_reserva_meses:
         return "verde"  # saudável
     return "amarelo"  # regular / dá pra melhorar
+
+
+def _criterios_do_profissional(profissional) -> CriteriosSaude:
+    """Limiares configurados pelo planejador (ou os defaults do banco)."""
+    return CriteriosSaude(
+        reserva_min_meses=float(profissional.saude_reserva_min_meses),
+        verde_reserva_meses=float(profissional.saude_verde_reserva_meses),
+        verde_poupanca_pct=float(profissional.saude_verde_poupanca_pct),
+        azul_reserva_meses=float(profissional.saude_azul_reserva_meses),
+        azul_poupanca_pct=float(profissional.saude_azul_poupanca_pct),
+    )
 
 
 @router.get("/saude-financeira", response_model=SaudeFinanceiraResposta)
@@ -623,15 +635,22 @@ def obter_saude_financeira(
     taxa_poupanca_pct = (
         round((entradas_mes - despesas_mes) / entradas_mes * 100, 1) if entradas_mes > 0 else None
     )
-    classificacao = _classificar_saude(tem_dados, entradas_mes, despesas_mes, reserva_meses, taxa_poupanca_pct)
 
     cliente = db.get(Cliente, cliente_id)
     profissional = db.get(Profissional, cliente.profissional_id) if cliente else None
+    criterios = _criterios_do_profissional(profissional) if profissional else CriteriosSaude(
+        reserva_min_meses=3, verde_reserva_meses=6, verde_poupanca_pct=15,
+        azul_reserva_meses=12, azul_poupanca_pct=30,
+    )
+    classificacao = _classificar_saude(
+        tem_dados, entradas_mes, despesas_mes, reserva_meses, taxa_poupanca_pct, criterios
+    )
 
     return SaudeFinanceiraResposta(
         classificacao=classificacao,
         reserva_meses=reserva_meses,
         taxa_poupanca_pct=taxa_poupanca_pct,
+        criterios=criterios,
         tem_dados=tem_dados,
         score=score,
         receitas_mes=entradas_mes,

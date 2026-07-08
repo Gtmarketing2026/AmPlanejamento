@@ -15,6 +15,7 @@ import CrmPage from "../pages/crm/CrmPage"
 import OnboardingPage from "../pages/onboarding/OnboardingPage"
 import FaturasPage from "../pages/faturas/FaturasPage"
 import MarcaPage from "../pages/marca/MarcaPage"
+import ConfiguracoesPage from "../pages/configuracoes/ConfiguracoesPage"
 import PainelAnaliticoPage from "../pages/painelAnalitico/PainelAnaliticoPage"
 import ImportarExtratoPage from "../pages/importExtrato/ImportarExtratoPage"
 import CadastrosPage from "../pages/cadastros/CadastrosPage"
@@ -73,6 +74,7 @@ export const router = createBrowserRouter([
           { path: "/onboarding", element: <OnboardingPage /> },
           { path: "/faturas", element: <FaturasPage /> },
           { path: "/marca", element: <MarcaPage /> },
+          { path: "/configuracoes", element: <ConfiguracoesPage /> },
           { path: "/painel-analitico", element: <PainelAnaliticoPage /> },
           { path: "/importar-extrato", element: <ImportarExtratoPage /> },
           { path: "/cadastros", element: <CadastrosPage /> },

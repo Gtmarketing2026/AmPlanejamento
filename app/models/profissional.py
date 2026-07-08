@@ -1,7 +1,7 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import Boolean, Date, String, DateTime, func
+from sqlalchemy import Boolean, Date, Numeric, String, DateTime, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -25,3 +25,15 @@ class Profissional(Base):
     video_boas_vindas: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="ativa")  # ativa | congelada | cancelada
     criado_em: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    # Critérios da saúde financeira do cliente (o planejador pode ajustar na aba
+    # Configurações). Defaults = as regras que estavam hardcoded antes.
+    # Vermelho: gasta mais do que ganha OU reserva < reserva_min_meses.
+    # Azul (excelente): poupança >= azul_poupanca E reserva >= azul_reserva.
+    # Verde (saudável): poupança >= verde_poupanca E reserva >= verde_reserva.
+    # Senão: amarelo.
+    saude_reserva_min_meses: Mapped[float] = mapped_column(Numeric(5, 1), nullable=False, default=3)
+    saude_verde_reserva_meses: Mapped[float] = mapped_column(Numeric(5, 1), nullable=False, default=6)
+    saude_verde_poupanca_pct: Mapped[float] = mapped_column(Numeric(5, 1), nullable=False, default=15)
+    saude_azul_reserva_meses: Mapped[float] = mapped_column(Numeric(5, 1), nullable=False, default=12)
+    saude_azul_poupanca_pct: Mapped[float] = mapped_column(Numeric(5, 1), nullable=False, default=30)

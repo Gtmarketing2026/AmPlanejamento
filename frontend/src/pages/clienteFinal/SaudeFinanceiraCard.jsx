@@ -40,6 +40,14 @@ export default function SaudeFinanceiraCard({ token }) {
   if (isLoading || !data) return null
 
   const c = CLASSIFICACAO[data.classificacao] || CLASSIFICACAO.neutro
+  // Limiares configurados pelo planejador (fallback = defaults do sistema).
+  const cr = data.criterios || {
+    reserva_min_meses: 3,
+    verde_reserva_meses: 6,
+    verde_poupanca_pct: 15,
+    azul_reserva_meses: 12,
+    azul_poupanca_pct: 30,
+  }
   const linkPlanejador = data.planejador_whatsapp
     ? `https://wa.me/55${data.planejador_whatsapp.replace(/\D/g, "")}`
     : null
@@ -102,10 +110,10 @@ export default function SaudeFinanceiraCard({ token }) {
             </li>
           </ul>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
-            <span><span className="text-red">●</span> Vermelho: gasta mais do que ganha ou reserva &lt; 3 meses</span>
-            <span><span className="text-amber">●</span> Amarelo: até 3–6 meses de reserva</span>
-            <span><span className="text-accent">●</span> Verde: poupança ≥ 15% e reserva ≥ 6 meses</span>
-            <span><span className="text-blue">●</span> Azul: poupança ≥ 30% e reserva ≥ 12 meses</span>
+            <span><span className="text-red">●</span> Vermelho: gasta mais do que ganha ou reserva &lt; {cr.reserva_min_meses} meses</span>
+            <span><span className="text-amber">●</span> Amarelo: reserva a partir de {cr.reserva_min_meses} meses, ainda abaixo do Verde</span>
+            <span><span className="text-accent">●</span> Verde: poupança ≥ {cr.verde_poupanca_pct}% e reserva ≥ {cr.verde_reserva_meses} meses</span>
+            <span><span className="text-blue">●</span> Azul: poupança ≥ {cr.azul_poupanca_pct}% e reserva ≥ {cr.azul_reserva_meses} meses</span>
           </div>
           <p className="text-text-faint mt-2">É uma referência automática pra orientar — não substitui a análise do seu planejador.</p>
         </div>
