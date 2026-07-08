@@ -306,7 +306,30 @@ function CarrosselTelas() {
   )
 }
 
+// Destaques -- os diferenciais mais fortes, com mais detalhe que o grid.
+const DESTAQUES = [
+  {
+    icone: "📄",
+    titulo: "Importe qualquer extrato, de qualquer arquivo",
+    texto:
+      "Fatura de cartão ou extrato de conta, em PDF (mesmo protegido por senha), OFX ou CSV — de qualquer banco. Não precisa ter o cartão cadastrado nem conexão com o banco: sobe o arquivo e os lançamentos entram na hora.",
+  },
+  {
+    icone: "🤖",
+    titulo: "Lançamento automático com IA",
+    texto:
+      "Ao subir uma fatura, cada compra já chega classificada por IA e as parcelas futuras são geradas como projeção nos próximos meses — sem duplicar quando a próxima fatura chega. Você só ajusta o que quiser.",
+  },
+  {
+    icone: "🔄",
+    titulo: "Virada do cartão (opcional)",
+    texto:
+      "Configure a data de fechamento do cartão pra que cada compra conte no mês em que será paga, não no mês em que foi feita — mapeando o gasto real do mês. É opcional e editável: a data da compra continua visível, só muda em qual mês ela é somada.",
+  },
+]
+
 const RECURSOS = [
+  { icone: "🔎", titulo: "Filtros e ações em massa", texto: "Filtre por conta, cartão, categoria, subcategoria ou período; importe ou exclua lançamentos em massa." },
   { icone: "💸", titulo: "Fluxo de caixa", texto: "Receitas, despesas e resultado por mês, com gráfico e exportação em PDF/Excel." },
   { icone: "📊", titulo: "Resumo financeiro", texto: "Visão anual mês a mês — clique num valor e veja os lançamentos por trás dele." },
   { icone: "🎯", titulo: "Planejamento e metas", texto: "Metas de gasto por categoria, priorização (essencial/desejo/sonho) e acompanhamento de aportes." },
@@ -314,11 +337,10 @@ const RECURSOS = [
   { icone: "📈", titulo: "Investimentos", texto: "Carteira por instituição e liquidez, com alocação direta pra cada meta do cliente." },
   { icone: "🏦", titulo: "Patrimônio", texto: "Ativos, dívidas, bens móveis e imóveis — patrimônio líquido sempre atualizado." },
   { icone: "🛡️", titulo: "Proteção", texto: "Cobertura de seguro de vida atual vs. recomendada, com apólices cadastradas." },
-  { icone: "🤖", titulo: "Categorização por IA", texto: "Lançamentos importados já chegam classificados — o cliente só ajusta o que quiser." },
-  { icone: "📄", titulo: "Importação PDF, OFX e CSV", texto: "Fatura de cartão ou extrato bancário, mesmo com senha — parcelamentos detectados automaticamente." },
   { icone: "💳", titulo: "Contas e cartões", texto: "Saldo atualizado automaticamente pelos lançamentos, com virada de fatura configurável." },
   { icone: "🏷️", titulo: "Categorias sob medida", texto: "Categorias padrão prontas, mais as que você e cada cliente quiserem criar." },
-  { icone: "🤝", titulo: "CRM completo", texto: "Timeline, follow-ups, Google Agenda e checklist de tarefas pro cliente." },
+  { icone: "🤝", titulo: "CRM com Google Agenda", texto: "Timeline de cada cliente, follow-ups sincronizados com o Google Agenda e checklist de tarefas." },
+  { icone: "🎨", titulo: "Sua marca (white label)", texto: "Subdomínio, cor e logo próprios — seu cliente vê o painel com a cara do seu escritório." },
 ]
 
 const BENEFICIOS_PLANO = {
@@ -328,10 +350,12 @@ const BENEFICIOS_PLANO = {
 
 const FAQ = [
   { p: "Preciso instalar alguma coisa?", r: "Não — é 100% web. Você e seus clientes acessam pelo navegador, no computador ou celular." },
+  { p: "De quais bancos consigo importar?", r: "De qualquer um. A leitura é feita a partir do arquivo (PDF, OFX ou CSV) que você já baixa do internet banking ou do app do cartão — não depende de integração com o banco, então funciona com fatura ou extrato de qualquer instituição." },
+  { p: "Preciso cadastrar o cartão antes de importar?", r: "Não. Você pode subir qualquer fatura ou extrato sem ter o cartão/conta cadastrados. Se quiser, depois vincula a importação a um cartão específico pra acompanhar limite e virada de fatura." },
   { p: "Os planos incluem quantos clientes?", r: "Os dois planos incluem 4 clientes. A partir do 5º, cada cliente extra tem um valor fixo mensal adicional." },
   { p: "Posso cancelar quando quiser?", r: "Sim, a assinatura é mensal recorrente e sem fidelidade." },
   { p: "Meus clientes têm acesso próprio?", r: "Sim — cada cliente recebe um login exclusivo pra acompanhar o próprio painel financeiro, separado do seu." },
-  { p: "E o Open Finance?", r: "Disponível no Plano Completo. Hoje a importação é manual (PDF/OFX/CSV); a conexão automática com bancos está em ativação." },
+  { p: "E o Open Finance?", r: "Disponível no Plano Completo. Hoje a importação é por arquivo (PDF/OFX/CSV); a conexão automática com bancos está em ativação." },
 ]
 
 export default function LandingPage() {
@@ -391,6 +415,23 @@ export default function LandingPage() {
           <p className="text-text-faint text-[11px] text-center mt-3">
             * Telas com dados fictícios (cliente demonstrativo), só pra ilustrar o produto.
           </p>
+        </div>
+      </section>
+
+      {/* Destaques */}
+      <section className="max-w-[1180px] mx-auto px-6 py-10">
+        <div className="text-center mb-10">
+          <div className="text-accent text-[11px] uppercase tracking-wide font-mono mb-2">O que faz diferença</div>
+          <h2 className="font-display text-[28px] font-bold">Menos trabalho manual, mais planejamento</h2>
+        </div>
+        <div className="grid md:grid-cols-3 gap-5">
+          {DESTAQUES.map((d) => (
+            <Card key={d.titulo} className="p-6">
+              <div className="text-[26px] mb-3">{d.icone}</div>
+              <div className="font-display font-semibold text-[16px] mb-2">{d.titulo}</div>
+              <p className="text-text-dim text-[13px] leading-relaxed">{d.texto}</p>
+            </Card>
+          ))}
         </div>
       </section>
 
