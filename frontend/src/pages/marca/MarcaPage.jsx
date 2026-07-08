@@ -19,7 +19,6 @@ export default function MarcaPage() {
   const [form, setForm] = useState({
     nome_empresa: profissional?.nome_empresa || "",
     cor_marca: profissional?.cor_marca || "#26D9A8",
-    subdominio: profissional?.subdominio || "",
     video_boas_vindas: profissional?.video_boas_vindas || "",
   })
   const [salvo, setSalvo] = useState(false)
@@ -38,7 +37,6 @@ export default function MarcaPage() {
       await atualizarMarca({
         nome_empresa: form.nome_empresa || null,
         cor_marca: form.cor_marca,
-        subdominio: form.subdominio || null,
         video_boas_vindas: form.video_boas_vindas || null,
       })
       await recarregar()
@@ -61,7 +59,7 @@ export default function MarcaPage() {
     >
       <div className="relative grid grid-cols-[1fr_320px] gap-7 max-md:grid-cols-1">
         {bloqueado && (
-          <LockedOverlay description="Marca própria (subdomínio, cor e vídeo) está disponível no Plano Completo." />
+          <LockedOverlay description="Marca própria (cor e vídeo) está disponível no Plano Completo." />
         )}
         <form onSubmit={onSalvar}>
           <Field
@@ -99,25 +97,6 @@ export default function MarcaPage() {
             </div>
           </div>
 
-          <div className="mb-3">
-            <Label>Identificador do escritório (endereço próprio)</Label>
-            <div className="flex items-center gap-1.5">
-              <span className="text-text-faint text-[13px] font-mono">app.</span>
-              <input
-                value={form.subdominio}
-                onChange={(e) => setForm((f) => ({ ...f, subdominio: e.target.value.toLowerCase() }))}
-                disabled={bloqueado}
-                className="bg-bg border border-line rounded-[9px] px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent/60 w-40 disabled:opacity-60"
-              />
-              <span className="text-text-faint text-[13px] font-mono">.…</span>
-            </div>
-            <p className="text-text-faint text-[11px] mt-1">
-              Apenas letras e números, sem espaços. Fica <strong>reservado</strong> pra virar o endereço próprio do seu
-              painel quando o domínio personalizado for ativado (em breve). Hoje o acesso é pelo endereço padrão do
-              AMplanejador.
-            </p>
-          </div>
-
           <Field
             label="Vídeo de boas-vindas (YouTube)"
             value={form.video_boas_vindas}
@@ -149,10 +128,7 @@ export default function MarcaPage() {
           <PhoneFrame width={280}>
             <div className="text-center">
               <div className="w-9 h-9 rounded-lg mx-auto mb-3" style={{ background: form.cor_marca }} />
-              <div className="font-semibold text-[12.5px]">{nomeExibido}</div>
-              <div className="text-text-faint text-[9.5px] font-mono mb-4">
-                app.{form.subdominio || profissional?.subdominio}
-              </div>
+              <div className="font-semibold text-[12.5px] mb-4">{nomeExibido}</div>
               <Card className="mb-3 text-left p-3">
                 <div className="text-[10px] text-text-faint mb-1">SALDO CONCILIADO</div>
                 <div className="text-[16px] font-semibold" style={{ color: form.cor_marca }}>

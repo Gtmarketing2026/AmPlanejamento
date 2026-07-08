@@ -37,9 +37,12 @@ export default function OnboardingPage() {
       <Card className="max-w-md">
         <div className="font-display font-semibold text-lg mb-1">Personalize sua área de clientes</div>
         <p className="text-text-dim text-[13px] mb-5">Última etapa — isso é o que seus clientes vão ver.</p>
-        <StaticField label="Identificador do seu escritório (endereço próprio em breve)">
-          app.<span className="text-accent">{profissional?.subdominio}</span>
+        <StaticField label="Escritório">
+          {profissional?.nome_empresa || profissional?.nome}
         </StaticField>
+        <p className="text-text-faint text-[12px] mt-2">
+          Você pode personalizar cor e vídeo de boas-vindas depois, na aba <strong>Marca</strong>.
+        </p>
         <div className="flex flex-col gap-2 mt-4">
           <Button onClick={() => navigate("/clientes")}>Concluir e ir para meus clientes</Button>
           <Button variant="ghost" onClick={() => navigate("/inicio")}>

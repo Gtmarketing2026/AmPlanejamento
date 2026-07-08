@@ -12,7 +12,7 @@ import { formatarMoeda } from "../../lib/format"
 
 const BENEFICIOS = {
   essencial: ["Upload manual de extrato/fatura (OFX, CSV, PDF)", "Classificação automática por IA", "Até 4 clientes inclusos"],
-  completo: ["Tudo do Essencial", "Conciliação via Open Finance", "Marca própria (subdomínio, cor, logo)", "Até 4 clientes inclusos"],
+  completo: ["Tudo do Essencial", "Conciliação via Open Finance", "Marca própria (cor e logo)", "Até 4 clientes inclusos"],
 }
 
 export default function AssinaturaPage() {
