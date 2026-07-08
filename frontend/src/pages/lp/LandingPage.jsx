@@ -345,6 +345,45 @@ function CarrosselTelas() {
 }
 
 // Destaques -- os diferenciais mais fortes, com mais detalhe que o grid.
+// Mini-ilustração do mapa "onde estou → onde quero chegar" pro card de
+// destaque (versão compacta do roadmap que aparece no CRM/carrossel).
+function MiniMapaPlanoAcao() {
+  const nos = [
+    { cor: "#26D9A8", label: "Reserva" },
+    { cor: "#F0A63C", label: "Investir" },
+    { cor: "#5A6570", label: "Quitar" },
+  ]
+  return (
+    <div className="bg-panel-2 border border-line rounded-xl px-4 py-3.5 mt-1">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10.5px] text-text-faint font-mono">📍 Onde estou</span>
+        <span className="text-[10.5px] text-accent font-mono">🎯 Onde quero chegar</span>
+      </div>
+      <div className="flex items-center">
+        <span className="text-[14px]">📍</span>
+        {nos.map((n, i) => (
+          <div key={i} className="flex items-center flex-1">
+            <div className="h-[2px] flex-1 bg-line" />
+            <span
+              className="w-3 h-3 rounded-full shrink-0 ring-2 ring-panel-2"
+              style={{ background: n.cor }}
+              title={n.label}
+            />
+          </div>
+        ))}
+        <div className="h-[2px] w-4 bg-line" />
+        <span className="text-[14px]">🎯</span>
+      </div>
+      <div className="flex items-center justify-between mt-2">
+        <div className="h-1.5 w-24 rounded-full bg-panel overflow-hidden">
+          <div className="h-full rounded-full bg-accent" style={{ width: "33%" }} />
+        </div>
+        <span className="text-[10px] text-accent font-mono">33% concluído</span>
+      </div>
+    </div>
+  )
+}
+
 const DESTAQUES = [
   {
     icone: "📄",
@@ -369,6 +408,7 @@ const DESTAQUES = [
     titulo: "Plano de ação visual pra cada cliente",
     texto:
       "Monte no CRM o caminho de “onde estou → onde quero chegar”: etapas com prazo e status, quiz de perfil comportamental e histórico do cliente — com uma barra de progresso que mostra o quanto ele já avançou. Vira uma conversa clara sobre o planejamento.",
+    visual: MiniMapaPlanoAcao,
   },
 ]
 
@@ -514,6 +554,7 @@ export default function LandingPage() {
               <div className="text-[26px] mb-3">{d.icone}</div>
               <div className="font-display font-semibold text-[16px] mb-2">{d.titulo}</div>
               <p className="text-text-dim text-[13px] leading-relaxed">{d.texto}</p>
+              {d.visual && <d.visual />}
             </Card>
           ))}
         </div>
