@@ -20,6 +20,10 @@ class ImportacaoResposta(BaseModel):
     # Conta/cartão ao qual a importação foi associada (ver ContaConectada.natureza).
     conta_natureza: str | None = None  # conta | cartao
     conta_nome: str | None = None
+    # Mês(es) de referência dos lançamentos dessa importação (min/max do
+    # mes_referencia deles — respeita a virada do cartão). Um só mês => iguais.
+    mes_ref_inicio: date | None = None
+    mes_ref_fim: date | None = None
     # Só na resposta do upload: quantas compras parceladas têm parcelas futuras
     # que podem ser geradas (o frontend pergunta se o usuário quer gerá-las).
     parcelamentos_detectados: int = 0

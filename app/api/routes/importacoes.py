@@ -456,6 +456,35 @@ def gerar_parcelas_importacao(importacao_id: uuid.UUID, db: Session = Depends(ge
     return {"parcelas_criadas": criadas}
 
 
+def meses_ref_por_importacao(db: Session, importacao_ids: list[uuid.UUID]) -> dict:
+    """Min/max do mes_referencia dos lançamentos de cada importação -- usado
+    pra mostrar o mês de referência na lista de importações."""
+    if not importacao_ids:
+        return {}
+    rows = db.execute(
+        select(
+            Transacao.importacao_id,
+            func.min(Transacao.mes_referencia),
+            func.max(Transacao.mes_referencia),
+        )
+        .where(Transacao.importacao_id.in_(importacao_ids))
+        .group_by(Transacao.importacao_id)
+    ).all()
+    return {r[0]: (r[1], r[2]) for r in rows}
+
+
+def _monta_importacao_resposta(imp, conta, meses: dict) -> ImportacaoResposta:
+    ini, fim = meses.get(imp.id, (None, None))
+    return ImportacaoResposta.model_validate(imp).model_copy(
+        update={
+            "conta_natureza": conta.natureza if conta else None,
+            "conta_nome": conta.nome_exibicao if conta else None,
+            "mes_ref_inicio": ini,
+            "mes_ref_fim": fim,
+        }
+    )
+
+
 @router.get("/importacoes", response_model=list[ImportacaoResposta])
 def listar_importacoes(cliente_id: uuid.UUID | None = None, db: Session = Depends(get_db_com_rls)):
     query = (
@@ -466,12 +495,8 @@ def listar_importacoes(cliente_id: uuid.UUID | None = None, db: Session = Depend
     if cliente_id:
         query = query.where(ImportacaoExtrato.cliente_id == cliente_id)
     linhas = db.execute(query).all()
-    return [
-        ImportacaoResposta.model_validate(imp).model_copy(
-            update={"conta_natureza": conta.natureza if conta else None, "conta_nome": conta.nome_exibicao if conta else None}
-        )
-        for imp, conta in linhas
-    ]
+    meses = meses_ref_por_importacao(db, [imp.id for imp, _ in linhas])
+    return [_monta_importacao_resposta(imp, conta, meses) for imp, conta in linhas]
 
 
 @router.delete("/importacoes/{importacao_id}", status_code=status.HTTP_200_OK)

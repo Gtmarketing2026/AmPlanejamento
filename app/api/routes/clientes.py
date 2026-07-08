@@ -19,8 +19,10 @@ from app.api.routes.importacoes import (
     _calcular_mes_referencia,
     _estabelecimento,
     _hash_parcela,
+    _monta_importacao_resposta,
     _obter_conta_do_upload,
     gerar_parcelas_futuras,
+    meses_ref_por_importacao,
     processar_upload,
     projetar_parcelas_de_origem,
 )
@@ -760,12 +762,8 @@ def listar_minhas_importacoes(
         .where(ImportacaoExtrato.cliente_id == cliente_id)
         .order_by(ImportacaoExtrato.criado_em.desc())
     ).all()
-    return [
-        ImportacaoResposta.model_validate(imp).model_copy(
-            update={"conta_natureza": conta.natureza if conta else None, "conta_nome": conta.nome_exibicao if conta else None}
-        )
-        for imp, conta in linhas
-    ]
+    meses = meses_ref_por_importacao(db, [imp.id for imp, _ in linhas])
+    return [_monta_importacao_resposta(imp, conta, meses) for imp, conta in linhas]
 
 
 @router.delete("/eu/importacoes/{importacao_id}", status_code=status.HTTP_200_OK)

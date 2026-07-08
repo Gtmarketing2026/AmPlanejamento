@@ -17,6 +17,18 @@ import { formatarData } from "../../lib/format"
 
 const STATUS_VARIANT = { processado: "on", processando: "warn", pendente: "warn", erro: "off" }
 
+const MESES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+// Mês(es) de referência a partir do min/max (datas "AAAA-MM-DD"). Um só = "jul/2026";
+// vários = "jun–jul/2026"; nenhum (import sem lançamentos) = "—".
+function mesRefLabel(ini, fim) {
+  if (!ini) return "—"
+  const f = (d) => {
+    const [y, m] = d.split("-")
+    return `${MESES[Number(m) - 1]}/${y}`
+  }
+  return !fim || ini === fim ? f(ini) : `${f(ini)}–${f(fim)}`
+}
+
 export default function ClienteImportarPage() {
   const { token, perfil } = useOutletContext()
   const qc = useQueryClient()
@@ -167,6 +179,7 @@ export default function ClienteImportarPage() {
             <Th>Enviado em</Th>
             <Th>Tipo</Th>
             <Th>Conta</Th>
+            <Th>Mês ref.</Th>
             <Th>Formato</Th>
             <Th>Lançamentos</Th>
             <Th>Status</Th>
@@ -181,6 +194,7 @@ export default function ClienteImportarPage() {
                   {imp.conta_natureza === "cartao" ? "Cartão" : "Banco"}
                   {imp.conta_nome && <span className="text-text-faint"> · {imp.conta_nome}</span>}
                 </Td>
+                <Td className="font-mono text-text-dim">{mesRefLabel(imp.mes_ref_inicio, imp.mes_ref_fim)}</Td>
                 <Td className="uppercase text-text-dim">{imp.formato_arquivo}</Td>
                 <Td className="font-mono">
                   {imp.status === "erro"
@@ -205,7 +219,7 @@ export default function ClienteImportarPage() {
             ))}
             {!importacoes.length && (
               <Tr>
-                <Td colSpan={7} className="text-text-faint text-center py-6">
+                <Td colSpan={8} className="text-text-faint text-center py-6">
                   Nenhuma importação ainda.
                 </Td>
               </Tr>
