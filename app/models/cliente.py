@@ -25,8 +25,12 @@ class Cliente(Base):
     nome_pj: Mapped[str | None] = mapped_column(String, nullable=True)
     # Acesso do cliente final ao próprio dashboard (login separado do
     # profissional). nickname único globalmente pra servir de identificador
-    # de login simples.
-    nickname: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
+    # de login simples -- mas a unicidade real é um ÍNDICE PARCIAL no banco
+    # (só entre status <> 'excluido', ver migration_reativacao_cliente.sql):
+    # um cliente excluído não pode segurar o nickname refém e impedir
+    # recadastro. Por isso `unique=True` foi removido daqui (era constraint
+    # total, que bloqueava a reativação/recadastro).
+    nickname: Mapped[str | None] = mapped_column(String, nullable=True)
     senha_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     data_cadastro: Mapped[date] = mapped_column(Date, server_default=func.current_date())
     status: Mapped[str] = mapped_column(String, default="ativo")  # ativo | excluido

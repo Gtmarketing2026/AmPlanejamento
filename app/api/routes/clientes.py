@@ -74,6 +74,20 @@ def listar_clientes(db: Session = Depends(get_db_com_rls)):
     return clientes
 
 
+def _nickname_em_uso(nickname: str | None, ignorar_id: uuid.UUID | None = None) -> bool:
+    """O nickname é o login global do cliente -- precisa ser único ENTRE OS
+    NÃO EXCLUÍDOS (índice parcial no banco). Um cliente excluído não segura o
+    nickname refém. Checagem via conexão privilegiada porque o RLS restringiria
+    a busca só ao próprio tenant, deixando passar duplicata de outro planejador."""
+    if not nickname:
+        return False
+    with SessionLocalAdmin() as db_admin:
+        q = select(Cliente).where(Cliente.nickname == nickname, Cliente.status != "excluido")
+        if ignorar_id is not None:
+            q = q.where(Cliente.id != ignorar_id)
+        return db_admin.scalar(q) is not None
+
+
 @router.post("", response_model=ClienteResposta, status_code=status.HTTP_201_CREATED)
 def criar_cliente(
     dados: ClienteCriar,
@@ -81,18 +95,45 @@ def criar_cliente(
     profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
     _plano: uuid.UUID = Depends(exigir_plano_ativo),  # 402 se não tem plano ativo
 ):
-    # nickname é único globalmente (login do cliente final não sabe o
-    # subdomínio do profissional antecipadamente) — checagem via conexão
-    # privilegiada, porque RLS restringiria a busca só aos clientes do
-    # profissional atual, deixando passar duplicata de outro tenant.
-    with SessionLocalAdmin() as db_admin:
-        ja_existe_nickname = db_admin.scalar(select(Cliente).where(Cliente.nickname == dados.nickname))
-    if ja_existe_nickname:
-        raise HTTPException(status_code=400, detail="Nickname já está em uso")
+    # Duplicidade por CPF DENTRO deste planejador (RLS já filtra o tenant):
+    #  - se existe um ATIVO com o mesmo CPF -> é duplicata real, bloqueia;
+    #  - se existe um EXCLUÍDO com o mesmo CPF -> REATIVA (traz de volta com o
+    #    histórico), em vez de barrar como "já cadastrado". Assim, excluir e
+    #    recadastrar o mesmo cliente funciona. Outro planejador não é afetado
+    #    (CPF não é único global; o RLS não enxerga clientes de outro tenant).
+    mesmos_cpf = db.scalars(
+        select(Cliente).where(Cliente.documento == dados.documento).order_by(Cliente.criado_em.desc())
+    ).all()
+    if any(c.status == "ativo" for c in mesmos_cpf):
+        raise HTTPException(status_code=400, detail="Você já tem um cliente ativo com esse CPF.")
 
-    # Nota: isto é ilustrativo — em produção, usar select(func.count()) em vez
-    # de carregar o objeto. Mantido simples aqui para foco na regra de negócio.
-    qtd_ativos = len(db.scalars(select(Cliente).where(Cliente.status == "ativo")).all())
+    reativar = next((c for c in mesmos_cpf if c.status == "excluido"), None)
+    if reativar is not None:
+        if _nickname_em_uso(dados.nickname, ignorar_id=reativar.id):
+            raise HTTPException(status_code=400, detail="Nickname já está em uso")
+        validar_senha_forte(dados.senha)
+        reativar.status = "ativo"
+        reativar.data_exclusao = None
+        reativar.motivo_churn = None
+        reativar.motivo_churn_detalhe = None
+        reativar.conexao_pausada = False
+        reativar.nome = dados.nome
+        reativar.tipo = dados.tipo
+        reativar.cnpj = dados.cnpj
+        reativar.nome_pj = dados.nome_pj
+        reativar.nickname = dados.nickname
+        reativar.senha_hash = hash_senha(dados.senha)
+        reativar.valor_honorario_mensal = dados.valor_honorario_mensal
+        reativar.perfil_comportamental = dados.perfil_comportamental
+        reativar.objetivo_principal = dados.objetivo_principal
+        reativar.data_cadastro = date.today()  # nova relação recomeça hoje
+        db.add(reativar)
+        db.flush()
+        db.refresh(reativar)
+        return reativar
+
+    if _nickname_em_uso(dados.nickname):
+        raise HTTPException(status_code=400, detail="Nickname já está em uso")
 
     cliente = Cliente(
         profissional_id=profissional_id,
@@ -110,16 +151,6 @@ def criar_cliente(
     )
     db.add(cliente)
     db.flush()
-
-    # Cadastrar já cobra o ciclo atual integral (regra fechada anteriormente).
-    # A geração da cobrança em si é responsabilidade do job de faturamento,
-    # não desta rota — aqui só garantimos que o cliente entrou no cômputo
-    # do próximo fechamento de ciclo.
-    if qtd_ativos >= settings.CLIENTES_INCLUSOS_PLANO_BASE:
-        # Sinalização para o frontend mostrar o aviso de cliente extra.
-        # (não bloqueia a criação — cliente extra é permitido, só é cobrado)
-        pass
-
     db.refresh(cliente)
     return cliente
 
@@ -139,11 +170,7 @@ def atualizar_cliente(
 
     novo_nickname = dados_informados.pop("nickname", None)
     if novo_nickname and novo_nickname != cliente.nickname:
-        with SessionLocalAdmin() as db_admin:
-            ja_existe_nickname = db_admin.scalar(
-                select(Cliente).where(Cliente.nickname == novo_nickname, Cliente.id != cliente_id)
-            )
-        if ja_existe_nickname:
+        if _nickname_em_uso(novo_nickname, ignorar_id=cliente_id):
             raise HTTPException(status_code=400, detail="Nickname já está em uso")
         cliente.nickname = novo_nickname
 
