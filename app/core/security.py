@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 from passlib.context import CryptContext
 
 from app.core.config import settings
@@ -32,7 +33,7 @@ def decodificar_access_token(token: str) -> str | None:
         if payload.get("tipo", "profissional") != "profissional":
             return None
         return payload.get("sub")
-    except JWTError:
+    except PyJWTError:
         return None
 
 
@@ -43,7 +44,7 @@ def decodificar_token_cliente(token: str) -> str | None:
         if payload.get("tipo") != "cliente_final":
             return None
         return payload.get("sub")
-    except JWTError:
+    except PyJWTError:
         return None
 
 
@@ -63,7 +64,7 @@ def decodificar_state_oauth_google(token: str) -> str | None:
         if payload.get("tipo") != "google_oauth_state":
             return None
         return payload.get("sub")
-    except JWTError:
+    except PyJWTError:
         return None
 
 
@@ -77,5 +78,5 @@ def decodificar_token_admin(token: str) -> str | None:
         if payload.get("tipo") != "admin":
             return None
         return payload.get("sub")
-    except JWTError:
+    except PyJWTError:
         return None

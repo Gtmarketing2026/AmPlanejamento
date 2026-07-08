@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
@@ -29,10 +29,24 @@ if settings.FRONTEND_URL:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_origins_liberadas,
-    allow_credentials=True,
+    # Autenticação é via Bearer token (Authorization header), não cookie -- não
+    # precisa de allow_credentials, e deixá-lo false é mais restritivo.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def cabecalhos_seguranca(request: Request, call_next):
+    """Headers de segurança padrão em toda resposta da API."""
+    resposta = await call_next(request)
+    resposta.headers["X-Content-Type-Options"] = "nosniff"
+    resposta.headers["X-Frame-Options"] = "DENY"
+    resposta.headers["Referrer-Policy"] = "no-referrer"
+    resposta.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    resposta.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    return resposta
 
 app.include_router(auth.router)
 app.include_router(clientes.router)

@@ -7,15 +7,22 @@ de cliente final (app/api/routes/clientes.py): tabela própria, JWT com
 tipo="admin", nunca aceito nas rotas dos outros dois níveis e vice-versa.
 """
 
+import base64
+import io
 import uuid
 from datetime import date
 
+import pyotp
+import qrcode
+import qrcode.image.svg
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_admin_id_atual, get_db_negocio, get_db_sem_rls
+from app.core.rate_limit import limpar, registrar_falha, verificar_bloqueio
 from app.core.security import criar_access_token, hash_senha, verificar_senha
+from app.core.validacao import validar_senha_forte
 from app.models.admin import Admin
 from app.models.cliente import Cliente
 from app.models.despesa_operacional import DespesaOperacional
@@ -24,9 +31,12 @@ from app.models.transacao import Transacao
 from app.schemas.cliente import LoginRequest, TokenResponse
 from app.schemas.negocio import (
     AdminAtualizar,
+    AdminLoginRequest,
     AdminPerfilResposta,
     CapacidadeItem,
     ClienteDoPlanejadorResposta,
+    MfaCodigo,
+    MfaSetupResposta,
     CredenciaisClienteAtualizar,
     CredenciaisClienteResposta,
     CredenciaisProfissionalAtualizar,
@@ -46,16 +56,105 @@ router = APIRouter(prefix="/negocio", tags=["negocio"])
 
 
 @router.post("/login", response_model=TokenResponse)
-def login_admin(dados: LoginRequest, db: Session = Depends(get_db_sem_rls)):
+def login_admin(dados: AdminLoginRequest, db: Session = Depends(get_db_sem_rls)):
     # get_db_sem_rls usa a conexão privilegiada -- necessário aqui porque o
     # login busca por e-mail sem ainda ter nenhum contexto de RLS (mesma
     # razão do login de profissional/cliente final).
+    chave = f"admin:{(dados.email or '').lower()}"
+    verificar_bloqueio(chave)
+
     admin = db.scalar(select(Admin).where(Admin.email == dados.email))
     if not admin or not verificar_senha(dados.senha, admin.senha_hash):
+        registrar_falha(chave)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="E-mail ou senha inválidos")
 
+    # 2º fator (TOTP) quando ativo. Senha certa mas sem/errado o código ->
+    # 401 com um marcador pra UI pedir o código (sem revelar nada a mais).
+    if admin.mfa_ativo:
+        if not dados.codigo_totp:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="mfa_requerido")
+        if not pyotp.TOTP(admin.mfa_secret).verify(dados.codigo_totp, valid_window=1):
+            registrar_falha(chave)
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Código de verificação inválido.")
+
+    limpar(chave)
     token = criar_access_token(str(admin.id), tipo="admin")
     return TokenResponse(access_token=token)
+
+
+# ---------------------------------------------------------------------------
+# MFA / 2FA do admin (TOTP — Google Authenticator, Authy etc.)
+# ---------------------------------------------------------------------------
+
+
+def _qr_svg_data_uri(otpauth_uri: str) -> str:
+    """Gera o QR do otpauth:// como SVG embutido (data URI) — sem depender de
+    CDN externo no frontend (CSP), sem PIL (SVG factory pura)."""
+    img = qrcode.make(otpauth_uri, image_factory=qrcode.image.svg.SvgImage)
+    buf = io.BytesIO()
+    img.save(buf)
+    b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+    return f"data:image/svg+xml;base64,{b64}"
+
+
+@router.post("/mfa/setup", response_model=MfaSetupResposta)
+def mfa_setup(
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    """Gera um segredo TOTP novo (ainda NÃO ativa — só ativa depois que o admin
+    confirma um código em /mfa/ativar). Regerar o setup troca o segredo."""
+    admin = db.get(Admin, admin_id)
+    if not admin:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Admin não encontrado")
+    secret = pyotp.random_base32()
+    admin.mfa_secret = secret
+    admin.mfa_ativo = False
+    db.add(admin)
+    db.flush()
+    otpauth = pyotp.TOTP(secret).provisioning_uri(name=admin.email, issuer_name="AMplanejador")
+    return MfaSetupResposta(secret=secret, otpauth_uri=otpauth, qr_svg_data_uri=_qr_svg_data_uri(otpauth))
+
+
+@router.post("/mfa/ativar", response_model=AdminPerfilResposta)
+def mfa_ativar(
+    dados: MfaCodigo,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    admin = db.get(Admin, admin_id)
+    if not admin or not admin.mfa_secret:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Gere o QR code primeiro (setup).")
+    if not pyotp.TOTP(admin.mfa_secret).verify(dados.codigo, valid_window=1):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Código inválido. Confira o app autenticador.")
+    admin.mfa_ativo = True
+    db.add(admin)
+    db.flush()
+    db.refresh(admin)
+    return admin
+
+
+@router.post("/mfa/desativar", response_model=AdminPerfilResposta)
+def mfa_desativar(
+    dados: MfaCodigo,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    """Desativa o MFA — exige um código válido atual (não deixa desligar só
+    por estar logado, caso a sessão tenha sido sequestrada)."""
+    admin = db.get(Admin, admin_id)
+    if not admin:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Admin não encontrado")
+    if not admin.mfa_ativo or not admin.mfa_secret:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "MFA não está ativo.")
+    if not pyotp.TOTP(admin.mfa_secret).verify(dados.codigo, valid_window=1):
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Código inválido.")
+    admin.mfa_ativo = False
+    admin.mfa_secret = None
+    db.add(admin)
+    db.flush()
+    db.refresh(admin)
+    return admin
 
 
 @router.get("/perfil", response_model=AdminPerfilResposta)
@@ -91,6 +190,7 @@ def atualizar_perfil_admin(
 
     nova_senha = dados_informados.pop("senha", None)
     if nova_senha:
+        validar_senha_forte(nova_senha)
         admin.senha_hash = hash_senha(nova_senha)
 
     for campo, valor in dados_informados.items():
@@ -274,7 +374,11 @@ def listar_clientes_do_planejador(profissional_id: uuid.UUID, db: Session = Depe
 
 
 @router.post("/planejadores/{profissional_id}/entrar", response_model=TokenResponse)
-def entrar_como_planejador(profissional_id: uuid.UUID, db: Session = Depends(get_db_negocio)):
+def entrar_como_planejador(
+    profissional_id: uuid.UUID,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
     """Emite um token de profissional de verdade -- o admin entra no MESMO
     app que o planejador usa (Dashboard, Clientes, CRM, Faturas...), não uma
     tela resumida à parte. Não precisa da senha dele: o bypass de RLS
@@ -283,17 +387,40 @@ def entrar_como_planejador(profissional_id: uuid.UUID, db: Session = Depends(get
     profissional = db.get(Profissional, profissional_id)
     if not profissional:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Planejador não encontrado")
+    # Impersonação é um acesso poderoso -- fica rastreada na auditoria.
+    db.execute(
+        text("""
+            INSERT INTO auditoria_log (profissional_id, ator_tipo, acao, entidade, entidade_id, detalhe)
+            VALUES (:pid, 'sistema', 'ADMIN_IMPERSONACAO', 'profissional', :pid,
+                    jsonb_build_object('admin_id', :admin_id))
+        """),
+        {"pid": str(profissional_id), "admin_id": str(admin_id)},
+    )
+    db.flush()
     token = criar_access_token(str(profissional_id), tipo="profissional")
     return TokenResponse(access_token=token)
 
 
 @router.post("/clientes/{cliente_id}/entrar", response_model=TokenResponse)
-def entrar_como_cliente(cliente_id: uuid.UUID, db: Session = Depends(get_db_negocio)):
+def entrar_como_cliente(
+    cliente_id: uuid.UUID,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
     """Mesma ideia, pro dashboard do cliente final -- 100% do painel dele,
     não uma listagem de lançamentos à parte."""
     cliente = db.get(Cliente, cliente_id)
     if not cliente:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    db.execute(
+        text("""
+            INSERT INTO auditoria_log (profissional_id, cliente_id, ator_tipo, acao, entidade, entidade_id, detalhe)
+            VALUES (:pid, :cid, 'sistema', 'ADMIN_IMPERSONACAO', 'cliente', :cid,
+                    jsonb_build_object('admin_id', :admin_id))
+        """),
+        {"pid": str(cliente.profissional_id), "cid": str(cliente_id), "admin_id": str(admin_id)},
+    )
+    db.flush()
     token = criar_access_token(str(cliente_id), tipo="cliente_final")
     return TokenResponse(access_token=token)
 
@@ -322,6 +449,7 @@ def atualizar_credenciais_planejador(
 
     nova_senha = dados_informados.pop("senha", None)
     if nova_senha:
+        validar_senha_forte(nova_senha)
         profissional.senha_hash = hash_senha(nova_senha)
 
     db.add(profissional)
@@ -351,6 +479,7 @@ def atualizar_credenciais_cliente(
 
     nova_senha = dados_informados.pop("senha", None)
     if nova_senha:
+        validar_senha_forte(nova_senha)
         cliente.senha_hash = hash_senha(nova_senha)
 
     db.add(cliente)

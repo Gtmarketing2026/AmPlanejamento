@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import DateTime, String, func
+from sqlalchemy import Boolean, DateTime, String, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,4 +19,8 @@ class Admin(Base):
     nome: Mapped[str] = mapped_column(String, nullable=False)
     email: Mapped[str] = mapped_column(String, nullable=False, unique=True)
     senha_hash: Mapped[str] = mapped_column(String, nullable=False)
+    # MFA/2FA (TOTP). mfa_secret é o segredo base32; mfa_ativo só vira true
+    # depois que o admin confirma um código válido no setup.
+    mfa_secret: Mapped[str | None] = mapped_column(String, nullable=True)
+    mfa_ativo: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     criado_em: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())

@@ -25,7 +25,9 @@ from app.api.routes.importacoes import (
     projetar_parcelas_de_origem,
 )
 from app.core.config import settings
+from app.core.rate_limit import limpar, registrar_falha, verificar_bloqueio
 from app.core.security import criar_access_token, hash_senha, verificar_senha
+from app.core.validacao import validar_senha_forte
 from app.db.base import SessionLocalAdmin
 from app.integrations.supabase_storage import excluir_arquivo
 from app.models.categoria import Categoria, Subcategoria
@@ -100,7 +102,7 @@ def criar_cliente(
         cnpj=dados.cnpj,
         nome_pj=dados.nome_pj,
         nickname=dados.nickname,
-        senha_hash=hash_senha(dados.senha),
+        senha_hash=(validar_senha_forte(dados.senha) or hash_senha(dados.senha)),
         valor_honorario_mensal=dados.valor_honorario_mensal,
         perfil_comportamental=dados.perfil_comportamental,
         objetivo_principal=dados.objetivo_principal,
@@ -147,6 +149,7 @@ def atualizar_cliente(
 
     nova_senha = dados_informados.pop("senha", None)
     if nova_senha:
+        validar_senha_forte(nova_senha)
         cliente.senha_hash = hash_senha(nova_senha)
 
     for campo, valor in dados_informados.items():
@@ -190,10 +193,15 @@ def login_cliente(dados: ClienteLoginRequest, db: Session = Depends(get_db_sem_r
     # get_db_sem_rls já usa a conexão privilegiada — necessário aqui porque
     # login busca por nickname sem ainda saber o profissional_id (RLS de
     # clientes bloquearia a busca, igual ao login de profissional).
+    chave = f"cliente:{(dados.nickname or '').lower()}"
+    verificar_bloqueio(chave)
+
     cliente = db.scalar(select(Cliente).where(Cliente.nickname == dados.nickname))
     if not cliente or not cliente.senha_hash or not verificar_senha(dados.senha, cliente.senha_hash):
+        registrar_falha(chave)
         raise HTTPException(status_code=401, detail="Nickname ou senha inválidos")
 
+    limpar(chave)
     if cliente.status == "excluido":
         raise HTTPException(status_code=403, detail="Cadastro encerrado. Fale com seu planejador.")
 

@@ -9,6 +9,8 @@ from app.api.deps import get_db_com_rls, get_db_sem_rls, get_profissional_id_atu
 from app.core.config import settings
 from app.core.planos import pode_usar_marca, tem_plano_ativo
 from app.core.security import criar_access_token, hash_senha, verificar_senha
+from app.core.rate_limit import limpar, registrar_falha, verificar_bloqueio
+from app.core.validacao import validar_senha_forte
 from app.models.assinatura import Assinatura
 from app.models.profissional import Profissional
 from app.schemas.cliente import LoginRequest, ProfissionalCadastro, ProfissionalPerfil, TokenResponse
@@ -34,6 +36,8 @@ def _gerar_subdominio(db: Session, base_texto: str) -> str:
 @router.post("/cadastro", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def cadastrar_profissional(dados: ProfissionalCadastro, db: Session = Depends(get_db_sem_rls)):
     from datetime import timedelta
+
+    validar_senha_forte(dados.senha)
 
     ja_existe = db.scalar(select(Profissional).where(Profissional.email == dados.email))
     if ja_existe:
@@ -74,10 +78,15 @@ def cadastrar_profissional(dados: ProfissionalCadastro, db: Session = Depends(ge
 
 @router.post("/login", response_model=TokenResponse)
 def login(dados: LoginRequest, db: Session = Depends(get_db_sem_rls)):
+    chave = f"profissional:{(dados.email or '').lower()}"
+    verificar_bloqueio(chave)
+
     profissional = db.scalar(select(Profissional).where(Profissional.email == dados.email))
     if not profissional or not verificar_senha(dados.senha, profissional.senha_hash):
+        registrar_falha(chave)
         raise HTTPException(status_code=401, detail="E-mail ou senha inválidos")
 
+    limpar(chave)
     if profissional.status == "cancelada":
         raise HTTPException(status_code=403, detail="Assinatura cancelada. Entre em contato com o suporte.")
 

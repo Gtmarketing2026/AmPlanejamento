@@ -29,7 +29,12 @@ async function comToken(promessa) {
 
 const auth = () => ({ token: getTokenAdmin() })
 
-export const loginAdmin = (email, senha) => apiPost("/negocio/login", { email, senha }, { auth: false })
+export const loginAdmin = (email, senha, codigo_totp) =>
+  apiPost("/negocio/login", { email, senha, codigo_totp: codigo_totp || null }, { auth: false })
+
+export const mfaSetup = () => comToken(apiPost("/negocio/mfa/setup", {}, auth()))
+export const mfaAtivar = (codigo) => comToken(apiPost("/negocio/mfa/ativar", { codigo }, auth()))
+export const mfaDesativar = (codigo) => comToken(apiPost("/negocio/mfa/desativar", { codigo }, auth()))
 
 export const buscarMetricasNegocio = () => comToken(apiGet("/negocio/metricas", auth()))
 

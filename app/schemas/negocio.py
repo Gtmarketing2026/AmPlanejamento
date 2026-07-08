@@ -109,9 +109,26 @@ class AdminPerfilResposta(BaseModel):
     id: uuid.UUID
     nome: str
     email: str
+    mfa_ativo: bool = False
     criado_em: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AdminLoginRequest(BaseModel):
+    email: str
+    senha: str
+    codigo_totp: str | None = None  # exigido quando o admin tem MFA ativo
+
+
+class MfaSetupResposta(BaseModel):
+    secret: str  # chave base32 pra digitar manualmente no app autenticador
+    otpauth_uri: str  # link otpauth:// (pro QR)
+    qr_svg_data_uri: str  # QR já pronto como data URI (image/svg+xml)
+
+
+class MfaCodigo(BaseModel):
+    codigo: str
 
 
 class AdminAtualizar(BaseModel):
