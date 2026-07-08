@@ -55,7 +55,15 @@ export default function ConsentPage() {
             </Card>
 
             <Button block>Autorizar no meu banco</Button>
-            <p className="text-text-faint text-[10.5px] font-mono mt-4">
+            <p className="text-text-faint text-[11px] leading-relaxed mt-3 text-left">
+              Ao autorizar, você consente com a leitura dos dados listados acima, apenas para acompanhamento financeiro,
+              enquanto durar esta autorização. Você pode <strong className="text-text-dim">revogar a qualquer momento</strong>
+              no seu painel. Saiba mais na{" "}
+              <a href="/privacidade" target="_blank" rel="noreferrer" className="text-accent hover:underline">
+                Política de Privacidade
+              </a>.
+            </p>
+            <p className="text-text-faint text-[10.5px] font-mono mt-3">
               Powered by Open Finance · regulado pelo Bacen
             </p>
           </div>

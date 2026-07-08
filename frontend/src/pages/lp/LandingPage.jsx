@@ -654,9 +654,13 @@ export default function LandingPage() {
       <footer className="border-t border-line">
         <div className="max-w-[1180px] mx-auto px-6 py-8 flex items-center justify-between flex-wrap gap-4">
           <Logo size={20} />
-          <div className="flex items-center gap-5 text-text-faint text-[12px]">
+          <div className="flex items-center gap-x-5 gap-y-1.5 text-text-faint text-[12px] flex-wrap justify-center">
             <a href="#recursos" className="hover:text-text-dim">Recursos</a>
             <a href="#planos" className="hover:text-text-dim">Planos</a>
+            <Link to="/privacidade" className="hover:text-text-dim">Privacidade</Link>
+            <Link to="/termos" className="hover:text-text-dim">Termos</Link>
+            <Link to="/cookies" className="hover:text-text-dim">Cookies</Link>
+            <Link to="/lgpd" className="hover:text-text-dim">Canal LGPD</Link>
             <EntrarMenu triggerClassName="hover:text-text-dim flex items-center gap-1" paraCima>
               Entrar <span className="text-[9px]">▾</span>
             </EntrarMenu>

@@ -4,6 +4,10 @@ import AuthLayout from "../layouts/AuthLayout"
 import ProtectedRoute from "./ProtectedRoute"
 
 import LandingPage from "../pages/lp/LandingPage"
+import PoliticaPrivacidade from "../pages/legal/PoliticaPrivacidade"
+import TermosUso from "../pages/legal/TermosUso"
+import PoliticaCookies from "../pages/legal/PoliticaCookies"
+import CanalLgpd from "../pages/legal/CanalLgpd"
 import LoginPage from "../pages/auth/LoginPage"
 import CadastroPage from "../pages/auth/CadastroPage"
 import InicioPage from "../pages/inicio/InicioPage"
@@ -33,6 +37,10 @@ import MeuPerfilNegocioPage from "../pages/negocio/MeuPerfilNegocioPage"
 
 export const router = createBrowserRouter([
   { path: "/", element: <LandingPage /> },
+  { path: "/privacidade", element: <PoliticaPrivacidade /> },
+  { path: "/termos", element: <TermosUso /> },
+  { path: "/cookies", element: <PoliticaCookies /> },
+  { path: "/lgpd", element: <CanalLgpd /> },
   {
     element: <AuthLayout />,
     children: [
