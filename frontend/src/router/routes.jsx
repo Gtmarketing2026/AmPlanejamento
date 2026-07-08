@@ -3,6 +3,7 @@ import AppLayout from "../layouts/AppLayout"
 import AuthLayout from "../layouts/AuthLayout"
 import ProtectedRoute from "./ProtectedRoute"
 
+import LandingPage from "../pages/lp/LandingPage"
 import LoginPage from "../pages/auth/LoginPage"
 import CadastroPage from "../pages/auth/CadastroPage"
 import InicioPage from "../pages/inicio/InicioPage"
@@ -30,6 +31,7 @@ import FinanceiroPlataformaPage from "../pages/negocio/FinanceiroPlataformaPage"
 import MeuPerfilNegocioPage from "../pages/negocio/MeuPerfilNegocioPage"
 
 export const router = createBrowserRouter([
+  { path: "/", element: <LandingPage /> },
   {
     element: <AuthLayout />,
     children: [
@@ -62,7 +64,6 @@ export const router = createBrowserRouter([
       {
         element: <AppLayout />,
         children: [
-          { path: "/", element: <Navigate to="/inicio" replace /> },
           { path: "/inicio", element: <InicioPage /> },
           { path: "/dashboard/:clienteId", element: <DashboardPage /> },
           { path: "/clientes", element: <ClientesPage /> },
