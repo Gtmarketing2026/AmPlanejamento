@@ -27,7 +27,6 @@ export default function ConsentPage() {
             <p className="text-text-dim text-[12.5px] mb-1">
               {m.planejadorNome} (sua planejadora) vai acompanhar seus dados financeiros.
             </p>
-            <p className="text-text-faint text-[11px] font-mono mb-5">app.{m.subdominio}.amplanejador.com.br</p>
 
             <Card className="mb-3 text-left">
               <div className="font-medium text-[13px] mb-1">Banco selecionado</div>
