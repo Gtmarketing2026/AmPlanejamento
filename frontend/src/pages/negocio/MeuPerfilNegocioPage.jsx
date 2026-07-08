@@ -153,6 +153,7 @@ export default function MeuPerfilNegocioPage() {
             onChange={(e) => setSenha(e.target.value)}
             placeholder="deixe em branco pra manter a atual"
           />
+          <p className="text-text-faint text-[11px] -mt-2 mb-3">Mín. 8 caracteres, com pelo menos uma letra e um número.</p>
           {atualizar.isError && <p className="text-red text-[12.5px] mb-3">{atualizar.error.message}</p>}
           {sucesso && <p className="text-accent text-[12.5px] mb-3">Dados atualizados.</p>}
           <Button type="submit" disabled={atualizar.isPending}>

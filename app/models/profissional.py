@@ -20,7 +20,10 @@ class Profissional(Base):
     is_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     trial_ate: Mapped[date | None] = mapped_column(Date, nullable=True)
     subdominio: Mapped[str] = mapped_column(String, nullable=False, unique=True)
-    cor_marca: Mapped[str] = mapped_column(String, default="#4C8DFF")
+    # Cor de marca (white-label). Padrão = accent verde do app, pra quem não
+    # personaliza não ver mudança nenhuma; ao escolher outra cor, o app do
+    # planejador (e a área do cliente dele) passam a usá-la como accent.
+    cor_marca: Mapped[str] = mapped_column(String, default="#26D9A8")
     logo_url: Mapped[str | None] = mapped_column(String, nullable=True)
     video_boas_vindas: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="ativa")  # ativa | congelada | cancelada

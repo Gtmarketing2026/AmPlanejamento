@@ -169,7 +169,7 @@ export default function CarteiraPlanejadorPage() {
                               type="password"
                               value={form.senha}
                               onChange={(e) => setForm((f) => ({ ...f, senha: e.target.value }))}
-                              placeholder="deixe em branco pra manter"
+                              placeholder="8+ com letra e número (ou vazio)"
                             />
                           </div>
                           <Button type="submit" disabled={atualizarCredenciais.isPending} className="mb-3">

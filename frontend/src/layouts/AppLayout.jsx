@@ -24,8 +24,14 @@ export default function AppLayout() {
   // estão travadas (o backend devolve 402). Banner fixo leva pra /assinatura.
   const semPlano = profissional && profissional.plano_ativo === false
 
+  // O app do planejador acompanha a cor de marca escolhida por ele (accent).
+  // Sobrescreve as CSS vars --color-accent; se não tiver cor, mantém o padrão.
+  const estiloMarca = profissional?.cor_marca
+    ? { "--color-accent": profissional.cor_marca, "--color-accent-dim": profissional.cor_marca }
+    : undefined
+
   return (
-    <div className="min-h-screen bg-bg text-text">
+    <div className="min-h-screen bg-bg text-text" style={estiloMarca}>
       {impersonando && <BannerImpersonacao nome={profissional?.nome || "planejador"} />}
       <Topbar />
       {semPlano && (

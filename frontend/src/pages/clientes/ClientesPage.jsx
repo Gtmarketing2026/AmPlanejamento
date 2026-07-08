@@ -267,6 +267,7 @@ export default function ClientesPage() {
 
             <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mt-2 mb-2">
               Acesso do cliente ao próprio dashboard {nicknameAuto && "— nickname sugerido a partir do CPF, pode editar"}
+              <span className="normal-case tracking-normal"> · senha: mín. 8 caracteres, com letra e número</span>
             </div>
             <div className="grid grid-cols-4 gap-3 items-end">
               <Field label="Nickname (login)" value={form.nickname} onChange={setNickname} required />
