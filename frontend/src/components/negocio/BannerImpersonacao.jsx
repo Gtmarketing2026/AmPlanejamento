@@ -16,7 +16,7 @@ export default function BannerImpersonacao({ nome }) {
   }
 
   return (
-    <div className="sticky top-0 z-50 bg-blue/15 border-b border-blue/40 px-6 py-2 flex items-center justify-between text-[12.5px]">
+    <div className="relative z-30 bg-blue/15 border-b border-blue/40 px-6 py-2 flex items-center justify-between gap-3 flex-wrap text-[12.5px]">
       <span className="text-blue font-medium">
         {doPlanejador ? (
           <>👁️ Você está vendo o painel do cliente <strong>{nome}</strong>.</>

@@ -74,7 +74,11 @@ def classificar_transacoes(
                     {"role": "user", "content": json.dumps({"transacoes": lista_transacoes}, ensure_ascii=False)},
                 ],
             },
-            timeout=30,
+            # Bem abaixo do maxDuration da função (60s): a classificação é
+            # best-effort -- se a OpenAI demorar, cortamos e importamos sem
+            # categoria (classificável depois), em vez de estourar o tempo
+            # total e derrubar a importação inteira (504).
+            timeout=18,
         )
         resp.raise_for_status()
         conteudo = resp.json()["choices"][0]["message"]["content"]
