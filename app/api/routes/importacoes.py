@@ -50,18 +50,31 @@ TIPOS_DOCUMENTO = {"extrato", "fatura_cartao"}
 # só compras e parcelamentos de verdade. Melhor esforço (regex, não é
 # possível cobrir 100% dos formatos de banco).
 _PADRAO_LINHA_AGREGADA = re.compile(
-    r"\b(total(?:\s+(?:de\s+compras(?:\s+parceladas)?|da\s+fatura|geral|a\s+pagar(?:\s+do\s+cart[aã]o)?))?|"
-    r"subtotal|saldo\s+(?:anterior|atual|final|dispon[ií]vel)|valor\s+total|"
+    r"\b(total(?:\s+de\s+(?:compras(?:\s+parceladas)?|entradas|sa[íi]das|cr[eé]ditos|d[eé]bitos|lan[çc]amentos))?"
+    r"(?:\s+(?:da\s+fatura|geral|a\s+pagar(?:\s+do\s+cart[aã]o)?))?|"
+    r"subtotal|saldo\s+(?:anterior|atual|final|inicial|dispon[ií]vel|do\s+per[ií]odo)|valor\s+total|"
     r"limite\s+(?:dispon[ií]vel|total|de\s+cr[eé]dito)|fatura\s+anterior|"
     r"pagamentos?\s*(?:efetuados?|recebidos?)|tarifa|anuidade|"
+    r"resumo(?:\s+do\s+per[ií]odo)?|"
     r"despesas\s+futuras|pr[óo]xim[ao]s?\s+fatura|faturas?\s+nos?\s+pr[óo]ximos?\s+meses|"
     r"parcelas?\s+e\s+transa[çc][õo]es\s+de|fechamento|vencimento)\b",
     re.IGNORECASE,
 )
 
+# Linha de resumo do período que traz entradas E saídas juntas (ex:
+# "Entradas: R$ 14.996,73 • Saídas: R$ ...") -- é rodapé/cabeçalho de totais,
+# não um lançamento. Exige os DOIS termos pra não pegar um lançamento real que
+# por acaso tenha "entrada"/"saída" na descrição.
+_PADRAO_ENTRADAS = re.compile(r"\bentradas?\b", re.IGNORECASE)
+_PADRAO_SAIDAS = re.compile(r"\bsa[íi]das?\b", re.IGNORECASE)
+
 
 def _e_linha_agregada(descricao: str) -> bool:
-    return bool(_PADRAO_LINHA_AGREGADA.search(descricao))
+    if _PADRAO_LINHA_AGREGADA.search(descricao):
+        return True
+    if _PADRAO_ENTRADAS.search(descricao) and _PADRAO_SAIDAS.search(descricao):
+        return True
+    return False
 
 
 def _obter_conta_do_upload(
