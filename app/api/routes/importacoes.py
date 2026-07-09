@@ -480,10 +480,16 @@ def meses_ref_por_importacao(db: Session, importacao_ids: list[uuid.UUID]) -> di
     return {r[0]: (r[1], r[2]) for r in rows}
 
 
-def aplicar_classificacao_ia(db: Session, txs: list) -> int:
+def aplicar_classificacao_ia(db: Session, txs: list, sobrescrever: bool = False) -> int:
     """Classifica por IA uma lista de Transacao e aplica categoria/subcategoria.
     Best-effort: se a OpenAI falhar/estourar, retorna 0 e as transações seguem
-    como estavam. Reutilizado pela 2ª etapa da importação e pelo 'Reclassificar'."""
+    como estavam.
+
+    sobrescrever=False (automático, 2ª etapa da importação): NUNCA mexe numa
+    transação que já tenha categoria -- a aplicação é atômica no banco
+    (UPDATE ... WHERE categoria_id IS NULL), então mesmo que o cliente
+    classifique manualmente durante a janela da IA, o manual é preservado.
+    sobrescrever=True (botão 'Reclassificar', pedido explícito): pode redefinir."""
     if not txs:
         return 0
     categorias = db.scalars(select(Categoria)).all()
@@ -500,17 +506,22 @@ def aplicar_classificacao_ia(db: Session, txs: list) -> int:
     for t, classif in zip(txs, classificacoes):
         categoria_id = cat_por_nome.get((classif.get("categoria") or "").strip().lower())
         subcategoria_id = sub_por_nome.get((classif.get("subcategoria") or "").strip().lower())
-        if categoria_id or subcategoria_id:
-            t.categoria_id = categoria_id
-            t.subcategoria_id = subcategoria_id
-            db.add(t)
-            n += 1
+        if not (categoria_id or subcategoria_id):
+            continue
+        stmt = update(Transacao).where(Transacao.id == t.id)
+        if not sobrescrever:
+            # só aplica se AINDA estiver sem categoria -- protege o manual mesmo
+            # numa corrida (edição manual acontecendo durante a classificação).
+            stmt = stmt.where(Transacao.categoria_id.is_(None))
+        res = db.execute(stmt.values(categoria_id=categoria_id, subcategoria_id=subcategoria_id))
+        n += res.rowcount or 0
     db.flush()
     return n
 
 
 def classificar_importacao(db: Session, importacao_id: uuid.UUID, cliente_id: uuid.UUID | None = None) -> int:
-    """2ª etapa da importação: classifica os lançamentos AINDA SEM categoria."""
+    """2ª etapa da importação: classifica os lançamentos AINDA SEM categoria
+    (automático, nunca sobrescreve manual)."""
     q = select(Transacao).where(
         Transacao.importacao_id == importacao_id,
         Transacao.categoria_id.is_(None),
@@ -518,18 +529,19 @@ def classificar_importacao(db: Session, importacao_id: uuid.UUID, cliente_id: uu
     )
     if cliente_id is not None:
         q = q.where(Transacao.cliente_id == cliente_id)
-    return aplicar_classificacao_ia(db, db.scalars(q).all())
+    return aplicar_classificacao_ia(db, db.scalars(q).all(), sobrescrever=False)
 
 
 def reclassificar_por_ids(db: Session, ids: list, cliente_id: uuid.UUID | None = None) -> int:
-    """Reclassifica por IA um conjunto de lançamentos (por id) -- usado pelo
-    botão 'Reclassificar com IA' do período selecionado. Ignora previstos."""
+    """Reclassifica por IA um conjunto de lançamentos (por id) -- botão
+    'Reclassificar com IA' (pedido explícito): PODE redefinir categoria já
+    existente. Ignora previstos."""
     if not ids:
         return 0
     q = select(Transacao).where(Transacao.id.in_(ids), Transacao.previsto.is_(False))
     if cliente_id is not None:
         q = q.where(Transacao.cliente_id == cliente_id)
-    return aplicar_classificacao_ia(db, db.scalars(q).all())
+    return aplicar_classificacao_ia(db, db.scalars(q).all(), sobrescrever=True)
 
 
 def _monta_importacao_resposta(imp, conta, meses: dict) -> ImportacaoResposta:
