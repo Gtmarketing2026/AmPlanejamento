@@ -31,6 +31,12 @@ class ImportacaoResposta(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class MesReferenciaAtualizar(BaseModel):
+    # Define/ajusta o mês de referência de TODOS os lançamentos de uma
+    # importação (o frontend manda o 1º dia do mês escolhido).
+    mes_referencia: date
+
+
 class TransacaoAtualizar(BaseModel):
     categoria_id: uuid.UUID | None = None
     subcategoria_id: uuid.UUID | None = None

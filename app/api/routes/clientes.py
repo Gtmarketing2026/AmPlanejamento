@@ -3,7 +3,7 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -60,6 +60,7 @@ from app.schemas.cliente import (
 from app.schemas.importacao import (
     EnviarEmpresa,
     ImportacaoResposta,
+    MesReferenciaAtualizar,
     TransacaoAtualizar,
     TransacaoCriar,
     TransacaoResposta,
@@ -764,6 +765,32 @@ def listar_minhas_importacoes(
     ).all()
     meses = meses_ref_por_importacao(db, [imp.id for imp, _ in linhas])
     return [_monta_importacao_resposta(imp, conta, meses) for imp, conta in linhas]
+
+
+@router.patch("/eu/importacoes/{importacao_id}/mes-referencia")
+def atualizar_mes_ref_minha_importacao(
+    importacao_id: uuid.UUID,
+    dados: MesReferenciaAtualizar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    """Ajusta manualmente o mês de referência de TODOS os lançamentos desta
+    importação (ex: uma fatura que deve contar toda em julho). Recalcula pro
+    1º dia do mês escolhido."""
+    imp = db.scalar(
+        select(ImportacaoExtrato).where(
+            ImportacaoExtrato.id == importacao_id, ImportacaoExtrato.cliente_id == cliente_id
+        )
+    )
+    if not imp:
+        raise HTTPException(status_code=404, detail="Importação não encontrada")
+    mes = dados.mes_referencia.replace(day=1)
+    db.execute(
+        update(Transacao)
+        .where(Transacao.importacao_id == importacao_id, Transacao.cliente_id == cliente_id)
+        .values(mes_referencia=mes)
+    )
+    return {"ok": True, "mes_referencia": mes.isoformat()}
 
 
 @router.delete("/eu/importacoes/{importacao_id}", status_code=status.HTTP_200_OK)

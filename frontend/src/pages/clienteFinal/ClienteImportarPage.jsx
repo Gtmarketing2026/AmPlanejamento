@@ -7,6 +7,7 @@ import Pill from "../../components/ui/Pill"
 import Field, { Select } from "../../components/ui/Field"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import {
+  atualizarMesRefImportacao,
   excluirMinhaImportacao,
   gerarMinhasParcelas,
   importarMeuExtrato,
@@ -92,6 +93,22 @@ export default function ClienteImportarPage() {
       qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] })
     },
   })
+
+  // Edição do mês de referência da importação (aplica a todos os lançamentos dela).
+  const [editMesId, setEditMesId] = useState(null)
+  const [mesInput, setMesInput] = useState("")
+  const salvarMes = useMutation({
+    mutationFn: ({ id, mes }) => atualizarMesRefImportacao(token, id, `${mes}-01`),
+    onSuccess: () => {
+      setEditMesId(null)
+      qc.invalidateQueries({ queryKey: ["cliente-eu-importacoes", token] })
+      qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] })
+    },
+  })
+  function abrirEditMes(imp) {
+    setEditMesId(imp.id)
+    setMesInput((imp.mes_ref_inicio || "").slice(0, 7)) // "AAAA-MM"
+  }
 
   function onEnviar(e) {
     e.preventDefault()
@@ -194,7 +211,30 @@ export default function ClienteImportarPage() {
                   {imp.conta_natureza === "cartao" ? "Cartão" : "Banco"}
                   {imp.conta_nome && <span className="text-text-faint"> · {imp.conta_nome}</span>}
                 </Td>
-                <Td className="font-mono text-text-dim">{mesRefLabel(imp.mes_ref_inicio, imp.mes_ref_fim)}</Td>
+                <Td className="font-mono text-text-dim">
+                  {editMesId === imp.id ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="month"
+                        value={mesInput}
+                        onChange={(e) => setMesInput(e.target.value)}
+                        className="bg-bg border border-line rounded px-1.5 py-1 text-[11px] text-text w-[120px]"
+                      />
+                      <button
+                        onClick={() => mesInput && salvarMes.mutate({ id: imp.id, mes: mesInput })}
+                        disabled={salvarMes.isPending}
+                        className="text-accent text-[11px] hover:underline"
+                      >
+                        ok
+                      </button>
+                      <button onClick={() => setEditMesId(null)} className="text-text-faint text-[11px] hover:underline">×</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => abrirEditMes(imp)} className="hover:text-text hover:underline" title="Editar mês de referência">
+                      {mesRefLabel(imp.mes_ref_inicio, imp.mes_ref_fim)}
+                    </button>
+                  )}
+                </Td>
                 <Td className="uppercase text-text-dim">{imp.formato_arquivo}</Td>
                 <Td className="font-mono">
                   {imp.status === "erro"

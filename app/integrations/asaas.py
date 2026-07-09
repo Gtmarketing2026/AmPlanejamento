@@ -40,25 +40,25 @@ def _headers() -> dict:
 
 
 def _post(path: str, payload: dict) -> dict:
-    resp = requests.post(f"{BASE_URL}{path}", json=payload, headers=_headers(), timeout=30)
+    resp = requests.post(f"{BASE_URL}{path}", json=payload, headers=_headers(), timeout=15)
     resp.raise_for_status()
     return resp.json()
 
 
 def _get(path: str, params: dict | None = None) -> dict:
-    resp = requests.get(f"{BASE_URL}{path}", params=params, headers=_headers(), timeout=30)
+    resp = requests.get(f"{BASE_URL}{path}", params=params, headers=_headers(), timeout=15)
     resp.raise_for_status()
     return resp.json()
 
 
 def _put(path: str, payload: dict) -> dict:
-    resp = requests.put(f"{BASE_URL}{path}", json=payload, headers=_headers(), timeout=30)
+    resp = requests.put(f"{BASE_URL}{path}", json=payload, headers=_headers(), timeout=15)
     resp.raise_for_status()
     return resp.json()
 
 
 def _delete(path: str) -> dict:
-    resp = requests.delete(f"{BASE_URL}{path}", headers=_headers(), timeout=30)
+    resp = requests.delete(f"{BASE_URL}{path}", headers=_headers(), timeout=15)
     resp.raise_for_status()
     return resp.json()
 

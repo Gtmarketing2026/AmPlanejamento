@@ -76,3 +76,8 @@ export const gerarMinhasParcelas = (token, importacaoId) =>
 
 export const excluirMinhaImportacao = (token, id) =>
   apiDelete(`/clientes/eu/importacoes/${id}`, undefined, { token })
+
+// Ajusta o mês de referência de todos os lançamentos de uma importação.
+// mesRefIso = "AAAA-MM-01".
+export const atualizarMesRefImportacao = (token, id, mesRefIso) =>
+  apiPatch(`/clientes/eu/importacoes/${id}/mes-referencia`, { mes_referencia: mesRefIso }, { token })
