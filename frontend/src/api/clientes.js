@@ -74,6 +74,10 @@ export const listarMinhasImportacoes = (token) => apiGet("/clientes/eu/importaco
 export const gerarMinhasParcelas = (token, importacaoId) =>
   apiPost(`/clientes/eu/importacoes/${importacaoId}/gerar-parcelas`, {}, { token })
 
+// 2ª etapa da importação: classificação por IA (separada do upload).
+export const classificarMinhaImportacao = (token, importacaoId) =>
+  apiPost(`/clientes/eu/importacoes/${importacaoId}/classificar`, {}, { token })
+
 export const excluirMinhaImportacao = (token, id) =>
   apiDelete(`/clientes/eu/importacoes/${id}`, undefined, { token })
 

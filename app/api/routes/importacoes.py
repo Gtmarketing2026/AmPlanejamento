@@ -382,33 +382,12 @@ def processar_upload(
         else:
             duplicadas += 1
 
-    # Classificação automática via IA logo após a importação -- uma chamada
-    # pra leva inteira. Se a OpenAI falhar por qualquer motivo, as transações
-    # ficam sem categoria (classificável manualmente depois, ver PATCH
-    # /transacoes/{id}) e a importação segue normalmente -- nunca trava aqui.
-    if inseridas:
-        categorias = db.scalars(select(Categoria)).all()
-        subcategorias = db.scalars(select(Subcategoria)).all()
-        try:
-            classificacoes = classificar_transacoes(
-                [{"descricao": i["descricao"], "tipo": i["tipo"]} for i in inseridas],
-                categorias,
-                subcategorias,
-            )
-            categorias_por_nome = {c.nome.strip().lower(): c.id for c in categorias}
-            subcategorias_por_nome = {s.nome.strip().lower(): s.id for s in subcategorias}
-            for item, classif in zip(inseridas, classificacoes):
-                categoria_id = categorias_por_nome.get((classif.get("categoria") or "").strip().lower())
-                subcategoria_id = subcategorias_por_nome.get((classif.get("subcategoria") or "").strip().lower())
-                if categoria_id or subcategoria_id:
-                    db.execute(
-                        update(Transacao)
-                        .where(Transacao.id == item["id"])
-                        .values(categoria_id=categoria_id, subcategoria_id=subcategoria_id)
-                    )
-        except ClassificacaoIndisponivel:
-            pass
-
+    # A classificação por IA NÃO roda mais aqui (era o que fazia o upload de
+    # PDFs pesados estourar o maxDuration -> 504). Agora o upload retorna rápido
+    # e a classificação acontece numa 2ª etapa (POST .../importacoes/{id}/
+    # classificar), chamada pelo frontend logo depois -- cada request com seu
+    # próprio orçamento de tempo. As transações entram sem categoria e são
+    # classificadas em seguida (ou manualmente).
     importacao.status = "processado"
     importacao.transacoes_importadas = importadas
     importacao.transacoes_duplicadas = duplicadas
@@ -456,6 +435,16 @@ def gerar_parcelas_importacao(importacao_id: uuid.UUID, db: Session = Depends(ge
     return {"parcelas_criadas": criadas}
 
 
+@router.post("/importacoes/{importacao_id}/classificar")
+def classificar_importacao_planejador(importacao_id: uuid.UUID, db: Session = Depends(get_db_com_rls)):
+    """2ª etapa: classifica por IA os lançamentos da importação (RLS já garante
+    que só importações do próprio planejador são encontradas)."""
+    importacao = db.get(ImportacaoExtrato, importacao_id)
+    if not importacao:
+        raise HTTPException(status_code=404, detail="Importação não encontrada")
+    return {"classificadas": classificar_importacao(db, importacao_id)}
+
+
 def meses_ref_por_importacao(db: Session, importacao_ids: list[uuid.UUID]) -> dict:
     """Min/max do mes_referencia dos lançamentos de cada importação -- usado
     pra mostrar o mês de referência na lista de importações."""
@@ -471,6 +460,43 @@ def meses_ref_por_importacao(db: Session, importacao_ids: list[uuid.UUID]) -> di
         .group_by(Transacao.importacao_id)
     ).all()
     return {r[0]: (r[1], r[2]) for r in rows}
+
+
+def classificar_importacao(db: Session, importacao_id: uuid.UUID, cliente_id: uuid.UUID | None = None) -> int:
+    """Classifica por IA os lançamentos AINDA SEM categoria de uma importação
+    (2ª etapa, separada do upload pra não estourar o tempo). Best-effort: se a
+    OpenAI falhar/estourar, retorna 0 e as transações seguem sem categoria."""
+    q = select(Transacao).where(
+        Transacao.importacao_id == importacao_id,
+        Transacao.categoria_id.is_(None),
+        Transacao.previsto.is_(False),
+    )
+    if cliente_id is not None:
+        q = q.where(Transacao.cliente_id == cliente_id)
+    txs = db.scalars(q).all()
+    if not txs:
+        return 0
+    categorias = db.scalars(select(Categoria)).all()
+    subcategorias = db.scalars(select(Subcategoria)).all()
+    try:
+        classificacoes = classificar_transacoes(
+            [{"descricao": t.descricao, "tipo": t.tipo} for t in txs], categorias, subcategorias
+        )
+    except ClassificacaoIndisponivel:
+        return 0
+    cat_por_nome = {c.nome.strip().lower(): c.id for c in categorias}
+    sub_por_nome = {s.nome.strip().lower(): s.id for s in subcategorias}
+    n = 0
+    for t, classif in zip(txs, classificacoes):
+        categoria_id = cat_por_nome.get((classif.get("categoria") or "").strip().lower())
+        subcategoria_id = sub_por_nome.get((classif.get("subcategoria") or "").strip().lower())
+        if categoria_id or subcategoria_id:
+            t.categoria_id = categoria_id
+            t.subcategoria_id = subcategoria_id
+            db.add(t)
+            n += 1
+    db.flush()
+    return n
 
 
 def _monta_importacao_resposta(imp, conta, meses: dict) -> ImportacaoResposta:

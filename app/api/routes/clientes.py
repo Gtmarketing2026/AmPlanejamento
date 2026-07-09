@@ -21,6 +21,7 @@ from app.api.routes.importacoes import (
     _hash_parcela,
     _monta_importacao_resposta,
     _obter_conta_do_upload,
+    classificar_importacao,
     gerar_parcelas_futuras,
     meses_ref_por_importacao,
     processar_upload,
@@ -765,6 +766,24 @@ def listar_minhas_importacoes(
     ).all()
     meses = meses_ref_por_importacao(db, [imp.id for imp, _ in linhas])
     return [_monta_importacao_resposta(imp, conta, meses) for imp, conta in linhas]
+
+
+@router.post("/eu/importacoes/{importacao_id}/classificar")
+def classificar_minha_importacao(
+    importacao_id: uuid.UUID,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    """2ª etapa da importação: classifica por IA os lançamentos ainda sem
+    categoria. Separada do upload pra este não estourar o tempo (504)."""
+    imp = db.scalar(
+        select(ImportacaoExtrato).where(
+            ImportacaoExtrato.id == importacao_id, ImportacaoExtrato.cliente_id == cliente_id
+        )
+    )
+    if not imp:
+        raise HTTPException(status_code=404, detail="Importação não encontrada")
+    return {"classificadas": classificar_importacao(db, importacao_id, cliente_id=cliente_id)}
 
 
 @router.patch("/eu/importacoes/{importacao_id}/mes-referencia")

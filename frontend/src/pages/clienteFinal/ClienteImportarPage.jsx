@@ -8,6 +8,7 @@ import Field, { Select } from "../../components/ui/Field"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import {
   atualizarMesRefImportacao,
+  classificarMinhaImportacao,
   excluirMinhaImportacao,
   gerarMinhasParcelas,
   importarMeuExtrato,
@@ -82,8 +83,21 @@ export default function ClienteImportarPage() {
       setArquivo(null)
       setSenhaPdf("")
       if (inputRef.current) inputRef.current.value = ""
+      // 2ª etapa: classificação por IA num request separado (não trava o upload,
+      // sem risco de timeout). Os lançamentos já apareceram; as categorias
+      // preenchem quando isto volta. Best-effort — falha aqui não é erro do upload.
+      if (imp?.id) classificar.mutate(imp.id)
     },
     onError: (e) => setErro(e.message),
+  })
+
+  const classificar = useMutation({
+    mutationFn: (id) => classificarMinhaImportacao(token, id),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] })
+      qc.invalidateQueries({ queryKey: ["cliente-eu-importacoes", token] })
+    },
+    onError: () => {}, // best-effort: dá pra classificar manualmente depois
   })
 
   const excluir = useMutation({
@@ -183,6 +197,9 @@ export default function ClienteImportarPage() {
           <p className="text-text-faint text-[11.5px] -mt-2 mb-1">
             Faturas de cartão às vezes vêm protegidas por senha (geralmente dígitos do CPF ou nascimento do titular).
           </p>
+        )}
+        {classificar.isPending && (
+          <p className="text-text-dim text-[12px] mt-1">✨ Lançamentos importados. Classificando as categorias por IA…</p>
         )}
         {erro && <p className="text-red text-[12.5px] mt-1">{erro}</p>}
       </Card>
