@@ -47,6 +47,10 @@ export const atualizarMinhaTransacao = (token, id, dados) =>
 export const excluirMinhaTransacao = (token, id) =>
   apiDelete(`/clientes/eu/transacoes/${id}`, undefined, { token })
 
+// Reclassificar por IA os lançamentos informados (do período/filtro atual).
+export const reclassificarMinhasTransacoes = (token, ids) =>
+  apiPost("/clientes/eu/transacoes/reclassificar", { ids }, { token })
+
 export const enviarTransacaoEmpresa = (token, id, acao) =>
   apiPost(`/clientes/eu/transacoes/${id}/empresa`, { acao }, { token })
 

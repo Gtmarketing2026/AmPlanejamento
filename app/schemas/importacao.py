@@ -31,6 +31,10 @@ class ImportacaoResposta(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ReclassificarRequest(BaseModel):
+    ids: list[uuid.UUID]  # lançamentos a reclassificar por IA (o período/filtro atual)
+
+
 class MesReferenciaAtualizar(BaseModel):
     # Define/ajusta o mês de referência de TODOS os lançamentos de uma
     # importação (o frontend manda o 1º dia do mês escolhido).

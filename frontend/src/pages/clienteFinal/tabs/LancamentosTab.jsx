@@ -14,6 +14,7 @@ import {
   minhasCategorias,
   minhasSubcategorias,
   minhasTransacoes,
+  reclassificarMinhasTransacoes,
 } from "../../../api/clientes"
 import { listarMinhasContas } from "../../../api/contas"
 import { formatarData, formatarMoeda } from "../../../lib/format"
@@ -225,6 +226,32 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
     onSuccess: () => qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] }),
   })
 
+  // Reclassificar por IA os lançamentos visíveis (período/filtro atual).
+  const reclassificar = useMutation({
+    mutationFn: (ids) => reclassificarMinhasTransacoes(token, ids),
+    onSuccess: (resp) => {
+      qc.invalidateQueries({ queryKey: ["cliente-eu-transacoes", token] })
+      setMensagemReclassificacao(`IA reclassificou ${resp?.reclassificadas ?? 0} lançamento(s).`)
+      setTimeout(() => setMensagemReclassificacao(null), 4000)
+    },
+    onError: () => {
+      setMensagemReclassificacao("Não foi possível reclassificar agora. Tente de novo.")
+      setTimeout(() => setMensagemReclassificacao(null), 4000)
+    },
+  })
+  function onReclassificar() {
+    const ids = transacoes.filter((t) => !t.previsto).map((t) => t.id)
+    if (!ids.length) return
+    if (
+      !confirm(
+        `Reclassificar ${ids.length} lançamento(s) deste período com IA? ` +
+          `As categorias atuais podem ser substituídas pela sugestão da IA.`
+      )
+    )
+      return
+    reclassificar.mutate(ids)
+  }
+
   const criar = useMutation({
     mutationFn: () =>
       criarMinhaTransacao(token, {
@@ -284,7 +311,15 @@ export default function LancamentosTab({ token, contexto = "PF", temCnpj = false
         <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono">
           Lançamentos · você pode ajustar a categoria sugerida
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="ghost"
+            onClick={onReclassificar}
+            disabled={!transacoes.length || reclassificar.isPending}
+            title="A IA reclassifica as categorias dos lançamentos deste período"
+          >
+            {reclassificar.isPending ? "Reclassificando…" : "✨ Reclassificar com IA"}
+          </Button>
           <Button variant="ghost" onClick={exportar} disabled={!transacoes.length}>
             Exportar (Excel/CSV)
           </Button>

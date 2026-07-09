@@ -26,6 +26,7 @@ from app.api.routes.importacoes import (
     meses_ref_por_importacao,
     processar_upload,
     projetar_parcelas_de_origem,
+    reclassificar_por_ids,
 )
 from app.core.config import settings
 from app.core.rate_limit import limpar, registrar_falha, verificar_bloqueio
@@ -62,6 +63,7 @@ from app.schemas.importacao import (
     EnviarEmpresa,
     ImportacaoResposta,
     MesReferenciaAtualizar,
+    ReclassificarRequest,
     TransacaoAtualizar,
     TransacaoCriar,
     TransacaoResposta,
@@ -509,6 +511,16 @@ def listar_minhas_transacoes(
         query = query.where(Transacao.mes_referencia == mes_referencia)
     transacoes = db.scalars(query.order_by(Transacao.data.desc())).all()
     return transacoes
+
+
+@router.post("/eu/transacoes/reclassificar")
+def reclassificar_minhas_transacoes(
+    dados: ReclassificarRequest,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    """Reclassifica por IA os lançamentos informados (do período/filtro atual)."""
+    return {"reclassificadas": reclassificar_por_ids(db, dados.ids, cliente_id=cliente_id)}
 
 
 @router.post("/eu/transacoes", response_model=TransacaoResposta, status_code=status.HTTP_201_CREATED)

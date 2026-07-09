@@ -30,7 +30,12 @@ from app.parsers.csv_parser import CsvFormatoInvalido, parse_csv
 from app.parsers.dedup import calcular_hash_dedup
 from app.parsers.ofx_parser import parse_ofx
 from app.parsers.pdf_parser import PdfProtegido, parse_pdf
-from app.schemas.importacao import ImportacaoResposta, TransacaoAtualizar, TransacaoResposta
+from app.schemas.importacao import (
+    ImportacaoResposta,
+    ReclassificarRequest,
+    TransacaoAtualizar,
+    TransacaoResposta,
+)
 
 router = APIRouter(tags=["importacoes"])
 
@@ -462,18 +467,10 @@ def meses_ref_por_importacao(db: Session, importacao_ids: list[uuid.UUID]) -> di
     return {r[0]: (r[1], r[2]) for r in rows}
 
 
-def classificar_importacao(db: Session, importacao_id: uuid.UUID, cliente_id: uuid.UUID | None = None) -> int:
-    """Classifica por IA os lançamentos AINDA SEM categoria de uma importação
-    (2ª etapa, separada do upload pra não estourar o tempo). Best-effort: se a
-    OpenAI falhar/estourar, retorna 0 e as transações seguem sem categoria."""
-    q = select(Transacao).where(
-        Transacao.importacao_id == importacao_id,
-        Transacao.categoria_id.is_(None),
-        Transacao.previsto.is_(False),
-    )
-    if cliente_id is not None:
-        q = q.where(Transacao.cliente_id == cliente_id)
-    txs = db.scalars(q).all()
+def aplicar_classificacao_ia(db: Session, txs: list) -> int:
+    """Classifica por IA uma lista de Transacao e aplica categoria/subcategoria.
+    Best-effort: se a OpenAI falhar/estourar, retorna 0 e as transações seguem
+    como estavam. Reutilizado pela 2ª etapa da importação e pelo 'Reclassificar'."""
     if not txs:
         return 0
     categorias = db.scalars(select(Categoria)).all()
@@ -497,6 +494,29 @@ def classificar_importacao(db: Session, importacao_id: uuid.UUID, cliente_id: uu
             n += 1
     db.flush()
     return n
+
+
+def classificar_importacao(db: Session, importacao_id: uuid.UUID, cliente_id: uuid.UUID | None = None) -> int:
+    """2ª etapa da importação: classifica os lançamentos AINDA SEM categoria."""
+    q = select(Transacao).where(
+        Transacao.importacao_id == importacao_id,
+        Transacao.categoria_id.is_(None),
+        Transacao.previsto.is_(False),
+    )
+    if cliente_id is not None:
+        q = q.where(Transacao.cliente_id == cliente_id)
+    return aplicar_classificacao_ia(db, db.scalars(q).all())
+
+
+def reclassificar_por_ids(db: Session, ids: list, cliente_id: uuid.UUID | None = None) -> int:
+    """Reclassifica por IA um conjunto de lançamentos (por id) -- usado pelo
+    botão 'Reclassificar com IA' do período selecionado. Ignora previstos."""
+    if not ids:
+        return 0
+    q = select(Transacao).where(Transacao.id.in_(ids), Transacao.previsto.is_(False))
+    if cliente_id is not None:
+        q = q.where(Transacao.cliente_id == cliente_id)
+    return aplicar_classificacao_ia(db, db.scalars(q).all())
 
 
 def _monta_importacao_resposta(imp, conta, meses: dict) -> ImportacaoResposta:
@@ -548,6 +568,13 @@ def excluir_importacao(importacao_id: uuid.UUID, db: Session = Depends(get_db_co
     db.flush()
 
     return {"transacoes_removidas": qtd_removida}
+
+
+@router.post("/transacoes/reclassificar")
+def reclassificar_transacoes_planejador(dados: ReclassificarRequest, db: Session = Depends(get_db_com_rls)):
+    """Reclassifica por IA os lançamentos informados (RLS garante que só os do
+    próprio planejador entram)."""
+    return {"reclassificadas": reclassificar_por_ids(db, dados.ids)}
 
 
 @router.get("/transacoes", response_model=list[TransacaoResposta])
