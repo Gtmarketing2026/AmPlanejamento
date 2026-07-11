@@ -13,3 +13,4 @@ pluggy_output/
 backups/
 *.sql.gz
 *.dump
+scripts/backup_banco.cmd

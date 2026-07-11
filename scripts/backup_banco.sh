@@ -27,8 +27,15 @@ if [ -z "${CONEXAO:-}" ]; then
   exit 1
 fi
 
-if ! command -v pg_dump >/dev/null 2>&1; then
-  echo "ERRO: pg_dump não instalado. Instale o PostgreSQL client." >&2
+# Localiza o pg_dump: no PATH, ou na instalação portátil em ~/pgclient
+# (binários do PostgreSQL extraídos sem admin).
+PGDUMP=""
+if command -v pg_dump >/dev/null 2>&1; then
+  PGDUMP="pg_dump"
+elif [ -x "$HOME/pgclient/pgsql/bin/pg_dump.exe" ]; then
+  PGDUMP="$HOME/pgclient/pgsql/bin/pg_dump.exe"
+else
+  echo "ERRO: pg_dump não encontrado (nem no PATH, nem em ~/pgclient)." >&2
   exit 1
 fi
 
@@ -37,8 +44,14 @@ CARIMBO="$(date +%Y-%m-%d_%H%M)"
 ARQUIVO="$DESTINO/backup_${CARIMBO}.sql.gz"
 
 echo "Gerando backup em: $ARQUIVO"
-pg_dump --no-owner --no-privileges "$CONEXAO" | gzip > "$ARQUIVO"
+"$PGDUMP" --no-owner --no-privileges "$CONEXAO" | gzip > "$ARQUIVO"
 
 TAMANHO="$(du -h "$ARQUIVO" | cut -f1)"
 echo "OK: backup criado ($TAMANHO)."
-echo ">>> AGORA copie este arquivo para fora do computador (Drive/OneDrive)."
+
+# Retenção: mantém os 30 backups mais recentes, apaga os mais antigos.
+ls -1t "$DESTINO"/backup_*.sql.gz 2>/dev/null | tail -n +31 | while read -r antigo; do
+  rm -f "$antigo" && echo "removido backup antigo: $(basename "$antigo")"
+done
+
+echo ">>> Confirme que a pasta de destino sincroniza pra fora do PC (Drive/OneDrive)."
