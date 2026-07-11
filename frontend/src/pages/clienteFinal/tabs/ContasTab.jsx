@@ -12,9 +12,10 @@ import {
 } from "../../../api/contas"
 import { formatarMoeda } from "../../../lib/format"
 
-const FORM_VAZIO = { natureza: "conta", nome_exibicao: "", banco: "", saldo_manual: "", limite_total: "", dia_virada: "" }
+const FORM_VAZIO = { natureza: "conta", nome_exibicao: "", banco: "", saldo_manual: "", limite_total: "", dia_virada: "", contexto: "ambos", de_conjuge: false }
+const CONTEXTO_LABEL = { PF: "Pessoal", PJ: "Empresa", ambos: "Pessoal e Empresa" }
 
-export default function ContasTab({ token }) {
+export default function ContasTab({ token, contexto = "PF", temCnpj = false }) {
   const qc = useQueryClient()
   const [form, setForm] = useState(FORM_VAZIO)
   const [mostrarForm, setMostrarForm] = useState(false)
@@ -36,6 +37,8 @@ export default function ContasTab({ token }) {
         saldo_manual: form.natureza === "conta" && form.saldo_manual !== "" ? Number(form.saldo_manual) : null,
         limite_total: form.natureza === "cartao" && form.limite_total !== "" ? Number(form.limite_total) : null,
         dia_virada: form.natureza === "cartao" && form.dia_virada !== "" ? Number(form.dia_virada) : null,
+        contexto: form.contexto,
+        de_conjuge: !!form.de_conjuge,
       }
       if (editandoId) return atualizarMinhaConta(token, editandoId, dados)
       return criarMinhaConta(token, { ...dados, natureza: form.natureza })
@@ -81,18 +84,28 @@ export default function ContasTab({ token }) {
       saldo_manual: conta.saldo_manual ?? "",
       limite_total: conta.limite_total ?? "",
       dia_virada: conta.dia_virada ?? "",
+      contexto: conta.contexto || "ambos",
+      de_conjuge: !!conta.de_conjuge,
     })
     setMostrarForm(true)
   }
 
   function novoForm(natureza) {
     setEditandoId(null)
-    setForm({ ...FORM_VAZIO, natureza })
+    // Nova conta já entra marcada pra visão atual (Pessoal/Empresa) quando o
+    // cliente tem PJ; sem PJ, tudo é "ambos".
+    const contextoInicial = temCnpj ? (contexto === "PJ" ? "PJ" : "PF") : "ambos"
+    setForm({ ...FORM_VAZIO, natureza, contexto: contextoInicial })
     setMostrarForm(true)
   }
 
-  const contasBancarias = contas.filter((c) => c.natureza === "conta")
-  const cartoes = contas.filter((c) => c.natureza === "cartao")
+  // Com PJ, cada visão (Pessoal/Empresa) mostra só as contas/cartões dela --
+  // "ambos" aparece nas duas. Sem PJ, mostra tudo.
+  const visiveis = contas.filter(
+    (c) => !temCnpj || c.contexto === "ambos" || c.contexto === contexto
+  )
+  const contasBancarias = visiveis.filter((c) => c.natureza === "conta")
+  const cartoes = visiveis.filter((c) => c.natureza === "cartao")
   const totalContas = contasBancarias.reduce((s, c) => s + Number(c.saldo_atual || 0), 0)
   const totalUsadoCartoes = cartoes.reduce((s, c) => s + Number(c.valor_usado || 0), 0)
   const totalLimiteCartoes = cartoes.reduce((s, c) => s + Number(c.limite_total || 0), 0)
@@ -123,7 +136,12 @@ export default function ContasTab({ token }) {
             {formatarMoeda(totalUsadoCartoes)}{" "}
             <span className="text-text-faint text-[13px] font-normal">de {formatarMoeda(totalLimiteCartoes)}</span>
           </div>
-          <div className="text-text-faint text-[11.5px]">Usado nos cartões este mês</div>
+          <div
+            className="text-text-faint text-[11.5px] cursor-help"
+            title="Fatura do ciclo atual em diante, incluindo as parcelas futuras já lançadas (uma compra parcelada compromete o limite inteiro na hora). Faturas anteriores, já pagas, não contam."
+          >
+            Limite usado nos cartões (fatura atual + parcelas futuras)
+          </div>
         </Card>
       </div>
 
@@ -155,6 +173,19 @@ export default function ContasTab({ token }) {
                   placeholder="ex: Itaú"
                 />
               </div>
+              {temCnpj && (
+                <div className="w-40">
+                  <Select
+                    label="Entra em"
+                    value={form.contexto}
+                    onChange={(e) => setForm((f) => ({ ...f, contexto: e.target.value }))}
+                  >
+                    <option value="PF">Pessoal (PF)</option>
+                    <option value="PJ">Empresa (PJ)</option>
+                    <option value="ambos">Pessoal e Empresa</option>
+                  </Select>
+                </div>
+              )}
               {form.natureza === "conta" ? (
                 !editandoId && (
                   <div className="w-40">
@@ -191,6 +222,15 @@ export default function ContasTab({ token }) {
                 </>
               )}
             </div>
+            <label className="flex items-center gap-2 mt-3 text-[12.5px] text-text-dim cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={!!form.de_conjuge}
+                onChange={(e) => setForm((f) => ({ ...f, de_conjuge: e.target.checked }))}
+                className="accent-accent"
+              />
+              {form.natureza === "cartao" ? "Este cartão é do cônjuge" : "Esta conta é do cônjuge"}
+            </label>
             <div className="flex items-center gap-2 mt-2">
               <Button type="submit" disabled={!form.nome_exibicao.trim() || salvar.isPending}>
                 {salvar.isPending ? "Salvando…" : editandoId ? "Salvar alterações" : "Adicionar"}
@@ -220,7 +260,12 @@ export default function ContasTab({ token }) {
           <div key={c.id} className="py-2.5 border-b border-line last:border-0">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-[13.5px] font-medium">{c.nome_exibicao}</div>
+                <div className="text-[13.5px] font-medium flex items-center gap-2">
+                  {c.nome_exibicao}
+                  {c.de_conjuge && (
+                    <span className="text-[10px] font-mono rounded-full px-2 py-0.5 bg-blue/15 text-blue">cônjuge</span>
+                  )}
+                </div>
                 {c.banco && <div className="text-text-faint text-[11px]">{c.banco}</div>}
               </div>
               <div className="flex items-center gap-3">
@@ -278,7 +323,12 @@ export default function ContasTab({ token }) {
             <div key={c.id} className="py-2.5 border-b border-line last:border-0">
               <div className="flex items-center justify-between mb-1.5">
                 <div>
-                  <div className="text-[13.5px] font-medium">{c.nome_exibicao}</div>
+                  <div className="text-[13.5px] font-medium flex items-center gap-2">
+                    {c.nome_exibicao}
+                    {c.de_conjuge && (
+                      <span className="text-[10px] font-mono rounded-full px-2 py-0.5 bg-blue/15 text-blue">cônjuge</span>
+                    )}
+                  </div>
                   <div className="text-text-faint text-[11px]">
                     {c.banco}
                     {c.dia_virada ? ` · vira dia ${c.dia_virada}` : ""}

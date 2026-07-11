@@ -64,6 +64,7 @@ async function request(path, { method = "GET", body, auth = true, token } = {}) 
 export const apiGet = (path, opts) => request(path, { ...opts, method: "GET" })
 export const apiPost = (path, body, opts) => request(path, { ...opts, method: "POST", body })
 export const apiPatch = (path, body, opts) => request(path, { ...opts, method: "PATCH", body })
+export const apiPut = (path, body, opts) => request(path, { ...opts, method: "PUT", body })
 export const apiDelete = (path, body, opts) => request(path, { ...opts, method: "DELETE", body })
 
 export { ApiError }

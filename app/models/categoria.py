@@ -25,7 +25,7 @@ class Categoria(Base):
         UUID(as_uuid=True), ForeignKey("clientes.id", ondelete="CASCADE"), nullable=True
     )
     nome: Mapped[str] = mapped_column(String, nullable=False)
-    tipo: Mapped[str] = mapped_column(String, nullable=False)  # entrada | saida | neutra
+    tipo: Mapped[str] = mapped_column(String, nullable=False)  # entrada | saida | neutra | investimento
     icone: Mapped[str | None] = mapped_column(String, nullable=True)  # emoji exibido no lançamento
     contexto: Mapped[str] = mapped_column(String, nullable=False, default="ambos")  # PF | PJ | ambos
     padrao_sistema: Mapped[bool] = mapped_column(Boolean, default=False)

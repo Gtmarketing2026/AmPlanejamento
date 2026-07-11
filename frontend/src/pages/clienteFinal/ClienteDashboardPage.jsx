@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { useOutletContext } from "react-router-dom"
+import { useLocation, useOutletContext } from "react-router-dom"
 import { useQuery } from "@tanstack/react-query"
 import TabsAgrupadas from "../../components/ui/TabsAgrupadas"
 import { meuPerfilCliente } from "../../api/clientes"
@@ -17,16 +17,19 @@ import ProtecaoTab from "./tabs/ProtecaoTab"
 import TarefasTab from "./tabs/TarefasTab"
 import ContasTab from "./tabs/ContasTab"
 import CategoriasTab from "./tabs/CategoriasTab"
-import SaudeFinanceiraCard from "./SaudeFinanceiraCard"
+import IndiceSaudeCard from "./IndiceSaudeCard"
 
 export default function ClienteDashboardPage() {
   const { token } = useOutletContext()
-  const [tab, setTab] = useState("fluxo")
+  // Navegação vinda de outra tela (ex: clicar numa importação na aba Importar)
+  // pode pedir pra abrir direto numa aba já filtrada, via location.state.
+  const { state } = useLocation()
+  const [tab, setTab] = useState(state?.tab || "fluxo")
   const [contexto, setContexto] = useState("PF") // PF | PJ (controle da empresa)
   // Filtros herdados quando o usuário clica num valor do Resumo Financeiro
-  // (ex: "Despesas de julho") -- abre os Lançamentos já filtrados por
-  // período/tipo/categoria. Navegação normal do menu limpa isso (ver mudarTab).
-  const [filtrosLancamentos, setFiltrosLancamentos] = useState(null)
+  // (ex: "Despesas de julho") ou numa importação -- abre os Lançamentos já
+  // filtrados. Navegação normal do menu limpa isso (ver mudarTab).
+  const [filtrosLancamentos, setFiltrosLancamentos] = useState(state?.filtros || null)
 
   function mudarTab(novaTab) {
     setTab(novaTab)
@@ -74,7 +77,7 @@ export default function ClienteDashboardPage() {
         </div>
       )}
 
-      <SaudeFinanceiraCard token={token} />
+      <IndiceSaudeCard token={token} contexto={ctx} onIrParaTab={mudarTab} />
 
       <div className="mb-5">
         <TabsAgrupadas
@@ -90,8 +93,8 @@ export default function ClienteDashboardPage() {
             {
               label: "Planejamento",
               itens: [
-                { value: "orcamento", label: "Planejamento" },
-                { value: "metas", label: "Metas" },
+                { value: "orcamento", label: "Metas" },
+                { value: "metas", label: "Projetos" },
                 { value: "futuro", label: "Meu Futuro" },
               ],
             },
@@ -99,7 +102,7 @@ export default function ClienteDashboardPage() {
               label: "Patrimônio",
               itens: [
                 { value: "investimentos", label: "Investimentos" },
-                { value: "patrimonio", label: "Patrimônio" },
+                { value: "patrimonio", label: "Bens e dívidas" },
                 { value: "dividas", label: "Dívidas" },
                 { value: "protecao", label: "Proteção" },
               ],
@@ -122,7 +125,9 @@ export default function ClienteDashboardPage() {
       {tab === "lancamentos" && (
         <LancamentosTab token={token} contexto={ctx} temCnpj={temCnpj} filtrosIniciais={filtrosLancamentos} />
       )}
-      {tab === "orcamento" && <OrcamentoTab token={token} contexto={ctx} />}
+      {tab === "orcamento" && (
+        <OrcamentoTab token={token} contexto={ctx} onVerLancamentos={irParaLancamentosComFiltro} />
+      )}
       {tab === "clareza" && (
         <ClarezaFinanceiraTab token={token} contexto={ctx} onVerLancamentos={irParaLancamentosComFiltro} />
       )}
@@ -133,7 +138,7 @@ export default function ClienteDashboardPage() {
       {tab === "dividas" && <DividasTab token={token} />}
       {tab === "protecao" && <ProtecaoTab token={token} />}
       {tab === "tarefas" && <TarefasTab token={token} />}
-      {tab === "contas" && <ContasTab token={token} />}
+      {tab === "contas" && <ContasTab token={token} contexto={ctx} temCnpj={temCnpj} />}
       {tab === "categorias" && <CategoriasTab token={token} temCnpj={temCnpj} />}
     </div>
   )

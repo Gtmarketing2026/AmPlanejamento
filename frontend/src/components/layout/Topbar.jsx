@@ -1,6 +1,8 @@
 import { NavLink } from "react-router-dom"
 import { useAuth } from "../../context/AuthContext"
 import Logo from "../ui/Logo"
+import SinoNovidades from "../ui/SinoNovidades"
+import { obterNovidadesPlanejador, marcarNovidadesVistasPlanejador } from "../../api/crm"
 
 const tabClass = ({ isActive }) =>
   `px-3.5 py-2 rounded-[7px] text-[12.5px] font-semibold transition-colors ${
@@ -25,6 +27,11 @@ export default function Topbar() {
       </div>
 
       <div className="flex items-center gap-2">
+        <SinoNovidades
+          queryKey={["crm-novidades-planejador"]}
+          carregar={obterNovidadesPlanejador}
+          marcarVistas={marcarNovidadesVistasPlanejador}
+        />
         <NavLink
           to="/assinatura"
           className="px-3.5 py-2 rounded-[7px] text-[12.5px] font-semibold bg-panel-2 border border-line text-text-dim hover:text-text flex items-center gap-1.5"

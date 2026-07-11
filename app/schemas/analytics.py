@@ -18,6 +18,7 @@ class MetricasCarteiraResposta(BaseModel):
     clientes_churned: int
     taxa_churn_pct: float | None
     ticket_medio: float | None
+    faturamento_mensal: float = 0  # soma dos honorários mensais dos ativos
     ltv_medio_realizado: float | None
     ltv_projetado: float | None
     top_clientes: list[TopClienteResposta]

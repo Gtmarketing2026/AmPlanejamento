@@ -85,9 +85,12 @@ def _extrair_de_tabelas(pdf: "pdfplumber.PDF", ano_referencia: int) -> list[dict
                 valor = _parsear_valor(valor_match)
                 if data is None or valor is None:
                     continue
-                descricao = next(
-                    (c for c in celulas if c not in (data_match, valor_match)), "Sem descrição"
-                )
+                descricao = next((c for c in celulas if c not in (data_match, valor_match)), "")
+                # Linha só com data + valor, sem nenhuma descrição, é quase sempre
+                # a coluna de "saldo do dia"/subtotal do extrato -- não é lançamento.
+                # Capturá-la cria uma "entrada" fantasma (ver investigação Sabrina).
+                if not descricao.strip():
+                    continue
                 transacoes.append(
                     {
                         "data": data,
@@ -149,7 +152,17 @@ def _extrair_de_texto(pdf: "pdfplumber.PDF", ano_referencia: int) -> list[dict]:
         # linha agregada (que depende de \s entre palavras) não pega.
         texto = pagina.extract_text(x_tolerance=1) or pagina.extract_text() or ""
         linhas.extend(texto.splitlines())
+    return _transacoes_de_linhas(linhas, ano_referencia)
 
+
+def parse_texto(texto: str, ano_referencia: int | None = None) -> list[dict]:
+    """Extrai lançamentos de um TEXTO cru (ex: saída de OCR), reaproveitando a
+    mesma lógica de linhas do PDF. Usado como fallback quando o PDF é ilegível."""
+    ano_referencia = ano_referencia or date.today().year
+    return _transacoes_de_linhas((texto or "").splitlines(), ano_referencia)
+
+
+def _transacoes_de_linhas(linhas: list[str], ano_referencia: int) -> list[dict]:
     tem_secao_marcada = any(_PADRAO_CABECALHO_TRANSACOES.search(linha) for linha in linhas)
 
     transacoes = []
@@ -176,10 +189,14 @@ def _extrair_de_texto(pdf: "pdfplumber.PDF", ano_referencia: int) -> list[dict]:
                 valor = _parsear_valor(valor_bruto)
                 if data is None or valor is None:
                     continue
+                # Data + valor sem nenhum texto entre eles = linha de "saldo do
+                # dia"/subtotal, não um lançamento (ver investigação Sabrina).
+                if not descricao.strip():
+                    continue
                 transacoes.append(
                     {
                         "data": data,
-                        "descricao": descricao or "Sem descrição",
+                        "descricao": descricao,
                         "valor": abs(valor),
                         "tipo": "entrada" if valor >= 0 else "saida",
                     }
@@ -198,11 +215,11 @@ def _extrair_de_texto(pdf: "pdfplumber.PDF", ano_referencia: int) -> list[dict]:
                 valor = _parsear_valor(valor_pendente)
                 descricao = linha.replace(data_match.group(0), "").strip()
                 valor_pendente = None
-                if data is not None and valor is not None:
+                if data is not None and valor is not None and descricao:
                     transacoes.append(
                         {
                             "data": data,
-                            "descricao": descricao or "Sem descrição",
+                            "descricao": descricao,
                             "valor": abs(valor),
                             "tipo": "entrada" if valor >= 0 else "saida",
                         }

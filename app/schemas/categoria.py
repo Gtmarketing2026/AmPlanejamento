@@ -4,7 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 CONTEXTOS = {"PF", "PJ", "ambos"}
-TIPOS = {"entrada", "saida", "neutra"}
+TIPOS = {"entrada", "saida", "neutra", "investimento"}
 
 
 class CategoriaResposta(BaseModel):

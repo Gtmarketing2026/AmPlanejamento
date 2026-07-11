@@ -24,6 +24,7 @@ class ImportacaoExtrato(Base):
     tipo_documento: Mapped[str] = mapped_column(String, nullable=False)  # extrato | fatura_cartao
     formato_arquivo: Mapped[str] = mapped_column(String, nullable=False)  # ofx | csv | pdf
     arquivo_url: Mapped[str] = mapped_column(String, nullable=False)  # caminho no Supabase Storage
+    arquivo_hash: Mapped[str | None] = mapped_column(String, nullable=True)  # sha256 do conteúdo (dedup por arquivo)
     periodo_inicio: Mapped[date | None] = mapped_column(Date, nullable=True)
     periodo_fim: Mapped[date | None] = mapped_column(Date, nullable=True)
     status: Mapped[str] = mapped_column(String, default="pendente")  # pendente|processando|processado|erro

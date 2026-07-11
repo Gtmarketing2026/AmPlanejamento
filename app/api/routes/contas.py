@@ -24,6 +24,7 @@ from app.models.conta_conectada import ContaConectada
 from app.models.preferencia_cliente import PreferenciaCliente
 from app.models.transacao import Transacao
 from app.schemas.conta import (
+    CONTEXTOS,
     NATUREZAS,
     ContaAtualizar,
     ContaCriar,
@@ -89,6 +90,7 @@ def _mes_atual() -> date:
 
 @router.get("/contas", response_model=list[ContaResposta])
 def listar_minhas_contas(
+    mes_referencia: date | None = None,  # ciclo a partir do qual conta o limite; default = mês atual
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
     db: Session = Depends(get_db_admin),
 ):
@@ -98,17 +100,21 @@ def listar_minhas_contas(
         .order_by(ContaConectada.natureza, ContaConectada.criado_em)
     ).all()
 
-    mes_atual = _mes_atual()
-    neutras = select(Categoria.id).where(Categoria.tipo == "neutra")
+    # "Usado do limite" do cartão = tudo que ainda vai ser cobrado: fatura do
+    # ciclo atual EM DIANTE, incluindo as parcelas futuras já lançadas (uma
+    # compra parcelada compromete o limite inteiro na hora, não mês a mês). Por
+    # isso soma mes_referencia >= mês atual e NÃO exclui os previstos. Faturas
+    # de meses anteriores (já fechadas/pagas) liberam o limite e ficam de fora.
+    mes = mes_referencia.replace(day=1) if mes_referencia else _mes_atual()
+    neutras = select(Categoria.id).where(Categoria.tipo.in_(["neutra", "investimento"]))
     usados_por_conta = dict(
         db.execute(
             select(Transacao.conta_conectada_id, sa_func.sum(sa_func.abs(Transacao.valor)))
             .where(
                 Transacao.cliente_id == cliente_id,
                 Transacao.tipo == "saida",
-                Transacao.previsto.is_(False),
                 (Transacao.categoria_id.is_(None)) | (Transacao.categoria_id.not_in(neutras)),
-                Transacao.mes_referencia == mes_atual,
+                Transacao.mes_referencia >= mes,
             )
             .group_by(Transacao.conta_conectada_id)
         ).all()
@@ -127,6 +133,8 @@ def criar_minha_conta(
 ):
     if dados.natureza not in NATUREZAS:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Natureza inválida: {dados.natureza}")
+    if dados.contexto not in CONTEXTOS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Contexto inválido: {dados.contexto}")
     if dados.dia_virada is not None and not (1 <= dados.dia_virada <= 31):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Dia de virada deve ser entre 1 e 31")
 
@@ -137,11 +145,13 @@ def criar_minha_conta(
         modo="manual",
         status="ativa",
         natureza=dados.natureza,
+        contexto=dados.contexto,
         nome_exibicao=dados.nome_exibicao,
         banco=dados.banco,
         saldo_manual=dados.saldo_manual,
         limite_total=dados.limite_total,
         dia_virada=dados.dia_virada,
+        de_conjuge=dados.de_conjuge,
     )
     db.add(conta)
     db.flush()
@@ -161,9 +171,13 @@ def atualizar_minha_conta(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Conta não encontrada")
     if dados.dia_virada is not None and not (1 <= dados.dia_virada <= 31):
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Dia de virada deve ser entre 1 e 31")
+    if dados.contexto is not None and dados.contexto not in CONTEXTOS:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Contexto inválido: {dados.contexto}")
 
     if dados.nome_exibicao is not None:
         conta.nome_exibicao = dados.nome_exibicao
+    if dados.contexto is not None:
+        conta.contexto = dados.contexto
     if dados.banco is not None:
         conta.banco = dados.banco
     if dados.saldo_manual is not None:
@@ -175,6 +189,8 @@ def atualizar_minha_conta(
         conta.dia_virada = dados.dia_virada
         if virada_mudou:
             _recalcular_mes_referencia_da_conta(db, conta)
+    if dados.de_conjuge is not None:
+        conta.de_conjuge = dados.de_conjuge
 
     return _conta_para_resposta_agregada(db, conta)
 
@@ -192,7 +208,7 @@ def excluir_minha_conta(
 
 
 def _conta_para_resposta_agregada(db: Session, conta: ContaConectada) -> ContaResposta:
-    neutras = select(Categoria.id).where(Categoria.tipo == "neutra")
+    neutras = select(Categoria.id).where(Categoria.tipo.in_(["neutra", "investimento"]))
     valor_usado = db.scalar(
         select(sa_func.sum(sa_func.abs(Transacao.valor))).where(
             Transacao.conta_conectada_id == conta.id,

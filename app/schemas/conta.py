@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel
 
 NATUREZAS = {"conta", "cartao"}
+CONTEXTOS = {"PF", "PJ", "ambos"}
 VISUALIZACOES = {"data_compra", "virada_cartao"}
 
 
@@ -14,6 +15,8 @@ class ContaCriar(BaseModel):
     saldo_manual: float | None = None  # natureza=conta
     limite_total: float | None = None  # natureza=cartao
     dia_virada: int | None = None  # natureza=cartao, 1-31
+    contexto: str = "ambos"  # PF | PJ | ambos
+    de_conjuge: bool = False  # True = conta/cartão do cônjuge
 
 
 class ContaAtualizar(BaseModel):
@@ -22,11 +25,15 @@ class ContaAtualizar(BaseModel):
     saldo_manual: float | None = None
     limite_total: float | None = None
     dia_virada: int | None = None
+    contexto: str | None = None
+    de_conjuge: bool | None = None
 
 
 class ContaResposta(BaseModel):
     id: uuid.UUID
     natureza: str
+    contexto: str = "ambos"
+    de_conjuge: bool = False
     nome_exibicao: str | None
     banco: str | None
     modo: str

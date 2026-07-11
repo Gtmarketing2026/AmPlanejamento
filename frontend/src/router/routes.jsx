@@ -34,6 +34,7 @@ import PlanejadoresPage from "../pages/negocio/PlanejadoresPage"
 import CarteiraPlanejadorPage from "../pages/negocio/CarteiraPlanejadorPage"
 import FinanceiroPlataformaPage from "../pages/negocio/FinanceiroPlataformaPage"
 import MeuPerfilNegocioPage from "../pages/negocio/MeuPerfilNegocioPage"
+import NovidadesAdminPage from "../pages/negocio/NovidadesAdminPage"
 
 export const router = createBrowserRouter([
   { path: "/", element: <LandingPage /> },
@@ -64,6 +65,7 @@ export const router = createBrowserRouter([
       { path: "/negocio/planejadores", element: <PlanejadoresPage /> },
       { path: "/negocio/planejadores/:planejadorId", element: <CarteiraPlanejadorPage /> },
       { path: "/negocio/financeiro", element: <FinanceiroPlataformaPage /> },
+      { path: "/negocio/novidades", element: <NovidadesAdminPage /> },
       { path: "/negocio/perfil", element: <MeuPerfilNegocioPage /> },
     ],
   },

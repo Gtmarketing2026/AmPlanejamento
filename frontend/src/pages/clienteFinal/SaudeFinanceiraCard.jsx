@@ -29,11 +29,11 @@ function Anel({ cor, pct }) {
   )
 }
 
-export default function SaudeFinanceiraCard({ token }) {
+export default function SaudeFinanceiraCard({ token, contexto = "PF" }) {
   const [verComo, setVerComo] = useState(false)
   const { data, isLoading } = useQuery({
-    queryKey: ["cliente-eu-saude-financeira", token],
-    queryFn: () => obterMinhaSaudeFinanceira(token),
+    queryKey: ["cliente-eu-saude-financeira", token, contexto],
+    queryFn: () => obterMinhaSaudeFinanceira(token, contexto),
     enabled: !!token,
   })
 

@@ -10,7 +10,7 @@ tipo="admin", nunca aceito nas rotas dos outros dois níveis e vice-versa.
 import base64
 import io
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 
 import pyotp
 import qrcode
@@ -26,8 +26,18 @@ from app.core.validacao import validar_senha_forte
 from app.models.admin import Admin
 from app.models.cliente import Cliente
 from app.models.despesa_operacional import DespesaOperacional
+from app.models.notificacao import (
+    PUBLICOS_ATUALIZACAO,
+    TIPOS_ATUALIZACAO,
+    AtualizacaoSistema,
+)
 from app.models.profissional import Profissional
 from app.models.transacao import Transacao
+from app.schemas.atualizacao import (
+    AtualizacaoAtualizar,
+    AtualizacaoCriar,
+    AtualizacaoResposta,
+)
 from app.schemas.cliente import LoginRequest, TokenResponse
 from app.schemas.negocio import (
     AdminAtualizar,
@@ -45,6 +55,7 @@ from app.schemas.negocio import (
     DespesaResposta,
     FaturaPlataformaResposta,
     MetricasNegocioResposta,
+    PlanejadorClienteAtualizar,
     PlanejadorResposta,
     StatusClienteAtualizar,
     StatusPlanejadorAtualizar,
@@ -670,6 +681,68 @@ def excluir_cliente_permanente(
     return {"ok": True, "excluido": str(cliente_id)}
 
 
+@router.patch("/clientes/{cliente_id}/planejador")
+def mudar_planejador_cliente(
+    cliente_id: uuid.UUID,
+    dados: PlanejadorClienteAtualizar,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    """Move o cliente inteiro pra outro planejador: atualiza cliente.profissional_id
+    e TODAS as tabelas dependentes (contas, importações, lançamentos, dívidas,
+    investimentos, metas/aportes, orçamentos, bens, alocações, apólices,
+    simulações, categorias/subcategorias personalizadas, preferências) --
+    senão essas linhas ficam "presas" no planejador antigo e o destino não
+    enxerga nada do histórico do cliente via RLS.
+
+    Tags NÃO são movidas: são vocabulário do planejador (ver app/models/tag.py),
+    então continuam pertencendo ao antigo -- os lançamentos já marcados mantêm
+    as tags (a relação é direta com a transação), mas o planejador novo não
+    vai ver essas tags na lista pra reaproveitar em outros lançamentos."""
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    novo = db.get(Profissional, dados.profissional_id)
+    if not novo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Planejador de destino não encontrado")
+    if cliente.profissional_id == dados.profissional_id:
+        raise HTTPException(status_code=422, detail="Cliente já pertence a esse planejador")
+
+    antigo_id = cliente.profissional_id
+    p = {"cid": str(cliente_id), "novo": str(dados.profissional_id)}
+
+    cliente.profissional_id = dados.profissional_id
+    db.add(cliente)
+    for tabela in (
+        "contas_conectadas", "importacoes_extrato", "transacoes", "dividas",
+        "investimentos", "metas", "orcamentos_categoria", "bens_patrimoniais",
+        "investimento_alocacoes", "apolices_seguro", "simulacoes",
+        "categorias", "subcategorias", "preferencias_cliente",
+    ):
+        db.execute(text(f"UPDATE {tabela} SET profissional_id=:novo WHERE cliente_id=:cid"), p)
+    # metas_aportes não tem cliente_id direto -- deriva via meta_id.
+    db.execute(
+        text("UPDATE metas_aportes SET profissional_id=:novo WHERE meta_id IN (SELECT id FROM metas WHERE cliente_id=:cid)"),
+        p,
+    )
+
+    db.execute(
+        text("""
+            INSERT INTO auditoria_log (profissional_id, cliente_id, ator_tipo, acao, entidade, entidade_id, detalhe)
+            VALUES (:novo, :cid, 'sistema', 'ADMIN_CLIENTE_MUDOU_PLANEJADOR', 'cliente', :cid,
+                    jsonb_build_object('admin_id', :admin_id, 'planejador_antigo', :antigo, 'planejador_novo', :novo))
+        """),
+        {**p, "admin_id": str(admin_id), "antigo": str(antigo_id)},
+    )
+    db.flush()
+    return {
+        "ok": True,
+        "cliente_id": str(cliente_id),
+        "profissional_id_antigo": str(antigo_id),
+        "profissional_id_novo": str(dados.profissional_id),
+    }
+
+
 @router.patch("/clientes/{cliente_id}/status")
 def atualizar_status_cliente(
     cliente_id: uuid.UUID,
@@ -778,3 +851,76 @@ def excluir_despesa(despesa_id: uuid.UUID, db: Session = Depends(get_db_negocio)
     db.delete(despesa)
     db.flush()
     return {"ok": True}
+
+
+# ============================================================================
+# Novidades do sistema (changelog) -- autoria pela plataforma (admin)
+# ============================================================================
+def _validar_atualizacao(tipo: str | None, publico: str | None) -> None:
+    if tipo is not None and tipo not in TIPOS_ATUALIZACAO:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Tipo inválido: {tipo}")
+    if publico is not None and publico not in PUBLICOS_ATUALIZACAO:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Público inválido: {publico}")
+
+
+@router.get("/atualizacoes", response_model=list[AtualizacaoResposta])
+def listar_atualizacoes(
+    admin_id: uuid.UUID = Depends(get_admin_id_atual), db: Session = Depends(get_db_negocio)
+):
+    return db.scalars(select(AtualizacaoSistema).order_by(AtualizacaoSistema.criado_em.desc())).all()
+
+
+@router.post("/atualizacoes", response_model=AtualizacaoResposta, status_code=status.HTTP_201_CREATED)
+def criar_atualizacao(
+    dados: AtualizacaoCriar,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    _validar_atualizacao(dados.tipo, dados.publico)
+    nota = AtualizacaoSistema(
+        titulo=dados.titulo,
+        descricao=dados.descricao,
+        tipo=dados.tipo,
+        publico=dados.publico,
+        publicado=dados.publicado,
+        publicado_em=datetime.now(timezone.utc) if dados.publicado else None,
+    )
+    db.add(nota)
+    db.flush()
+    db.refresh(nota)
+    return nota
+
+
+@router.patch("/atualizacoes/{atualizacao_id}", response_model=AtualizacaoResposta)
+def atualizar_atualizacao(
+    atualizacao_id: uuid.UUID,
+    dados: AtualizacaoAtualizar,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    nota = db.get(AtualizacaoSistema, atualizacao_id)
+    if nota is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Atualização não encontrada")
+    _validar_atualizacao(dados.tipo, dados.publico)
+    campos = dados.model_dump(exclude_unset=True)
+    # Publicar pela primeira vez carimba a data (usada pra contar não-lidas).
+    if campos.get("publicado") and not nota.publicado:
+        nota.publicado_em = datetime.now(timezone.utc)
+    for campo, valor in campos.items():
+        setattr(nota, campo, valor)
+    db.flush()
+    db.refresh(nota)
+    return nota
+
+
+@router.delete("/atualizacoes/{atualizacao_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_atualizacao(
+    atualizacao_id: uuid.UUID,
+    admin_id: uuid.UUID = Depends(get_admin_id_atual),
+    db: Session = Depends(get_db_negocio),
+):
+    nota = db.get(AtualizacaoSistema, atualizacao_id)
+    if nota is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Atualização não encontrada")
+    db.delete(nota)
+    db.flush()

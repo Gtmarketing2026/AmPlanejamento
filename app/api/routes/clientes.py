@@ -3,7 +3,7 @@ import uuid
 from datetime import date
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
-from sqlalchemy import func, select, update
+from sqlalchemy import case, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -20,8 +20,10 @@ from app.api.routes.importacoes import (
     _estabelecimento,
     _hash_parcela,
     _monta_importacao_resposta,
+    _chave_descricao,
     _obter_conta_do_upload,
     classificar_importacao,
+    excluir_parcelas_futuras_orfas,
     gerar_parcelas_futuras,
     meses_ref_por_importacao,
     processar_upload,
@@ -38,7 +40,10 @@ from app.models.categoria import Categoria, Subcategoria
 from app.models.cliente import Cliente
 from app.models.conta_conectada import ContaConectada
 from app.models.importacao_extrato import ImportacaoExtrato
+from app.models.patrimonio import Divida
 from app.models.preferencia_cliente import PreferenciaCliente
+from app.models.profissional import Profissional
+from app.models.tag import Tag
 from app.models.transacao import Transacao
 from app.parsers.dedup import calcular_hash_dedup
 from app.schemas.categoria import (
@@ -57,13 +62,18 @@ from app.schemas.cliente import (
     ClienteExcluir,
     ClienteLoginRequest,
     ClienteResposta,
+    ClienteSaudeResumo,
+    ConjugeAtualizar,
     TokenResponse,
 )
 from app.schemas.importacao import (
+    ContaImportacaoAtualizar,
     EnviarEmpresa,
     ImportacaoResposta,
     MesReferenciaAtualizar,
     ReclassificarRequest,
+    TagCriar,
+    TagResposta,
     TransacaoAtualizar,
     TransacaoCriar,
     TransacaoResposta,
@@ -78,6 +88,67 @@ def listar_clientes(db: Session = Depends(get_db_com_rls)):
     # mesmo sem WHERE explícito — mas mantemos o filtro de status por clareza.
     clientes = db.scalars(select(Cliente).where(Cliente.status == "ativo")).all()
     return clientes
+
+
+@router.get("/saude-resumo", response_model=list[ClienteSaudeResumo])
+def saude_resumo_clientes(
+    db: Session = Depends(get_db_com_rls),
+    profissional_id: uuid.UUID = Depends(get_profissional_id_atual),
+):
+    """Classificação de saúde financeira (termômetro) de TODOS os clientes ativos
+    do planejador, em massa (3 queries agrupadas -- sem N+1). Mesma regra que o
+    cliente vê no próprio termômetro (contexto = tudo, PF+PJ). Usado pra pintar
+    o pontinho na lista de clientes e o resumo no painel."""
+    # Import local pra reaproveitar a MESMA classificação do cliente sem duplicar
+    # a regra (e sem risco de import circular no topo do módulo).
+    from app.api.routes.patrimonio import _classificar_saude, _condicoes_fluxo_real, _criterios_do_profissional
+
+    clientes = db.scalars(select(Cliente).where(Cliente.status == "ativo")).all()
+    if not clientes:
+        return []
+    ids = [c.id for c in clientes]
+    inicio_mes = date.today().replace(day=1)
+    fluxo = _condicoes_fluxo_real()
+
+    def _por_cliente(*conds):
+        rows = db.execute(
+            select(Transacao.cliente_id, func.coalesce(func.sum(func.abs(Transacao.valor)), 0))
+            .where(Transacao.cliente_id.in_(ids), *conds, *fluxo)
+            .group_by(Transacao.cliente_id)
+        ).all()
+        return {r[0]: float(r[1] or 0) for r in rows}
+
+    entradas = _por_cliente(Transacao.tipo == "entrada", Transacao.data >= inicio_mes)
+    despesas = _por_cliente(Transacao.tipo == "saida", Transacao.data >= inicio_mes)
+    saldo_rows = db.execute(
+        select(
+            Transacao.cliente_id,
+            func.coalesce(
+                func.sum(
+                    case((Transacao.tipo == "entrada", func.abs(Transacao.valor)), else_=-func.abs(Transacao.valor))
+                ),
+                0,
+            ),
+        )
+        .where(Transacao.cliente_id.in_(ids), *fluxo)
+        .group_by(Transacao.cliente_id)
+    ).all()
+    saldo = {r[0]: float(r[1] or 0) for r in saldo_rows}
+
+    planejador = db.get(Profissional, profissional_id)
+    criterios = _criterios_do_profissional(planejador)
+
+    out = []
+    for c in clientes:
+        e = entradas.get(c.id, 0.0)
+        d = despesas.get(c.id, 0.0)
+        s = saldo.get(c.id, 0.0)
+        tem_dados = e > 0 or d > 0
+        reserva_meses = round(max(0.0, s) / d, 1) if d > 0 else None
+        poup = round((e - d) / e * 100, 1) if e > 0 else None
+        classif = _classificar_saude(tem_dados, e, d, reserva_meses, poup, criterios)
+        out.append(ClienteSaudeResumo(cliente_id=c.id, classificacao=classif))
+    return out
 
 
 def _nickname_em_uso(nickname: str | None, ignorar_id: uuid.UUID | None = None) -> bool:
@@ -287,6 +358,24 @@ def perfil_cliente_atual(
     return cliente
 
 
+@router.patch("/eu/conjuge", response_model=ClienteResposta)
+def atualizar_meu_conjuge(
+    dados: ConjugeAtualizar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    """Cadastro simples do cônjuge pelo próprio cliente (Configurações). Nome
+    vazio/None remove o cadastro."""
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    nome = (dados.conjuge_nome or "").strip()
+    cliente.conjuge_nome = nome or None
+    db.flush()
+    db.refresh(cliente)
+    return cliente
+
+
 def _categoria_resposta_cliente(c: Categoria, cliente_id: uuid.UUID) -> CategoriaResposta:
     return CategoriaResposta.model_validate(c).model_copy(update={"editavel": c.cliente_id == cliente_id})
 
@@ -474,6 +563,8 @@ def listar_minhas_transacoes(
     categoria_id: uuid.UUID | None = None,
     subcategoria_id: uuid.UUID | None = None,
     conta_conectada_id: uuid.UUID | None = None,  # filtro por conta/cartão
+    importacao_id: uuid.UUID | None = None,  # filtro pelos lançamentos de uma importação
+    tag_id: uuid.UUID | None = None,  # filtro por tag
     tipo: str | None = None,
     data_inicio: date | None = None,
     data_fim: date | None = None,
@@ -501,6 +592,10 @@ def listar_minhas_transacoes(
         query = query.where(Transacao.subcategoria_id == subcategoria_id)
     if conta_conectada_id:
         query = query.where(Transacao.conta_conectada_id == conta_conectada_id)
+    if importacao_id:
+        query = query.where(Transacao.importacao_id == importacao_id)
+    if tag_id:
+        query = query.where(Transacao.tags.any(Tag.id == tag_id))
     if tipo:
         query = query.where(Transacao.tipo == tipo)
     if data_inicio:
@@ -521,6 +616,90 @@ def reclassificar_minhas_transacoes(
 ):
     """Reclassifica por IA os lançamentos informados (do período/filtro atual)."""
     return {"reclassificadas": reclassificar_por_ids(db, dados.ids, cliente_id=cliente_id)}
+
+
+# ---------------------------------------------------------------------------
+# Tags -- vocabulário livre do PLANEJADOR (reaproveitado em todos os clientes
+# dele; cliente final também cria, entra no mesmo vocabulário via
+# cliente.profissional_id). Usadas pra marcar lançamentos (ex: "viagem",
+# "reembolsável"), independente de categoria.
+# ---------------------------------------------------------------------------
+
+
+def _resolver_tags(db: Session, profissional_id: uuid.UUID, tag_ids: list[uuid.UUID]) -> list[Tag]:
+    if not tag_ids:
+        return []
+    tags = db.scalars(select(Tag).where(Tag.id.in_(tag_ids), Tag.profissional_id == profissional_id)).all()
+    if len(tags) != len(set(tag_ids)):
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Alguma tag não foi encontrada")
+    return list(tags)
+
+
+@router.get("/eu/tags", response_model=list[TagResposta])
+def listar_minhas_tags(cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)):
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+    return db.scalars(
+        select(Tag).where(Tag.profissional_id == cliente.profissional_id).order_by(Tag.nome)
+    ).all()
+
+
+@router.post("/eu/tags", response_model=TagResposta, status_code=status.HTTP_201_CREATED)
+def criar_minha_tag(
+    dados: TagCriar, cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)
+):
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+    nome = dados.nome.strip()
+    if not nome:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Nome da tag não pode ser vazio")
+    # Idempotente: se já existe uma tag com esse nome (case-insensitive) pro
+    # profissional, reaproveita em vez de duplicar -- evita "viagem"/"Viagem"
+    # coexistindo quando cliente e planejador criam sem saber um do outro.
+    existente = db.scalar(
+        select(Tag).where(Tag.profissional_id == cliente.profissional_id, func.lower(Tag.nome) == nome.lower())
+    )
+    if existente:
+        return existente
+    tag = Tag(profissional_id=cliente.profissional_id, nome=nome)
+    db.add(tag)
+    db.flush()
+    db.refresh(tag)
+    return tag
+
+
+@router.delete("/eu/tags/{tag_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_minha_tag(
+    tag_id: uuid.UUID, cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)
+):
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
+    tag = db.get(Tag, tag_id)
+    if tag is None or tag.profissional_id != cliente.profissional_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Tag não encontrada")
+    db.delete(tag)  # cascade remove o vínculo dela em transacoes_tags
+
+
+def _ajustar_divida(db: Session, divida_id, valor, sinal: int) -> None:
+    """Abate (sinal=+1) ou estorna (sinal=-1) o valor de uma parcela no saldo da
+    dívida. Mexe em valor_pago/parcelas_pagas -- valor_restante é GERADO no
+    banco. Cap em [0, valor_total]; marca 'quitada' quando pago >= total."""
+    if not divida_id:
+        return
+    divida = db.get(Divida, divida_id)
+    if divida is None:
+        return
+    total = float(divida.valor_total or 0)
+    pago = float(divida.valor_pago or 0) + sinal * abs(float(valor or 0))
+    divida.valor_pago = max(0.0, min(pago, total)) if total > 0 else max(0.0, pago)
+    divida.parcelas_pagas = max(0, int(divida.parcelas_pagas or 0) + sinal)
+    if total > 0 and float(divida.valor_pago) >= total:
+        divida.status = "quitada"
+    elif divida.status == "quitada":
+        divida.status = "ativa"
 
 
 @router.post("/eu/transacoes", response_model=TransacaoResposta, status_code=status.HTTP_201_CREATED)
@@ -567,6 +746,12 @@ def criar_minha_transacao(
     modo_visualizacao = preferencia.visualizacao_lancamento if preferencia else "data_compra"
     mes_referencia = _calcular_mes_referencia(dados.data, conta.natureza, conta.dia_virada, modo_visualizacao)
 
+    if dados.divida_id is not None:
+        d = db.get(Divida, dados.divida_id)
+        if d is None or d.cliente_id != cliente_id:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Dívida não encontrada")
+    tags = _resolver_tags(db, cliente.profissional_id, dados.tag_ids)
+
     transacao = Transacao(
         conta_conectada_id=conta.id,
         cliente_id=cliente_id,
@@ -585,9 +770,14 @@ def criar_minha_transacao(
         parcela_atual=parcela_atual,
         parcela_total=parcela_total,
         hash_parcela=hash_parcela,
+        tags=tags,
+        divida_id=dados.divida_id,
     )
     db.add(transacao)
     db.flush()
+    # Lançamento manual real -> abate a dívida vinculada (as parcelas futuras
+    # projetadas abaixo não abatem: entram como 'previstas' sem divida_id).
+    _ajustar_divida(db, dados.divida_id, valor, +1)
     if parcelas > 1:
         db.refresh(transacao)
         projetar_parcelas_de_origem(db, transacao, modo_visualizacao)
@@ -610,23 +800,60 @@ def atualizar_minha_transacao(
     if not transacao:
         raise HTTPException(status_code=404, detail="Transação não encontrada")
 
-    campos = dados.model_dump(exclude_unset=True, exclude={"aplicar_a_todos_iguais"})
+    campos = dados.model_dump(exclude_unset=True, exclude={"aplicar_a_todos_iguais", "tag_ids"})
+    conta_mudou = "conta_conectada_id" in campos and campos["conta_conectada_id"] != transacao.conta_conectada_id
+    divida_mudou = "divida_id" in campos and campos["divida_id"] != transacao.divida_id
+    divida_antiga = transacao.divida_id
     for campo, valor in campos.items():
         setattr(transacao, campo, valor)
 
+    # Substitui o conjunto de tags do lançamento (enviado explicitamente).
+    if dados.tag_ids is not None:
+        transacao.tags = _resolver_tags(db, transacao.profissional_id, dados.tag_ids)
+
+    # Vínculo com dívida cadastrada: estorna o abatimento da dívida antiga e
+    # abate o valor da parcela na nova (o saldo restante da dívida recalcula).
+    if divida_mudou:
+        nova_divida = transacao.divida_id
+        if nova_divida is not None:
+            d = db.get(Divida, nova_divida)
+            if d is None or d.cliente_id != cliente_id:
+                raise HTTPException(status_code=404, detail="Dívida não encontrada")
+            if transacao.previsto:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Parcela futura (prevista) não abate dívida — vincule quando ela cair.",
+                )
+        _ajustar_divida(db, divida_antiga, transacao.valor, -1)
+        _ajustar_divida(db, nova_divida, transacao.valor, +1)
+
+    # Ao reatribuir a conta/cartão, o mês de referência (que respeita a virada
+    # do cartão) e a origem precisam acompanhar a nova conta.
+    if conta_mudou and transacao.conta_conectada_id is not None:
+        nova_conta = db.get(ContaConectada, transacao.conta_conectada_id)
+        if nova_conta is None or nova_conta.cliente_id != cliente_id:
+            raise HTTPException(status_code=404, detail="Conta/cartão não encontrado")
+        preferencia = db.get(PreferenciaCliente, cliente_id)
+        modo_visualizacao = preferencia.visualizacao_lancamento if preferencia else "data_compra"
+        transacao.mes_referencia = _calcular_mes_referencia(
+            transacao.data, nova_conta.natureza, nova_conta.dia_virada, modo_visualizacao
+        )
+        transacao.origem = "cartao" if nova_conta.natureza == "cartao" else "conta"
+
     quantidade_atualizada = None
     if dados.aplicar_a_todos_iguais:
-        # Reclassifica de uma vez todos os outros lançamentos do mesmo
-        # cliente com a MESMA descrição (comparação exata, case-insensitive)
-        # -- ex: acertar "UBER" uma vez e já valer pra todos os "UBER"
-        # existentes, sem precisar editar um por um.
-        outras = db.scalars(
-            select(Transacao).where(
-                Transacao.cliente_id == cliente_id,
-                Transacao.id != transacao_id,
-                func.lower(Transacao.descricao) == transacao.descricao.lower(),
-            )
+        # Reclassifica de uma vez todos os outros lançamentos do mesmo cliente
+        # com a MESMA descrição normalizada (mesma chave usada pra reaproveitar
+        # o histórico em importações futuras -- ver _chave_descricao/
+        # aplicar_classificacao_por_historico) -- não é comparação exata: ex:
+        # "COMPRA/PAD NOVA PRIMAVERA" e "PAD NOVA PRIMAVERA (3/6)" contam como
+        # a mesma descrição. Cobre TODOS os lançamentos já existentes, de
+        # qualquer data (passado ou futuro/previsto).
+        chave_alvo = _chave_descricao(transacao.descricao)
+        candidatas = db.scalars(
+            select(Transacao).where(Transacao.cliente_id == cliente_id, Transacao.id != transacao_id)
         ).all()
+        outras = [o for o in candidatas if chave_alvo and _chave_descricao(o.descricao) == chave_alvo]
         for outra in outras:
             outra.categoria_id = transacao.categoria_id
             outra.subcategoria_id = transacao.subcategoria_id
@@ -651,6 +878,9 @@ def excluir_minha_transacao(
     )
     if not transacao:
         raise HTTPException(status_code=404, detail="Transação não encontrada")
+    # Se abatia de uma dívida, estorna o abatimento antes de apagar.
+    _ajustar_divida(db, transacao.divida_id, transacao.valor, -1)
+    excluir_parcelas_futuras_orfas(db, [transacao])
     db.delete(transacao)
 
 
@@ -732,6 +962,8 @@ async def importar_meu_extrato(
     senha_pdf: str | None = Form(None),
     conta_conectada_id: uuid.UUID | None = Form(None),
     contexto: str = Form("PF"),
+    mes_referencia: date | None = Form(None),  # opcional: força o mês de ref. de todos os lançamentos
+    forcar: bool = Form(False),  # importar mesmo o arquivo já tendo sido importado antes
     arquivo: UploadFile = File(...),
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
     db: Session = Depends(get_db_admin),
@@ -745,6 +977,7 @@ async def importar_meu_extrato(
         db, cliente_id, cliente.profissional_id, tipo_documento,
         arquivo.filename or "arquivo", conteudo, periodo_inicio, periodo_fim, "cliente_final",
         senha_pdf=senha_pdf or None, conta_conectada_id=conta_conectada_id, contexto=contexto,
+        mes_referencia_manual=mes_referencia, forcar=forcar,
     )
 
 
@@ -824,6 +1057,50 @@ def atualizar_mes_ref_minha_importacao(
     return {"ok": True, "mes_referencia": mes.isoformat()}
 
 
+@router.patch("/eu/importacoes/{importacao_id}/conta")
+def atualizar_conta_minha_importacao(
+    importacao_id: uuid.UUID,
+    dados: ContaImportacaoAtualizar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    """Reatribui de uma vez TODOS os lançamentos desta importação a uma conta/
+    cartão (ou desvincula com null). Recalcula o mês de referência e a origem de
+    cada um conforme a nova conta -- ex: fatura importada 'sem conta' apontada
+    pro cartão certo pra abater do limite."""
+    imp = db.scalar(
+        select(ImportacaoExtrato).where(
+            ImportacaoExtrato.id == importacao_id, ImportacaoExtrato.cliente_id == cliente_id
+        )
+    )
+    if not imp:
+        raise HTTPException(status_code=404, detail="Importação não encontrada")
+
+    nova_conta = None
+    if dados.conta_conectada_id is not None:
+        nova_conta = db.get(ContaConectada, dados.conta_conectada_id)
+        if nova_conta is None or nova_conta.cliente_id != cliente_id:
+            raise HTTPException(status_code=404, detail="Conta/cartão não encontrado")
+
+    preferencia = db.get(PreferenciaCliente, cliente_id)
+    modo_visualizacao = preferencia.visualizacao_lancamento if preferencia else "data_compra"
+
+    transacoes = db.scalars(
+        select(Transacao).where(
+            Transacao.importacao_id == importacao_id, Transacao.cliente_id == cliente_id
+        )
+    ).all()
+    for t in transacoes:
+        t.conta_conectada_id = nova_conta.id if nova_conta else None
+        if nova_conta is not None:
+            t.origem = "cartao" if nova_conta.natureza == "cartao" else "conta"
+            t.mes_referencia = _calcular_mes_referencia(
+                t.data, nova_conta.natureza, nova_conta.dia_virada, modo_visualizacao
+            )
+    imp.conta_conectada_id = nova_conta.id if nova_conta else None
+    return {"ok": True, "atualizados": len(transacoes)}
+
+
 @router.delete("/eu/importacoes/{importacao_id}", status_code=status.HTTP_200_OK)
 def excluir_minha_importacao(
     importacao_id: uuid.UUID,
@@ -840,6 +1117,7 @@ def excluir_minha_importacao(
 
     transacoes = db.scalars(select(Transacao).where(Transacao.importacao_id == importacao_id)).all()
     qtd = len(transacoes)
+    qtd += excluir_parcelas_futuras_orfas(db, transacoes)
     for t in transacoes:
         db.delete(t)
     try:

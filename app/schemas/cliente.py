@@ -96,9 +96,21 @@ class ClienteResposta(BaseModel):
     objetivo_principal: str | None
     historico: str | None = None
     situacao_atual: str | None = None
+    conjuge_nome: str | None = None
     criado_em: datetime
 
     model_config = {"from_attributes": True}
+
+
+class ConjugeAtualizar(BaseModel):
+    conjuge_nome: str | None = None
+
+
+class ClienteSaudeResumo(BaseModel):
+    cliente_id: uuid.UUID
+    # vermelho | amarelo | verde | azul | neutro (mesma classificação que o
+    # cliente vê no termômetro da saúde financeira).
+    classificacao: str
 
 
 class ClienteAtualizar(BaseModel):

@@ -31,6 +31,11 @@ class ContaConectada(Base):
     # crédito (natureza), evitando uma segunda tabela quase idêntica -- os
     # campos abaixo só fazem sentido conforme a natureza.
     natureza: Mapped[str] = mapped_column(String, default="conta")  # conta | cartao
+    # PF | PJ | ambos -- separa conta/cartão pessoal do da empresa nas visões
+    # Pessoal/Empresa. 'ambos' aparece nas duas (default seguro pro histórico).
+    contexto: Mapped[str] = mapped_column(String, nullable=False, default="ambos")
+    # True = conta/cartão é do CÔNJUGE do cliente (não do titular).
+    de_conjuge: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     nome_exibicao: Mapped[str | None] = mapped_column(String, nullable=True)
     saldo_manual: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)  # natureza=conta
     limite_total: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)  # natureza=cartao

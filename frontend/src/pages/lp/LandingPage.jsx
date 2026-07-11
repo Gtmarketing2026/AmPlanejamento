@@ -71,9 +71,52 @@ function TelaFluxoCaixa() {
   )
 }
 
+// Painel analítico do PLANEJADOR (visão de negócio) -- números fictícios de
+// um escritório de sucesso, só pra ilustrar o produto.
+function TelaPainelAnalitico() {
+  const faixas = [
+    { label: "Precisam de atenção", qtd: 3, cor: "#E5645A" },
+    { label: "Regulares", qtd: 7, cor: "#F0A63C" },
+    { label: "Saudáveis", qtd: 30, cor: "#26D9A8" },
+    { label: "Sem dados", qtd: 2, cor: "#5A6570" },
+  ]
+  return (
+    <JanelaApp titulo="Painel analítico do profissional · visão agregada">
+      <div className="grid grid-cols-3 gap-3 mb-3">
+        <KpiStat label="Clientes ativos" value="42" />
+        <KpiStat label="Faturamento mensal" value="R$ 68.400,00" delta="soma dos honorários" deltaColor="accent" />
+        <KpiStat label="Ticket médio" value="R$ 1.629,00" delta="por cliente ativo" />
+      </div>
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <KpiStat label="LTV médio realizado" value="R$ 14.680,00" deltaColor="accent" />
+        <KpiStat label="LTV projetado" value="R$ 39.096,00" delta="ticket × retenção" />
+        <KpiStat label="Churn" value="2%" delta="12 meses" deltaColor="red" />
+      </div>
+      <Card>
+        <div className="text-[10.5px] text-text-faint uppercase tracking-wide font-mono mb-3">
+          Saúde da carteira · quem precisa de atenção
+        </div>
+        <div className="grid grid-cols-4 gap-2.5">
+          {faixas.map((f) => (
+            <div key={f.label} className="rounded-[10px] border border-line px-3 py-2.5">
+              <div className="flex items-center gap-1.5 mb-1">
+                <span className="w-2.5 h-2.5 rounded-full" style={{ background: f.cor }} />
+                <span className="text-[10.5px] text-text-dim leading-tight">{f.label}</span>
+              </div>
+              <div className="text-[22px] font-display font-semibold" style={{ color: f.cor }}>
+                {f.qtd}
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </JanelaApp>
+  )
+}
+
 function TelaPlanejamento() {
   return (
-    <JanelaApp titulo="Planejamento · painel do cliente">
+    <JanelaApp titulo="Metas de gasto · painel do cliente">
       <div className="grid grid-cols-3 gap-3 mb-4">
         <KpiStat label="Renda do mês" value="R$ 12.500,00" deltaColor="accent" />
         <KpiStat label="Gastos planejados" value="R$ 5.500,00" deltaColor="red" />
@@ -112,7 +155,7 @@ function TelaMetas() {
     { titulo: "Aposentadoria antecipada", sub: "sonho · longo prazo", pct: 12, valor: "R$ 180.000,00" },
   ]
   return (
-    <JanelaApp titulo="Metas · painel do cliente">
+    <JanelaApp titulo="Projetos · painel do cliente">
       <div className="flex flex-col gap-3">
         {metas.map((m) => (
           <Card key={m.titulo}>
@@ -162,7 +205,7 @@ function TelaInvestimentos() {
 
 function TelaPatrimonio() {
   return (
-    <JanelaApp titulo="Patrimônio · painel do cliente">
+    <JanelaApp titulo="Bens e dívidas · painel do cliente">
       <div className="grid grid-cols-3 gap-3 mb-4">
         <KpiStat label="Patrimônio líquido" value="R$ 238.832,00" deltaColor="accent" />
         <KpiStat label="Total de ativos" value="R$ 238.832,00" />
@@ -304,13 +347,63 @@ function TelaPlanoAcao() {
   )
 }
 
+function TelaPessoalEmpresa() {
+  // Mostra o toggle Pessoal/Empresa (PF/PJ): a mesma pessoa com as duas visões
+  // separadas. Aqui com a visão "Empresa" ativa.
+  const kpis = [
+    { label: "Receitas", valor: "R$ 42.300", cor: "text-accent" },
+    { label: "Despesas", valor: "R$ 18.740", cor: "text-red" },
+    { label: "Resultado", valor: "R$ 23.560", cor: "text-accent" },
+  ]
+  const itens = [
+    { desc: "Nota fiscal · Cliente Horizonte", meio: "Conta PJ · Inter", v: "+ R$ 12.000,00", cor: "text-accent" },
+    { desc: "Anúncios Google Ads", meio: "Cartão CNPJ final 0421", v: "- R$ 1.850,00", cor: "text-red" },
+    { desc: "Contador mensal", meio: "Conta PJ · Inter", v: "- R$ 480,00", cor: "text-red" },
+  ]
+  return (
+    <JanelaApp titulo="Pessoal e Empresa · mesma pessoa, contas separadas">
+      <div className="flex items-center gap-1 bg-panel border border-line rounded-[10px] p-1 w-fit mb-3">
+        <span className="px-3.5 py-1.5 rounded-[7px] text-[12px] font-semibold text-text-dim">Pessoal</span>
+        <span className="px-3.5 py-1.5 rounded-[7px] text-[12px] font-semibold bg-accent text-[#062019]">
+          Empresa · MC Studio
+        </span>
+      </div>
+      <div className="grid grid-cols-3 gap-2.5 mb-3">
+        {kpis.map((k) => (
+          <div key={k.label} className="bg-panel-2 border border-line rounded-[10px] px-3 py-2.5">
+            <div className="text-[10px] text-text-faint uppercase tracking-wide font-mono mb-1">{k.label}</div>
+            <div className={`font-mono text-[14px] ${k.cor}`}>{k.valor}</div>
+          </div>
+        ))}
+      </div>
+      <Card>
+        <div className="flex flex-col gap-2.5">
+          {itens.map((t) => (
+            <div key={t.desc} className="flex items-center justify-between text-[12.5px] border-b border-line last:border-0 pb-2.5 last:pb-0">
+              <div>
+                <div className="text-text">{t.desc}</div>
+                <div className="text-text-faint text-[10.5px]">{t.meio}</div>
+              </div>
+              <span className={`font-mono ${t.cor}`}>{t.v}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+      <p className="text-text-faint text-[11px] mt-3">
+        Um clique volta pra visão Pessoal — lançamentos, contas, cartões e saúde financeira de cada lado ficam separados.
+      </p>
+    </JanelaApp>
+  )
+}
+
 const TELAS_CARROSSEL = [
   { key: "fluxo", label: "Fluxo de caixa", render: TelaFluxoCaixa },
-  { key: "planejamento", label: "Planejamento", render: TelaPlanejamento },
-  { key: "metas", label: "Metas", render: TelaMetas },
+  { key: "planejamento", label: "Metas", render: TelaPlanejamento },
+  { key: "metas", label: "Projetos", render: TelaMetas },
   { key: "investimentos", label: "Investimentos", render: TelaInvestimentos },
-  { key: "patrimonio", label: "Patrimônio", render: TelaPatrimonio },
+  { key: "patrimonio", label: "Bens e dívidas", render: TelaPatrimonio },
   { key: "lancamentos", label: "Lançamentos", render: TelaLancamentos },
+  { key: "pf-pj", label: "Pessoal e Empresa", render: TelaPessoalEmpresa },
   { key: "crm", label: "CRM do planejador", render: TelaCrm },
   { key: "plano-acao", label: "Plano de ação (CRM)", render: TelaPlanoAcao },
 ]
@@ -401,7 +494,7 @@ const DESTAQUES = [
     icone: "🔄",
     titulo: "Virada do cartão (opcional)",
     texto:
-      "Configure a data de fechamento do cartão pra que cada compra conte no mês em que será paga, não no mês em que foi feita — mapeando o gasto real do mês. É opcional e editável: a data da compra continua visível, só muda em qual mês ela é somada.",
+      "Configure a data de fechamento do cartão pra que cada compra conte no mês do CICLO em que ela caiu (o consumo), não no mês-calendário de cada compra — mapeando o gasto real por fatura. É opcional e editável: a data da compra continua visível, só muda em qual mês ela é somada.",
   },
   {
     icone: "🗺️",
@@ -410,18 +503,25 @@ const DESTAQUES = [
       "Monte no CRM o caminho de “onde estou → onde quero chegar”: etapas com prazo e status, quiz de perfil comportamental e histórico do cliente — com uma barra de progresso que mostra o quanto ele já avançou. Vira uma conversa clara sobre o planejamento.",
     visual: MiniMapaPlanoAcao,
   },
+  {
+    icone: "🏢",
+    titulo: "Pessoal e Empresa no mesmo painel",
+    texto:
+      "Cada cliente pode manter as finanças pessoais (PF) e da empresa (PJ) separadas: um clique alterna a visão e tudo acompanha — lançamentos, contas, cartões, fluxo de caixa e a saúde financeira. Perfeito pra autônomos e donos de negócio que hoje misturam as contas.",
+  },
 ]
 
 const RECURSOS = [
   { icone: "🔎", titulo: "Filtros e ações em massa", texto: "Filtre por conta, cartão, categoria, subcategoria ou período; importe ou exclua lançamentos em massa." },
   { icone: "💸", titulo: "Fluxo de caixa", texto: "Receitas, despesas e resultado por mês, com gráfico e exportação em PDF/Excel." },
   { icone: "📊", titulo: "Resumo financeiro", texto: "Visão anual mês a mês — clique num valor e veja os lançamentos por trás dele." },
-  { icone: "🎯", titulo: "Planejamento e metas", texto: "Metas de gasto por categoria, priorização (essencial/desejo/sonho) e acompanhamento de aportes." },
+  { icone: "🎯", titulo: "Metas", texto: "Metas de gasto por categoria, com faixa de uso colorida e aviso de estouro — clique numa meta e veja os lançamentos dela." },
+  { icone: "🚀", titulo: "Projetos", texto: "Projetos de vida por prioridade (essencial/desejo/sonho), com aportes e investimentos vinculados contando no progresso." },
   { icone: "🧓", titulo: "Meu Futuro (FIRE)", texto: "Simulador de independência financeira: quanto investir por mês pra aposentar na idade que quiser." },
-  { icone: "📈", titulo: "Investimentos", texto: "Carteira por instituição e liquidez, com alocação direta pra cada meta do cliente." },
-  { icone: "🏦", titulo: "Patrimônio", texto: "Ativos, dívidas, bens móveis e imóveis — patrimônio líquido sempre atualizado." },
+  { icone: "📈", titulo: "Investimentos", texto: "Carteira por instituição, classe e liquidez, com alocação direta pra cada projeto. Classificou um lançamento como investimento? Ele sai das despesas e entra aqui — e aparece como aporte no fluxo de caixa." },
+  { icone: "🏦", titulo: "Bens e dívidas", texto: "Ativos, dívidas, bens móveis e imóveis e milhas — patrimônio líquido sempre atualizado." },
   { icone: "🛡️", titulo: "Proteção", texto: "Cobertura de seguro de vida atual vs. recomendada, com apólices cadastradas." },
-  { icone: "💳", titulo: "Contas e cartões", texto: "Saldo atualizado automaticamente pelos lançamentos, com virada de fatura configurável." },
+  { icone: "💳", titulo: "Contas e cartões", texto: "Cada meio de pagamento com o ícone do banco; vincule a fatura ao cartão pra o gasto abater do limite. Saldo atualizado automaticamente pelos lançamentos e virada de fatura configurável." },
   { icone: "🏷️", titulo: "Categorias sob medida", texto: "Categorias padrão prontas, mais as que você e cada cliente quiserem criar." },
   { icone: "🤝", titulo: "CRM com plano de ação e Google Agenda", texto: "Perfil comportamental, histórico, roadmap “onde estou → onde quero chegar”, follow-ups sincronizados com o Google Agenda e checklist de tarefas." },
   { icone: "🎨", titulo: "Sua marca (white label)", texto: "Subdomínio, cor e logo próprios — seu cliente vê o painel com a cara do seu escritório." },
@@ -539,6 +639,32 @@ export default function LandingPage() {
           <p className="text-text-faint text-[11px] text-center mt-3">
             * Telas com dados fictícios (cliente demonstrativo), só pra ilustrar o produto.
           </p>
+        </div>
+      </section>
+
+      {/* Visão de negócio: painel analítico do planejador */}
+      <section className="max-w-[1180px] mx-auto px-6 py-16 grid md:grid-cols-2 gap-12 items-center">
+        <div className="order-2 md:order-1">
+          <TelaPainelAnalitico />
+          <p className="text-text-faint text-[11px] text-center mt-3">
+            * Números fictícios de um escritório demonstrativo, só pra ilustrar.
+          </p>
+        </div>
+        <div className="order-1 md:order-2">
+          <div className="text-accent text-[11px] uppercase tracking-wide font-mono mb-2">Visão de negócio</div>
+          <h2 className="font-display text-[28px] font-bold leading-tight mb-4">
+            Sua carteira inteira num painel — saiba quem precisa de você
+          </h2>
+          <p className="text-text-dim text-[14px] leading-relaxed mb-5">
+            Além do painel de cada cliente, você tem a visão do seu escritório: faturamento mensal, ticket médio, LTV,
+            churn e o <strong className="text-text">termômetro de saúde de cada cliente</strong> — tudo agregado.
+          </p>
+          <ul className="flex flex-col gap-2.5 text-[13.5px] text-text-dim">
+            <li className="flex gap-2.5"><span className="text-accent">✓</span> Faturamento e ticket médio da carteira em tempo real.</li>
+            <li className="flex gap-2.5"><span className="text-accent">✓</span> LTV realizado e projetado pra entender o valor de cada cliente.</li>
+            <li className="flex gap-2.5"><span className="text-accent">✓</span> Termômetro por cliente: veja num relance quem está no vermelho.</li>
+            <li className="flex gap-2.5"><span className="text-accent">✓</span> Clique numa faixa e vá direto pros clientes que precisam de atenção.</li>
+          </ul>
         </div>
       </section>
 

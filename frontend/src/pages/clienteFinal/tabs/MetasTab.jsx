@@ -15,15 +15,28 @@ import {
 } from "../../../api/patrimonio"
 import { formatarData, formatarMoeda } from "../../../lib/format"
 
+// Tipos de projeto (com ícone). O `tipo` é texto livre no backend, então além
+// destes o cliente pode criar um tipo PERSONALIZADO (o nome digitado vira o
+// próprio tipo). Ver picker no form.
 const TIPOS = {
-  aposentadoria: "Aposentadoria",
-  viagem: "Viagem",
-  imovel: "Imóvel",
-  quitar_divida: "Quitar dívida",
-  reserva_emergencia: "Reserva de emergência",
-  educacao: "Educação",
-  outro: "Outro",
+  viagem: { label: "Viagem", icone: "✈️" },
+  veiculo: { label: "Veículo", icone: "🚗" },
+  casa: { label: "Casa", icone: "🏠" },
+  familia: { label: "Família", icone: "👪" },
+  eletronico: { label: "Eletrônico", icone: "💻" },
+  educacao: { label: "Educação", icone: "🎓" },
+  hobby: { label: "Hobby", icone: "🎨" },
+  profissional: { label: "Profissional", icone: "💼" },
+  saude: { label: "Saúde", icone: "❤️" },
+  aposentadoria: { label: "Aposentadoria", icone: "🌴" },
+  imovel: { label: "Imóvel", icone: "🏢" },
+  reserva_emergencia: { label: "Reserva de emergência", icone: "🛟" },
+  quitar_divida: { label: "Quitar dívida", icone: "💳" },
+  outro: { label: "Outro", icone: "🎯" },
 }
+// Rótulo/ícone de um tipo (inclui os personalizados: cai no texto livre).
+const rotuloTipo = (t) => TIPOS[t]?.label || t || "Outro"
+const iconeTipo = (t) => TIPOS[t]?.icone || "🎯"
 const STATUS_VARIANT = { em_andamento: "warn", concluida: "on", pausada: "neutral" }
 const STATUS_LABEL = { em_andamento: "em andamento", concluida: "concluída", pausada: "pausada" }
 
@@ -37,15 +50,18 @@ export default function MetasTab({ token }) {
   const qc = useQueryClient()
   const [visualizar, setVisualizar] = useState("prioridade") // prioridade | tabela | resumo
   const [titulo, setTitulo] = useState("")
-  const [tipo, setTipo] = useState("outro")
-  const [prioridade, setPrioridade] = useState("desejo")
+  const [tipo, setTipo] = useState("viagem")
+  const [tipoCustom, setTipoCustom] = useState("") // usado quando tipo === "__custom__"
+  const [prioridade, setPrioridade] = useState("essencial")
   const [valorAlvo, setValorAlvo] = useState("")
+  const [dataInicial, setDataInicial] = useState("")
   const [prazo, setPrazo] = useState("")
   const [aporteAberto, setAporteAberto] = useState(null)
   const [valorAporte, setValorAporte] = useState("")
   const [metaMensalAberta, setMetaMensalAberta] = useState(null)
   const [valorMetaMensal, setValorMetaMensal] = useState("")
   const [novaMetaMensal, setNovaMetaMensal] = useState("")
+  const [editandoId, setEditandoId] = useState(null) // projeto sendo editado (lápis)
 
   const { data: metas = [], isLoading } = useQuery({
     queryKey: ["cliente-eu-metas", token],
@@ -53,24 +69,56 @@ export default function MetasTab({ token }) {
     enabled: !!token,
   })
 
+  function payloadProjeto() {
+    return {
+      titulo,
+      tipo: tipo === "__custom__" ? tipoCustom.trim() || "outro" : tipo,
+      prioridade,
+      valor_alvo: valorAlvo ? Number(valorAlvo) : null,
+      data_inicial: dataInicial || null,
+      prazo: prazo || null,
+      aporte_mensal_meta: novaMetaMensal ? Number(novaMetaMensal) : null,
+    }
+  }
+  function limparForm() {
+    setEditandoId(null)
+    setTitulo("")
+    setTipo("viagem")
+    setTipoCustom("")
+    setPrioridade("essencial")
+    setValorAlvo("")
+    setDataInicial("")
+    setPrazo("")
+    setNovaMetaMensal("")
+  }
   const criar = useMutation({
-    mutationFn: () =>
-      criarMinhaMeta(token, {
-        titulo,
-        tipo,
-        prioridade,
-        valor_alvo: valorAlvo ? Number(valorAlvo) : null,
-        prazo: prazo || null,
-        aporte_mensal_meta: novaMetaMensal ? Number(novaMetaMensal) : null,
-      }),
+    mutationFn: () => criarMinhaMeta(token, payloadProjeto()),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["cliente-eu-metas", token] })
-      setTitulo("")
-      setValorAlvo("")
-      setPrazo("")
-      setNovaMetaMensal("")
+      limparForm()
     },
   })
+  const editar = useMutation({
+    mutationFn: () => atualizarMinhaMeta(token, editandoId, payloadProjeto()),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cliente-eu-metas", token] })
+      limparForm()
+    },
+  })
+  // Abre o form já preenchido pra editar um projeto existente (lápis no card).
+  function abrirEdicao(m) {
+    setEditandoId(m.id)
+    setTitulo(m.titulo || "")
+    const conhecido = TIPOS[m.tipo]
+    setTipo(conhecido ? m.tipo : "__custom__")
+    setTipoCustom(conhecido ? "" : m.tipo || "")
+    setPrioridade(m.prioridade || "essencial")
+    setValorAlvo(m.valor_alvo ? String(m.valor_alvo) : "")
+    setDataInicial(m.data_inicial || "")
+    setPrazo(m.prazo || "")
+    setNovaMetaMensal(m.aporte_mensal_meta ? String(m.aporte_mensal_meta) : "")
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" })
+  }
 
   const atualizarMetaMensal = useMutation({
     mutationFn: ({ id, valor }) => atualizarMinhaMeta(token, id, { aporte_mensal_meta: valor }),
@@ -101,50 +149,108 @@ export default function MetasTab({ token }) {
   })
 
   const porPrioridade = (p) => metas.filter((m) => m.prioridade === p)
-  const totalPrioridade = (p) => porPrioridade(p).reduce((s, m) => s + Number(m.valor_alvo || m.valor_atual || 0), 0)
+  // Acumulado do projeto = aportes manuais + investimentos alocados a ele
+  // (investimento vinculado ao projeto conta como aporte).
+  const acumuladoDe = (m) => Number(m.valor_atual || 0) + Number(m.valor_investido_alocado || 0)
+  const totalPrioridade = (p) => porPrioridade(p).reduce((s, m) => s + Number(m.valor_alvo || acumuladoDe(m)), 0)
 
   return (
     <div className="flex flex-col gap-5">
       <Card>
-        <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-3">
-          Nova meta
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono">
+            {editandoId ? "Editar projeto" : "Novo projeto"}
+          </div>
+          {editandoId && (
+            <button onClick={limparForm} className="text-text-faint hover:text-text text-[12px]">
+              Cancelar edição
+            </button>
+          )}
         </div>
         <form
           onSubmit={(e) => {
             e.preventDefault()
-            if (titulo.trim()) criar.mutate()
+            if (!titulo.trim()) return
+            editandoId ? editar.mutate() : criar.mutate()
           }}
+          className="flex flex-col gap-4"
         >
+          {/* Prioridade em chips */}
+          <div>
+            <div className="text-[11px] text-text-faint uppercase tracking-wide mb-1.5 font-mono">Prioridade</div>
+            <div className="flex gap-1.5 flex-wrap">
+              {PRIORIDADES.map((p) => (
+                <button
+                  key={p.valor}
+                  type="button"
+                  onClick={() => setPrioridade(p.valor)}
+                  className={`px-3 py-1.5 rounded-[9px] text-[12.5px] border transition-colors ${
+                    prioridade === p.valor
+                      ? "bg-accent text-[#062019] border-accent font-semibold"
+                      : "border-line text-text-dim hover:text-text"
+                  }`}
+                >
+                  {p.label} <span className="opacity-70">· {p.sub}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Tipo em grade de ícones + personalizado */}
+          <div>
+            <div className="text-[11px] text-text-faint uppercase tracking-wide mb-1.5 font-mono">Tipo do projeto</div>
+            <div className="flex gap-1.5 flex-wrap">
+              {Object.entries(TIPOS).map(([v, info]) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => setTipo(v)}
+                  title={info.label}
+                  className={`w-[74px] py-2 rounded-[10px] border flex flex-col items-center gap-1 transition-colors ${
+                    tipo === v ? "border-accent bg-accent/10 text-text" : "border-line text-text-dim hover:text-text"
+                  }`}
+                >
+                  <span className="text-[18px] leading-none">{info.icone}</span>
+                  <span className="text-[10px] leading-tight text-center">{info.label}</span>
+                </button>
+              ))}
+              <button
+                type="button"
+                onClick={() => setTipo("__custom__")}
+                title="Criar um tipo personalizado"
+                className={`w-[74px] py-2 rounded-[10px] border flex flex-col items-center gap-1 transition-colors ${
+                  tipo === "__custom__" ? "border-accent bg-accent/10 text-text" : "border-line text-text-dim hover:text-text"
+                }`}
+              >
+                <span className="text-[18px] leading-none">➕</span>
+                <span className="text-[10px] leading-tight text-center">Personalizado</span>
+              </button>
+            </div>
+            {tipo === "__custom__" && (
+              <div className="w-56 mt-2">
+                <Field
+                  label="Nome do tipo"
+                  value={tipoCustom}
+                  onChange={(e) => setTipoCustom(e.target.value)}
+                  placeholder="ex: Casamento"
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Campos */}
           <div className="flex gap-3 flex-wrap items-start">
             <div className="flex-1 min-w-[180px]">
               <Field
-                label="Título"
+                label="Nome do projeto"
                 value={titulo}
                 onChange={(e) => setTitulo(e.target.value)}
                 placeholder="ex: Sair do aluguel"
               />
             </div>
-            <div className="w-44">
-              <Select label="Tipo" value={tipo} onChange={(e) => setTipo(e.target.value)}>
-                {Object.entries(TIPOS).map(([v, l]) => (
-                  <option key={v} value={v}>
-                    {l}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="w-48">
-              <Select label="Prioridade" value={prioridade} onChange={(e) => setPrioridade(e.target.value)}>
-                {PRIORIDADES.map((p) => (
-                  <option key={p.valor} value={p.valor}>
-                    {p.label} ({p.sub})
-                  </option>
-                ))}
-              </Select>
-            </div>
             <div className="w-36">
               <Field
-                label="Valor alvo (R$)"
+                label="Valor total (R$)"
                 type="number"
                 value={valorAlvo}
                 onChange={(e) => setValorAlvo(e.target.value)}
@@ -152,11 +258,14 @@ export default function MetasTab({ token }) {
               />
             </div>
             <div className="w-40">
-              <Field label="Prazo" type="date" value={prazo} onChange={(e) => setPrazo(e.target.value)} />
+              <Field label="Data inicial" type="date" value={dataInicial} onChange={(e) => setDataInicial(e.target.value)} />
+            </div>
+            <div className="w-40">
+              <Field label="Prazo (data alvo)" type="date" value={prazo} onChange={(e) => setPrazo(e.target.value)} />
             </div>
             <div className="w-40">
               <Field
-                label="Meta mensal (R$)"
+                label="Aporte mensal (R$)"
                 type="number"
                 value={novaMetaMensal}
                 onChange={(e) => setNovaMetaMensal(e.target.value)}
@@ -164,8 +273,17 @@ export default function MetasTab({ token }) {
               />
             </div>
           </div>
-          <Button type="submit" disabled={!titulo.trim() || criar.isPending}>
-            {criar.isPending ? "Criando…" : "Criar meta"}
+          <Button
+            type="submit"
+            disabled={!titulo.trim() || (tipo === "__custom__" && !tipoCustom.trim()) || criar.isPending || editar.isPending}
+          >
+            {editandoId
+              ? editar.isPending
+                ? "Salvando…"
+                : "Salvar alterações"
+              : criar.isPending
+                ? "Criando…"
+                : "Criar projeto"}
           </Button>
         </form>
       </Card>
@@ -225,9 +343,18 @@ export default function MetasTab({ token }) {
                 <Tr key={m.id}>
                   <Td className="capitalize">{m.prioridade}</Td>
                   <Td>{m.titulo}</Td>
-                  <Td className="text-text-dim">{TIPOS[m.tipo]}</Td>
+                  <Td className="text-text-dim">{iconeTipo(m.tipo)} {rotuloTipo(m.tipo)}</Td>
                   <Td className="text-right font-mono">{formatarMoeda(m.valor_alvo)}</Td>
-                  <Td className="text-right font-mono">{formatarMoeda(m.valor_atual)}</Td>
+                  <Td
+                    className="text-right font-mono"
+                    title={
+                      m.valor_investido_alocado > 0
+                        ? `Aportado ${formatarMoeda(m.valor_atual)} + investido ${formatarMoeda(m.valor_investido_alocado)}`
+                        : undefined
+                    }
+                  >
+                    {formatarMoeda(acumuladoDe(m))}
+                  </Td>
                   <Td className="text-right font-mono text-text-dim">{formatarMoeda(m.aporte_mensal_meta)}</Td>
                   <Td>
                     <Pill variant={STATUS_VARIANT[m.status]}>{STATUS_LABEL[m.status]}</Pill>
@@ -268,11 +395,29 @@ export default function MetasTab({ token }) {
                 </div>
               </Card>
 
-              {porPrioridade(p.valor).map((m) => (
+              {porPrioridade(p.valor).map((m) => {
+                // Acumulado do objetivo = aportes manuais + investimentos alocados
+                // a ele. O % de progresso considera os dois (antes só contava os
+                // aportes, então R$100 investidos ficavam de fora do 0%).
+                const aportado = Number(m.valor_atual || 0)
+                const investido = Number(m.valor_investido_alocado || 0)
+                const acumulado = aportado + investido
+                const pctTotal = m.valor_alvo ? Math.round((acumulado / Number(m.valor_alvo)) * 100) : 0
+                return (
                 <Card key={m.id}>
                   <div className="flex items-start justify-between mb-1.5">
-                    <span className="font-medium text-[13px]">{m.titulo}</span>
+                    <span className="font-medium text-[13px] flex items-center gap-1.5">
+                      <span>{iconeTipo(m.tipo)}</span>
+                      {m.titulo}
+                    </span>
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => abrirEdicao(m)}
+                        title="Editar projeto"
+                        className="text-text-faint hover:text-text text-[12px]"
+                      >
+                        ✏️
+                      </button>
                       <button
                         onClick={() =>
                           alternarAtiva.mutate({
@@ -304,17 +449,17 @@ export default function MetasTab({ token }) {
                   )}
                   {m.valor_alvo ? (
                     <BarRow
-                      label={formatarMoeda(m.valor_atual)}
-                      pct={m.progresso_pct || 0}
-                      value={`${m.progresso_pct || 0}%`}
+                      label={formatarMoeda(acumulado)}
+                      pct={Math.min(100, pctTotal)}
+                      value={`${pctTotal}%`}
                       labelWidth="w-[90px]"
                     />
                   ) : (
-                    <div className="text-[12.5px] text-text-dim">Aportado: {formatarMoeda(m.valor_atual)}</div>
+                    <div className="text-[12.5px] text-text-dim">Acumulado: {formatarMoeda(acumulado)}</div>
                   )}
-                  {m.valor_investido_alocado > 0 && (
+                  {investido > 0 && (
                     <div className="text-text-faint text-[11px] mt-1">
-                      Investido: {formatarMoeda(m.valor_investido_alocado)}
+                      Aportado: {formatarMoeda(aportado)} · Investido: {formatarMoeda(investido)}
                     </div>
                   )}
                   <div className="flex items-center gap-2 mt-1.5">
@@ -386,7 +531,8 @@ export default function MetasTab({ token }) {
                     )}
                   </div>
                 </Card>
-              ))}
+                )
+              })}
               {!porPrioridade(p.valor).length && (
                 <p className="text-text-faint text-[11.5px] text-center py-3">Nenhuma meta aqui ainda.</p>
               )}

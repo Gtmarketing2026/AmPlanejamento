@@ -1,5 +1,6 @@
 import { Fragment, useState } from "react"
-import { useNavigate } from "react-router-dom"
+import { useNavigate, useSearchParams } from "react-router-dom"
+import { useQuery } from "@tanstack/react-query"
 import { useAuth } from "../../context/AuthContext"
 import Stage from "../../components/layout/Stage"
 import Card from "../../components/ui/Card"
@@ -8,10 +9,11 @@ import Field, { Select } from "../../components/ui/Field"
 import Pill from "../../components/ui/Pill"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
 import { useAtualizarCliente, useClientes, useCriarCliente, useExcluirCliente } from "../../hooks/useClientes"
-import { abrirPainelCliente } from "../../api/clientes"
+import { abrirPainelCliente, resumoSaudeClientes } from "../../api/clientes"
 import { setTokenCliente } from "../clienteFinal/ClienteLoginPage"
 import { iniciarImpersonacao } from "../../lib/impersonacao"
 import { formatarData, formatarMoeda, iniciais } from "../../lib/format"
+import { FAIXAS_SAUDE, infoSaude } from "../../lib/saude"
 
 const VAGAS_PADRAO = 4
 const FORM_VAZIO = {
@@ -29,8 +31,16 @@ const FORM_VAZIO = {
 
 export default function ClientesPage() {
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const { profissional } = useAuth()
   const { data: clientes, isLoading, error } = useClientes()
+  // Termômetro (saúde) de cada cliente + filtro por faixa vindo do painel (?saude=).
+  const { data: saudeLista = [] } = useQuery({
+    queryKey: ["clientes-saude-resumo"],
+    queryFn: resumoSaudeClientes,
+  })
+  const saudePorCliente = Object.fromEntries(saudeLista.map((s) => [s.cliente_id, s.classificacao]))
+  const filtroSaude = searchParams.get("saude") // vermelho | amarelo | verde | sem_dados
   const criar = useCriarCliente()
   const atualizar = useAtualizarCliente()
   const excluir = useExcluirCliente()
@@ -166,6 +176,10 @@ export default function ClientesPage() {
   const total = clientes?.length ?? 0
   const vagasLivres = Math.max(0, CLIENTES_INCLUSOS - total)
   const salvando = criar.isPending || atualizar.isPending
+  const clientesFiltrados = filtroSaude
+    ? (clientes || []).filter((c) => infoSaude(saudePorCliente[c.id]).faixa === filtroSaude)
+    : clientes
+  const faixaAtiva = FAIXAS_SAUDE.find((f) => f.faixa === filtroSaude)
 
   return (
     <Stage eyebrow="Etapa 02" title="Profissional cadastra um cliente" description="Clique num cliente pra entrar no dash dele.">
@@ -202,6 +216,21 @@ export default function ClientesPage() {
         </div>
         <Button onClick={onNovoCliente}>+ Novo cliente</Button>
       </div>
+
+      {faixaAtiva && (
+        <div className="flex items-center justify-between gap-3 mb-3 rounded-[9px] border border-line bg-panel-2 px-3.5 py-2.5">
+          <span className="text-[12.5px] text-text flex items-center gap-2">
+            <span className="w-2.5 h-2.5 rounded-full" style={{ background: faixaAtiva.cor }} />
+            Mostrando clientes: <strong>{faixaAtiva.label}</strong> ({clientesFiltrados?.length || 0})
+          </span>
+          <button
+            onClick={() => setSearchParams({})}
+            className="text-accent text-[12.5px] font-semibold hover:underline whitespace-nowrap"
+          >
+            Ver todos
+          </button>
+        </div>
+      )}
 
       {total >= CLIENTES_INCLUSOS && (
         <Card className="mb-4" style={{ borderColor: "rgba(240,166,60,0.3)", background: "rgba(240,166,60,0.08)" }}>
@@ -305,13 +334,23 @@ export default function ClientesPage() {
               <Th></Th>
             </Thead>
             <tbody>
-              {clientes?.map((c) => (
+              {clientesFiltrados?.map((c) => {
+                const saude = infoSaude(saudePorCliente[c.id])
+                return (
                 <Fragment key={c.id}>
                   <Tr className="cursor-pointer hover:bg-panel" onClick={() => onAbrirPainel(c)}>
                     <Td>
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-panel border border-line flex items-center justify-center text-[11px] font-mono">
-                          {iniciais(c.nome)}
+                        <div className="relative">
+                          <div className="w-8 h-8 rounded-full bg-panel border border-line flex items-center justify-center text-[11px] font-mono">
+                            {iniciais(c.nome)}
+                          </div>
+                          {/* Termômetro do cliente: pontinho de cor + tooltip. */}
+                          <span
+                            className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-bg"
+                            style={{ background: saude.cor }}
+                            title={`${saude.label} — ${saude.resumo}`}
+                          />
                         </div>
                         {c.nome}
                         {c.cnpj && <Pill variant="neutral">PJ: {c.nome_pj || "sem nome"}</Pill>}
@@ -384,8 +423,9 @@ export default function ClientesPage() {
                     </Tr>
                   )}
                 </Fragment>
-              ))}
-              {Array.from({ length: vagasLivres }).map((_, i) => (
+                )
+              })}
+              {!filtroSaude && Array.from({ length: vagasLivres }).map((_, i) => (
                 <Tr key={`vaga-${i}`} className="opacity-40">
                   <Td>
                     <div className="flex items-center gap-2.5">

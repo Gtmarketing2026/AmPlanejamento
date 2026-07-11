@@ -48,6 +48,12 @@ class Settings(BaseSettings):
     # OpenAI -- classificação automática de categoria/subcategoria
     OPENAI_API_KEY: str = ""
 
+    # Google Cloud Vision -- OCR de faturas/extratos em PDF que a extração de
+    # texto não consegue ler (fonte com ToUnicode quebrado, ex: Mercado Pago).
+    # Vazio = OCR desligado (o import recusa PDFs ilegíveis com mensagem clara).
+    # Basta uma API key com a Vision API habilitada (não precisa service account).
+    GOOGLE_VISION_API_KEY: str = ""
+
     # Sentry -- monitoramento de erros. Vazio = desligado (no-op). Preencher
     # SENTRY_DSN nas env vars da Vercel pra ativar; sem PII por padrão.
     SENTRY_DSN: str = ""

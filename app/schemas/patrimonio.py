@@ -3,13 +3,23 @@ from datetime import date, datetime
 
 from pydantic import BaseModel
 
+# Tipos "conhecidos" (com ícone no frontend). O cliente também pode criar um
+# tipo PERSONALIZADO -- por isso a rota NÃO restringe o tipo a este conjunto,
+# só usa como referência. Ver MetasTab.jsx (TIPOS).
 TIPOS_META = {
-    "aposentadoria",
     "viagem",
-    "imovel",
-    "quitar_divida",
-    "reserva_emergencia",
+    "veiculo",
+    "casa",
+    "familia",
+    "eletronico",
     "educacao",
+    "hobby",
+    "profissional",
+    "saude",
+    "aposentadoria",
+    "imovel",
+    "reserva_emergencia",
+    "quitar_divida",
     "outro",
 }
 STATUS_META = {"em_andamento", "concluida", "pausada"}
@@ -44,6 +54,7 @@ class MetaCriar(BaseModel):
     tipo: str = "outro"
     prioridade: str = "desejo"
     valor_alvo: float | None = None
+    data_inicial: date | None = None
     prazo: date | None = None
     aporte_mensal_meta: float | None = None
 
@@ -53,6 +64,7 @@ class MetaAtualizar(BaseModel):
     tipo: str | None = None
     prioridade: str | None = None
     valor_alvo: float | None = None
+    data_inicial: date | None = None
     prazo: date | None = None
     status: str | None = None
     aporte_mensal_meta: float | None = None
@@ -66,6 +78,7 @@ class MetaResposta(BaseModel):
     valor_alvo: float | None
     valor_atual: float
     progresso_pct: float | None
+    data_inicial: date | None = None
     prazo: date | None
     status: str
     aporte_mensal_meta: float | None = None
@@ -96,6 +109,7 @@ class MetaAporteResposta(BaseModel):
 class DividaCriar(BaseModel):
     tipo: str
     credor: str
+    responsavel: str = "titular"  # titular | conjuge | ambos
     valor_total: float
     valor_pago: float = 0
     taxa_juros_mensal_pct: float | None = None
@@ -106,9 +120,15 @@ class DividaCriar(BaseModel):
 
 
 class DividaAtualizar(BaseModel):
+    tipo: str | None = None
     credor: str | None = None
+    responsavel: str | None = None
+    valor_total: float | None = None
     valor_pago: float | None = None
+    taxa_juros_mensal_pct: float | None = None
+    parcelas_totais: int | None = None
     parcelas_pagas: int | None = None
+    data_inicio: date | None = None
     data_prevista_quitacao: date | None = None
     status: str | None = None
 
@@ -117,6 +137,7 @@ class DividaResposta(BaseModel):
     id: uuid.UUID
     tipo: str
     credor: str
+    responsavel: str = "titular"
     valor_total: float
     valor_pago: float
     valor_restante: float
@@ -148,6 +169,7 @@ class AlocacaoResposta(BaseModel):
 
 class InvestimentoCriar(BaseModel):
     tipo: str
+    classe_ativo: str | None = None
     nome_ativo: str
     quantidade: float | None = None
     valor_aplicado: float | None = None
@@ -155,6 +177,7 @@ class InvestimentoCriar(BaseModel):
     data_referencia: date | None = None
     instituicao_nome: str | None = None
     liquidez: str | None = None
+    data_vencimento: date | None = None
     # Se informado, substitui a divisão do valor entre objetivos de uma vez
     # (não precisa de tela separada -- o cliente já aloca ao criar/editar).
     alocacoes: list[AlocacaoCriar] | None = None
@@ -162,17 +185,20 @@ class InvestimentoCriar(BaseModel):
 
 class InvestimentoAtualizar(BaseModel):
     nome_ativo: str | None = None
+    classe_ativo: str | None = None
     quantidade: float | None = None
     valor_aplicado: float | None = None
     valor_atual: float | None = None
     instituicao_nome: str | None = None
     liquidez: str | None = None
+    data_vencimento: date | None = None
     alocacoes: list[AlocacaoCriar] | None = None
 
 
 class InvestimentoResposta(BaseModel):
     id: uuid.UUID
     tipo: str
+    classe_ativo: str | None = None
     nome_ativo: str
     quantidade: float | None
     valor_aplicado: float | None
@@ -180,8 +206,38 @@ class InvestimentoResposta(BaseModel):
     data_referencia: date
     instituicao_nome: str | None = None
     liquidez: str | None = None
+    data_vencimento: date | None = None
     criado_em: datetime
     alocacoes: list[AlocacaoResposta] = []
+
+    model_config = {"from_attributes": True}
+
+
+# ---------- Milhas aéreas ----------
+class MilhaCriar(BaseModel):
+    categoria: str | None = None
+    programa: str
+    quantidade: int = 0
+    proprietario: str = "titular"  # titular | conjuge
+    vencimento: date | None = None
+
+
+class MilhaAtualizar(BaseModel):
+    categoria: str | None = None
+    programa: str | None = None
+    quantidade: int | None = None
+    proprietario: str | None = None
+    vencimento: date | None = None
+
+
+class MilhaResposta(BaseModel):
+    id: uuid.UUID
+    categoria: str | None
+    programa: str
+    quantidade: int
+    proprietario: str
+    vencimento: date | None
+    criado_em: datetime
 
     model_config = {"from_attributes": True}
 
@@ -192,15 +248,33 @@ TIPOS_BEM = {"movel", "imovel"}
 
 class BemCriar(BaseModel):
     tipo: str
+    subtipo: str | None = None  # imóvel: Residencial/Veraneio/Comercial/Investimento/Participação empresa
     nome: str
     valor: float
+    proprietario: str = "titular"  # titular | conjuge | ambos
+    saldo_devedor: float = 0
+    valor_prestacao: float = 0
+
+
+class BemAtualizar(BaseModel):
+    tipo: str | None = None
+    subtipo: str | None = None
+    nome: str | None = None
+    valor: float | None = None
+    proprietario: str | None = None
+    saldo_devedor: float | None = None
+    valor_prestacao: float | None = None
 
 
 class BemResposta(BaseModel):
     id: uuid.UUID
     tipo: str
+    subtipo: str | None = None
     nome: str
     valor: float
+    proprietario: str = "titular"
+    saldo_devedor: float = 0
+    valor_prestacao: float = 0
     criado_em: datetime
 
     model_config = {"from_attributes": True}
@@ -258,19 +332,33 @@ TIPOS_APOLICE = {"vida", "saude", "patrimonial", "outro"}
 
 
 class ApoliceCriar(BaseModel):
+    titular: str | None = None
     tipo: str
     seguradora: str
     valor_cobertura: float
     premio_mensal: float | None = None
+    vigencia_inicio: date | None = None
+    vencimento: date | None = None  # vigência final
+
+
+class ApoliceAtualizar(BaseModel):
+    titular: str | None = None
+    tipo: str | None = None
+    seguradora: str | None = None
+    valor_cobertura: float | None = None
+    premio_mensal: float | None = None
+    vigencia_inicio: date | None = None
     vencimento: date | None = None
 
 
 class ApoliceResposta(BaseModel):
     id: uuid.UUID
+    titular: str | None = None
     tipo: str
     seguradora: str
     valor_cobertura: float
     premio_mensal: float | None
+    vigencia_inicio: date | None = None
     vencimento: date | None
     criado_em: datetime
 
@@ -281,6 +369,35 @@ class MinhaProtecaoResposta(BaseModel):
     cobertura_atual: float
     cobertura_recomendada: float
     apolices: list[ApoliceResposta]
+
+
+# ---------- Calculadora de seguro de vida ideal (config + médias) ----------
+class ProtecaoConfigResposta(BaseModel):
+    config: dict
+
+
+class ProtecaoConfigAtualizar(BaseModel):
+    config: dict
+
+
+# ---------- Plano de investimento (distribuição da meta mensal) ----------
+class PlanoInvestimentoResposta(BaseModel):
+    config: dict
+
+
+class PlanoInvestimentoAtualizar(BaseModel):
+    config: dict
+
+
+class ProtecaoMediasResposta(BaseModel):
+    # Média mensal por grupo de categoria (pra "preencher automaticamente").
+    renda_mensal: float
+    obrigatorias: float
+    empresa: float
+    nao_obrigatorias: float
+    projetos: float
+    patrimonio_liquido: float
+    meses_considerados: int
 
 
 # ---------- Saúde financeira (termômetro + alertas do mês) ----------
@@ -307,6 +424,27 @@ class CriteriosSaudeAtualizar(BaseModel):
     verde_poupanca_pct: float | None = None
     azul_reserva_meses: float | None = None
     azul_poupanca_pct: float | None = None
+
+
+class DimensaoIndice(BaseModel):
+    """Uma das 4 dimensões do índice de saúde financeira."""
+
+    chave: str  # organizacao | patrimonio | liberdade | gestao_ativos
+    nome: str
+    score: int | None  # 0-100; None quando ainda não há dados pra calcular
+    zona: str  # "Na contramão" | "Desvio de rota" | "Zona de atenção" | "A todo vapor" | "Sem dados"
+    tem_dados: bool
+    mensagens: list["MensagemSaudeFinanceira"] = []
+
+
+class IndiceSaudeResposta(BaseModel):
+    """Raio-X consolidado: índice geral (média das dimensões com dados) + as 4
+    dimensões, cada uma linkando pra aba que tem o detalhe/edição."""
+
+    indice_geral: int
+    zona: str
+    dimensoes: list[DimensaoIndice]
+    planejador_whatsapp: str | None = None
 
 
 class SaudeFinanceiraResposta(BaseModel):

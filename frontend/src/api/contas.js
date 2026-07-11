@@ -1,7 +1,9 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "./client"
 
 // ---------- Minhas Contas (cliente) ----------
-export const listarMinhasContas = (token) => apiGet("/clientes/eu/contas", { token })
+// mesRefIso ("AAAA-MM-01") define o mês do "usado no cartão"; omitido = mês atual.
+export const listarMinhasContas = (token, mesRefIso) =>
+  apiGet(`/clientes/eu/contas${mesRefIso ? `?mes_referencia=${mesRefIso}` : ""}`, { token })
 export const criarMinhaConta = (token, dados) => apiPost("/clientes/eu/contas", dados, { token })
 export const atualizarMinhaConta = (token, id, dados) =>
   apiPatch(`/clientes/eu/contas/${id}`, dados, { token })

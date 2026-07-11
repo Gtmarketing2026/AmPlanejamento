@@ -14,7 +14,12 @@ import {
   minhasSubcategorias,
 } from "../../../api/clientes"
 
-const TIPOS = { saida: "Despesas", entrada: "Receitas", neutra: "Classificação neutra" }
+const TIPOS = {
+  saida: "Despesas",
+  entrada: "Receitas",
+  investimento: "Investimentos",
+  neutra: "Classificação neutra",
+}
 const CONTEXTO_LABEL = { PF: "Pessoal", PJ: "Empresa", ambos: "Pessoal e Empresa" }
 const FORM_VAZIO = { nome: "", tipo: "saida", icone: "", contexto: "ambos" }
 
@@ -146,6 +151,7 @@ export default function CategoriasTab({ token, temCnpj = false }) {
                   <Select label="Tipo" value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))}>
                     <option value="saida">Despesa</option>
                     <option value="entrada">Receita</option>
+                    <option value="investimento">Investimento</option>
                     <option value="neutra">Classificação neutra</option>
                   </Select>
                 </div>

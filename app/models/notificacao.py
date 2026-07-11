@@ -40,3 +40,26 @@ class Notificacao(Base):
     lida_profissional: Mapped[bool] = mapped_column(Boolean, default=False)
     lida_cliente: Mapped[bool] = mapped_column(Boolean, default=False)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+# Públicos e tipos das notas de atualização do sistema (changelog).
+PUBLICOS_ATUALIZACAO = {"cliente", "planejador", "ambos"}
+TIPOS_ATUALIZACAO = {"novidade", "melhoria", "correcao"}
+
+
+class AtualizacaoSistema(Base):
+    """Nota de atualização do sistema (changelog) escrita pela plataforma (nível
+    Negócio) -- ex: 'nova função X', 'corrigido bug Y'. É GLOBAL (uma nota vale
+    pra todos do público-alvo), diferente de Notificacao que é por cliente.
+    Nada administrativo aqui: só o que o cliente/planejador precisa saber."""
+
+    __tablename__ = "atualizacoes_sistema"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    titulo: Mapped[str] = mapped_column(String, nullable=False)
+    descricao: Mapped[str] = mapped_column(Text, nullable=False)
+    tipo: Mapped[str] = mapped_column(String, default="novidade")  # novidade | melhoria | correcao
+    publico: Mapped[str] = mapped_column(String, default="ambos")  # cliente | planejador | ambos
+    publicado: Mapped[bool] = mapped_column(Boolean, default=False)
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    publicado_em: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

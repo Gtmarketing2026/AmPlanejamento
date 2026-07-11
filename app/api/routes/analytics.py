@@ -36,6 +36,17 @@ def metricas_carteira(
         "ticket_medio": None, "ltv_medio_realizado": None, "ltv_projetado": None,
     }
 
+    # Faturamento mensal atual = soma dos honorários mensais dos clientes ATIVOS
+    # (a view só traz o ticket_medio = média; aqui somamos pra ter o total).
+    faturamento_mensal = db.execute(
+        text("""
+            SELECT COALESCE(SUM(valor_honorario_mensal), 0)
+            FROM clientes
+            WHERE profissional_id = :pid AND status = 'ativo'
+        """),
+        {"pid": str(profissional_id)},
+    ).scalar()
+
     top = db.execute(
         text("""
             SELECT r.cliente_id, r.nome, r.tipo, r.valor_honorario_mensal,
@@ -55,6 +66,7 @@ def metricas_carteira(
         "clientes_churned": kpis.get("clientes_churned") or 0,
         "taxa_churn_pct": kpis.get("taxa_churn_pct"),
         "ticket_medio": kpis.get("ticket_medio"),
+        "faturamento_mensal": faturamento_mensal or 0,
         "ltv_medio_realizado": kpis.get("ltv_medio_realizado"),
         "ltv_projetado": kpis.get("ltv_projetado"),
         "top_clientes": [dict(r) for r in top],

@@ -27,6 +27,8 @@ class Profissional(Base):
     logo_url: Mapped[str | None] = mapped_column(String, nullable=True)
     video_boas_vindas: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String, default="ativa")  # ativa | congelada | cancelada
+    # Última vez que o planejador abriu o painel de Novidades (changelog).
+    novidades_vistas_em: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     criado_em: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Critérios da saúde financeira do cliente (o planejador pode ajustar na aba

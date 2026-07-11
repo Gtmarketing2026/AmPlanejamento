@@ -77,6 +77,18 @@ export const concederVagas = (id, dados) => comToken(apiPatch(`/negocio/planejad
 export const atualizarStatusCliente = (id, dados) =>
   comToken(apiPatch(`/negocio/clientes/${id}/status`, dados, auth()))
 
+// Move o cliente inteiro (contas, lançamentos, dívidas, etc.) pra outro planejador.
+export const mudarPlanejadorCliente = (id, profissionalId) =>
+  comToken(apiPatch(`/negocio/clientes/${id}/planejador`, { profissional_id: profissionalId }, auth()))
+
 // Exclusão PERMANENTE (admin) — cascata no banco. Diferente do status reversível.
 export const excluirPlanejadorNegocio = (id) => comToken(apiDelete(`/negocio/planejadores/${id}`, undefined, auth()))
 export const excluirClienteNegocio = (id) => comToken(apiDelete(`/negocio/clientes/${id}`, undefined, auth()))
+
+// ---------- Novidades do sistema (changelog) — autoria pela plataforma ----------
+export const listarAtualizacoes = () => comToken(apiGet("/negocio/atualizacoes", auth()))
+export const criarAtualizacao = (dados) => comToken(apiPost("/negocio/atualizacoes", dados, auth()))
+export const atualizarAtualizacao = (id, dados) =>
+  comToken(apiPatch(`/negocio/atualizacoes/${id}`, dados, auth()))
+export const excluirAtualizacao = (id) =>
+  comToken(apiDelete(`/negocio/atualizacoes/${id}`, undefined, auth()))

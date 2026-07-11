@@ -14,6 +14,7 @@ import {
   excluirClienteNegocio,
   listarClientesDoPlanejador,
   listarPlanejadores,
+  mudarPlanejadorCliente,
 } from "../../api/negocio"
 import { formatarData, formatarMoeda, iniciais } from "../../lib/format"
 
@@ -50,6 +51,41 @@ export default function CarteiraPlanejadorPage() {
     mutationFn: (id) => excluirClienteNegocio(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["negocio-clientes", planejadorId] }),
   })
+
+  const [movendoId, setMovendoId] = useState(null)
+  const [novoPlanejadorId, setNovoPlanejadorId] = useState("")
+  const mudarPlanejador = useMutation({
+    mutationFn: ({ id, novoId }) => mudarPlanejadorCliente(id, novoId),
+    onSuccess: () => {
+      // O cliente sai da carteira deste planejador (agora pertence a outro).
+      qc.invalidateQueries({ queryKey: ["negocio-clientes", planejadorId] })
+      setMovendoId(null)
+      setNovoPlanejadorId("")
+    },
+  })
+
+  function onMover(e, c) {
+    e.stopPropagation()
+    setMovendoId((atual) => (atual === c.id ? null : c.id))
+    setNovoPlanejadorId("")
+    mudarPlanejador.reset()
+  }
+
+  function onConfirmarMover(e, c) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!novoPlanejadorId) return
+    const destino = planejadores?.find((p) => p.id === novoPlanejadorId)
+    const ok = window.confirm(
+      `Mover "${c.nome}" pra "${destino?.nome || "outro planejador"}"?\n\n` +
+        `Todo o histórico dele (contas, lançamentos, dívidas, investimentos, metas, ` +
+        `categorias personalizadas etc.) vai junto. As TAGS aplicadas nos lançamentos ` +
+        `continuam visíveis, mas o vocabulário de tags fica com o planejador antigo — ` +
+        `o novo não vai poder reaproveitá-las em outros lançamentos.\n\n` +
+        `Essa ação não tem desfazer fácil.`
+    )
+    if (ok) mudarPlanejador.mutate({ id: c.id, novoId: novoPlanejadorId })
+  }
 
   function onExcluirCliente(e, c) {
     e.stopPropagation()
@@ -142,6 +178,9 @@ export default function CarteiraPlanejadorPage() {
                       <button onClick={(e) => onEditar(e, c)} className="text-blue text-[12px] hover:underline mr-3">
                         Editar login
                       </button>
+                      <button onClick={(e) => onMover(e, c)} className="text-text-dim text-[12px] hover:underline mr-3">
+                        Mudar planejador
+                      </button>
                       <span className="text-accent text-[12px] mr-3">Entrar como cliente →</span>
                       <button
                         onClick={(e) => onExcluirCliente(e, c)}
@@ -180,6 +219,42 @@ export default function CarteiraPlanejadorPage() {
                           </Button>
                           {atualizarCredenciais.isError && (
                             <p className="text-red text-[12.5px] mb-3">{atualizarCredenciais.error.message}</p>
+                          )}
+                        </form>
+                      </Td>
+                    </Tr>
+                  )}
+                  {movendoId === c.id && (
+                    <Tr onClick={(e) => e.stopPropagation()} className="cursor-default bg-panel/40">
+                      <Td colSpan={6}>
+                        <form onSubmit={(e) => onConfirmarMover(e, c)} className="flex items-end gap-3 py-1">
+                          <div className="w-64">
+                            <div className="text-[11px] text-text-faint uppercase tracking-wide mb-1.5 font-mono">
+                              Novo planejador
+                            </div>
+                            <select
+                              value={novoPlanejadorId}
+                              onChange={(e) => setNovoPlanejadorId(e.target.value)}
+                              className="w-full bg-bg border border-line rounded-[9px] px-3 py-2.5 text-[13px] text-text outline-none focus:border-accent/60"
+                            >
+                              <option value="">Selecione…</option>
+                              {planejadores
+                                ?.filter((p2) => p2.id !== planejadorId)
+                                .map((p2) => (
+                                  <option key={p2.id} value={p2.id}>
+                                    {p2.nome}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
+                          <Button type="submit" disabled={!novoPlanejadorId || mudarPlanejador.isPending} className="mb-3">
+                            {mudarPlanejador.isPending ? "Movendo…" : "Confirmar mudança"}
+                          </Button>
+                          <Button type="button" variant="ghost" className="mb-3" onClick={() => setMovendoId(null)}>
+                            Cancelar
+                          </Button>
+                          {mudarPlanejador.isError && (
+                            <p className="text-red text-[12.5px] mb-3">{mudarPlanejador.error.message}</p>
                           )}
                         </form>
                       </Td>

@@ -3,9 +3,10 @@ from datetime import date, datetime
 
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
+from app.models.tag import Tag, transacoes_tags
 
 
 class Transacao(Base):
@@ -56,5 +57,19 @@ class Transacao(Base):
     importacao_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("importacoes_extrato.id", ondelete="SET NULL"), nullable=True
     )
+    # Vínculo opcional: esta parcela abate desta dívida cadastrada (aba Dívidas).
+    divida_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("dividas.id", ondelete="SET NULL"), nullable=True
+    )
     hash_dedup: Mapped[str] = mapped_column(String, nullable=False)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # Quando o lançamento foi editado pela última vez (categoria, etc.) -- não
+    # confundir com criado_em. Usado pra saber qual classificação é a mais
+    # RECENTE ao reaproveitar o histórico do cliente (ver
+    # aplicar_classificacao_por_historico em app/api/routes/importacoes.py).
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+    # lazy="selectin": carrega as tags junto em toda leitura (2 queries no
+    # total, não N+1), sem precisar de .options() em cada rota que lê Transacao.
+    tags: Mapped[list["Tag"]] = relationship(secondary=transacoes_tags, lazy="selectin")

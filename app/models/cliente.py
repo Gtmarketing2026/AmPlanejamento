@@ -43,6 +43,10 @@ class Cliente(Base):
     historico: Mapped[str | None] = mapped_column(String, nullable=True)  # contexto/histórico do cliente (texto livre)
     situacao_atual: Mapped[str | None] = mapped_column(String, nullable=True)  # "onde estou" (ponto de partida do mapa)
     valor_honorario_mensal: Mapped[float | None] = mapped_column(Numeric(10, 2), nullable=True)
+    conjuge_nome: Mapped[str | None] = mapped_column(String, nullable=True)  # cadastro simples do cônjuge
+    # Última vez que o cliente abriu o painel de Novidades (changelog) -- usado
+    # pra contar quantas notas de atualização ainda não viu.
+    novidades_vistas_em: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     criado_em: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     @property

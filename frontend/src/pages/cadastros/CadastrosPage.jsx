@@ -17,7 +17,12 @@ import {
   excluirSubcategoria,
 } from "../../api/categorias"
 
-const TIPOS = { saida: "Despesas", entrada: "Receitas", neutra: "Classificação neutra" }
+const TIPOS = {
+  saida: "Despesas",
+  entrada: "Receitas",
+  investimento: "Investimentos",
+  neutra: "Classificação neutra",
+}
 
 function PillList({ items }) {
   return (
@@ -109,6 +114,7 @@ function AbaCategorias() {
               <Select label="Tipo" value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value }))} className="w-44">
                 <option value="saida">Despesa</option>
                 <option value="entrada">Receita</option>
+                <option value="investimento">Investimento</option>
                 <option value="neutra">Classificação neutra</option>
               </Select>
             )}

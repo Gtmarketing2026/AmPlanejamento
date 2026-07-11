@@ -2,7 +2,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import Computed, Date, DateTime, ForeignKey, Integer, Numeric, String, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -27,6 +27,7 @@ class Meta(Base):
     # essencial = curto prazo · desejo = médio prazo · sonho = longo prazo
     prioridade: Mapped[str] = mapped_column(String, default="desejo")
     valor_alvo: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    data_inicial: Mapped[date | None] = mapped_column(Date, nullable=True)  # início do projeto
     valor_atual: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
     # progresso_pct é GENERATED ALWAYS no banco -- Computed() avisa o SQLAlchemy
     # pra nunca incluir essa coluna em INSERT/UPDATE (senão o Postgres rejeita
@@ -72,6 +73,7 @@ class Divida(Base):
     )
     tipo: Mapped[str] = mapped_column(String, nullable=False)
     credor: Mapped[str] = mapped_column(String, nullable=False)
+    responsavel: Mapped[str] = mapped_column(String, default="titular")  # titular | conjuge | ambos
     valor_total: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
     valor_pago: Mapped[float] = mapped_column(Numeric(12, 2), default=0)
     # valor_restante é GENERATED ALWAYS no banco -- ver nota em Meta.progresso_pct.
@@ -100,6 +102,9 @@ class Investimento(Base):
         UUID(as_uuid=True), ForeignKey("contas_conectadas.id", ondelete="SET NULL"), nullable=True
     )
     tipo: Mapped[str] = mapped_column(String, nullable=False)
+    # Classe do ativo (ex: Ações, CDB, ETF, Título público) -- opcional, mais
+    # granular que `tipo`; aparece como coluna na carteira.
+    classe_ativo: Mapped[str | None] = mapped_column(String, nullable=True)
     nome_ativo: Mapped[str] = mapped_column(String, nullable=False)
     # Sem ForeignKey() do lado do SQLAlchemy porque instituicoes_bancarias não
     # tem model Python (mesmo motivo documentado em Transacao.instituicao_id)
@@ -109,6 +114,9 @@ class Investimento(Base):
     # cadastro prévio numa tabela de instituições pra um MVP de carteira.
     instituicao_nome: Mapped[str | None] = mapped_column(String, nullable=True)
     liquidez: Mapped[str | None] = mapped_column(String, nullable=True)  # ex: "Diária", "D+30", "Sem vencimento"
+    # Resgate por data: quando o resgate é "na data de vencimento" em vez de por
+    # liquidez (ex: CDB/Tesouro com vencimento). Um ou outro -- não os dois.
+    data_vencimento: Mapped[date | None] = mapped_column(Date, nullable=True)
     quantidade: Mapped[float | None] = mapped_column(Numeric(18, 8), nullable=True)
     valor_aplicado: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
     valor_atual: Mapped[float | None] = mapped_column(Numeric(14, 2), nullable=True)
@@ -196,8 +204,19 @@ class BemPatrimonial(Base):
         UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
     )
     tipo: Mapped[str] = mapped_column(String, nullable=False)  # movel | imovel
+    # Subtipo do imóvel (Residencial/Veraneio/Comercial/Investimento/Participação
+    # empresa) -- opcional, só faz sentido quando tipo == 'imovel'.
+    subtipo: Mapped[str | None] = mapped_column(String, nullable=True)
     nome: Mapped[str] = mapped_column(String, nullable=False)
-    valor: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    valor: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)  # valor de mercado do bem
+    proprietario: Mapped[str] = mapped_column(String, default="titular")  # titular | conjuge | ambos
+    # Quanto ainda se deve do bem (ex: financiamento em aberto). Entra como
+    # passivo no patrimônio líquido -- o bem soma o valor de mercado e abate
+    # o saldo devedor.
+    saldo_devedor: Mapped[float] = mapped_column(Numeric(14, 2), default=0, nullable=False)
+    # Valor da prestação mensal do financiamento (quando há saldo devedor). Com
+    # ele o app estima quantas parcelas ainda faltam (saldo / prestação).
+    valor_prestacao: Mapped[float] = mapped_column(Numeric(14, 2), default=0, nullable=False)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -237,9 +256,71 @@ class ApoliceSeguro(Base):
     profissional_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
     )
+    titular: Mapped[str | None] = mapped_column(String, nullable=True)  # quem é o segurado (titular/cônjuge/dependente)
     tipo: Mapped[str] = mapped_column(String, nullable=False)  # vida | saude | patrimonial | outro
-    seguradora: Mapped[str] = mapped_column(String, nullable=False)
-    valor_cobertura: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
-    premio_mensal: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)
+    seguradora: Mapped[str] = mapped_column(String, nullable=False)  # instituição
+    valor_cobertura: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)  # cobertura total
+    premio_mensal: Mapped[float | None] = mapped_column(Numeric(12, 2), nullable=True)  # prêmio
+    vigencia_inicio: Mapped[date | None] = mapped_column(Date, nullable=True)
+    vencimento: Mapped[date | None] = mapped_column(Date, nullable=True)  # vigência final
+    criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Milha(Base):
+    """Milhas aéreas do cliente (parte do Patrimônio). Cadastro simples por
+    programa de milhagem, com proprietário (titular | cônjuge) e vencimento."""
+
+    __tablename__ = "milhas"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False
+    )
+    profissional_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
+    )
+    categoria: Mapped[str | None] = mapped_column(String, nullable=True)  # ex: Aérea, Banco, Cartão
+    programa: Mapped[str] = mapped_column(String, nullable=False)  # ex: Smiles, Latam Pass
+    quantidade: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    proprietario: Mapped[str] = mapped_column(String, nullable=False, default="titular")  # titular | conjuge
     vencimento: Mapped[date | None] = mapped_column(Date, nullable=True)
     criado_em: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ProtecaoConfig(Base):
+    """Configuração da calculadora de seguro de vida ideal (aba Proteção):
+    dependentes/educação, padrão de vida e sucessão patrimonial. Guardado como
+    JSONB porque a forma é livre e evolui na tela -- o backend só persiste e
+    devolve; o cálculo do total fica no frontend (que já tem patrimônio/médias)."""
+
+    __tablename__ = "protecao_config"
+
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clientes.id", ondelete="CASCADE"), primary_key=True
+    )
+    profissional_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
+    )
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class PlanoInvestimentoConfig(Base):
+    """Distribuição planejada da meta MENSAL de investimentos entre os 3 baldes
+    (reserva de emergência, projetos, independência financeira). É a INTENÇÃO de
+    como dividir os aportes futuros -- guardada como JSONB, cálculo no frontend."""
+
+    __tablename__ = "plano_investimento_config"
+
+    cliente_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("clientes.id", ondelete="CASCADE"), primary_key=True
+    )
+    profissional_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profissionais.id", ondelete="CASCADE"), nullable=False
+    )
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    atualizado_em: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )

@@ -52,3 +52,7 @@ export const googleStatus = () => apiGet("/crm/google/status")
 export const googleConectar = () => apiGet("/crm/google/conectar")
 
 export const googleDesconectar = () => apiDelete("/crm/google/desconectar")
+
+// ---------- Novidades do sistema (planejador) ----------
+export const obterNovidadesPlanejador = () => apiGet("/crm/novidades")
+export const marcarNovidadesVistasPlanejador = () => apiPost("/crm/novidades/marcar-vistas", {})

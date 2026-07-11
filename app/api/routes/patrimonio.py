@@ -25,7 +25,10 @@ from app.models.patrimonio import (
     InvestimentoAlocacao,
     Meta,
     MetaAporte,
+    Milha,
     OrcamentoCategoria,
+    PlanoInvestimentoConfig,
+    ProtecaoConfig,
     Simulacao,
 )
 from app.models.profissional import Profissional
@@ -38,14 +41,18 @@ from app.schemas.patrimonio import (
     TIPOS_INVESTIMENTO,
     TIPOS_META,
     AlocacaoResposta,
+    ApoliceAtualizar,
     ApoliceCriar,
     ApoliceResposta,
+    BemAtualizar,
     BemCriar,
     BemResposta,
     CriteriosSaude,
+    DimensaoIndice,
     DividaAtualizar,
     DividaCriar,
     DividaResposta,
+    IndiceSaudeResposta,
     InvestimentoAtualizar,
     InvestimentoCriar,
     InvestimentoResposta,
@@ -55,11 +62,19 @@ from app.schemas.patrimonio import (
     MetaAtualizar,
     MetaCriar,
     MetaResposta,
+    MilhaAtualizar,
+    MilhaCriar,
+    MilhaResposta,
     MinhaProtecaoResposta,
     OrcamentoAtualizar,
     OrcamentoCriar,
     OrcamentoResposta,
     PatrimonioResposta,
+    PlanoInvestimentoAtualizar,
+    PlanoInvestimentoResposta,
+    ProtecaoConfigAtualizar,
+    ProtecaoConfigResposta,
+    ProtecaoMediasResposta,
     ResumoPatrimonialResposta,
     SaudeFinanceiraResposta,
     SimulacaoCriar,
@@ -111,17 +126,19 @@ def criar_meta(
     db: Session = Depends(get_db_admin),
 ):
     cliente = _exigir_cliente(db, cliente_id)
-    if dados.tipo not in TIPOS_META:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Tipo inválido: {dados.tipo}")
+    # tipo aceita valores PERSONALIZADOS (texto livre) além dos conhecidos --
+    # só normaliza/limita o tamanho pra não guardar lixo.
+    tipo = (dados.tipo or "outro").strip()[:40] or "outro"
     if dados.prioridade not in PRIORIDADES_META:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Prioridade inválida: {dados.prioridade}")
     meta = Meta(
         cliente_id=cliente_id,
         profissional_id=cliente.profissional_id,
         titulo=dados.titulo,
-        tipo=dados.tipo,
+        tipo=tipo,
         prioridade=dados.prioridade,
         valor_alvo=dados.valor_alvo,
+        data_inicial=dados.data_inicial,
         prazo=dados.prazo,
         aporte_mensal_meta=dados.aporte_mensal_meta,
     )
@@ -143,12 +160,12 @@ def atualizar_meta(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Meta não encontrada")
     if dados.status is not None and dados.status not in {"em_andamento", "concluida", "pausada"}:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Status inválido")
-    if dados.tipo is not None and dados.tipo not in TIPOS_META:
-        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Tipo inválido")
     if dados.prioridade is not None and dados.prioridade not in PRIORIDADES_META:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Prioridade inválida")
+    if dados.tipo is not None:
+        dados.tipo = dados.tipo.strip()[:40] or "outro"  # tipo personalizado (texto livre)
 
-    for campo in ("titulo", "tipo", "prioridade", "valor_alvo", "prazo", "status", "aporte_mensal_meta"):
+    for campo in ("titulo", "tipo", "prioridade", "valor_alvo", "data_inicial", "prazo", "status", "aporte_mensal_meta"):
         valor = getattr(dados, campo)
         if valor is not None:
             setattr(meta, campo, valor)
@@ -221,6 +238,7 @@ def criar_divida(
         profissional_id=cliente.profissional_id,
         tipo=dados.tipo,
         credor=dados.credor,
+        responsavel=dados.responsavel if dados.responsavel in ("titular", "conjuge", "ambos") else "titular",
         valor_total=dados.valor_total,
         valor_pago=dados.valor_pago,
         taxa_juros_mensal_pct=dados.taxa_juros_mensal_pct,
@@ -247,11 +265,11 @@ def atualizar_divida(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Dívida não encontrada")
     if dados.status is not None and dados.status not in {"ativa", "quitada", "atrasada"}:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Status inválido")
+    if dados.tipo is not None and dados.tipo not in TIPOS_DIVIDA:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Tipo inválido: {dados.tipo}")
 
-    for campo in ("credor", "valor_pago", "parcelas_pagas", "data_prevista_quitacao", "status"):
-        valor = getattr(dados, campo)
-        if valor is not None:
-            setattr(divida, campo, valor)
+    for campo, valor in dados.model_dump(exclude_unset=True).items():
+        setattr(divida, campo, valor)
     divida.atualizado_em = datetime.now(timezone.utc)
     db.flush()
     db.refresh(divida)
@@ -341,6 +359,7 @@ def criar_investimento(
         cliente_id=cliente_id,
         profissional_id=cliente.profissional_id,
         tipo=dados.tipo,
+        classe_ativo=dados.classe_ativo,
         nome_ativo=dados.nome_ativo,
         quantidade=dados.quantidade,
         valor_aplicado=dados.valor_aplicado,
@@ -348,6 +367,7 @@ def criar_investimento(
         data_referencia=dados.data_referencia or date.today(),
         instituicao_nome=dados.instituicao_nome,
         liquidez=dados.liquidez,
+        data_vencimento=dados.data_vencimento,
     )
     db.add(investimento)
     db.flush()
@@ -367,10 +387,13 @@ def atualizar_investimento(
     investimento = db.get(Investimento, investimento_id)
     if investimento is None or investimento.cliente_id != cliente_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Investimento não encontrado")
-    for campo in ("nome_ativo", "quantidade", "valor_aplicado", "valor_atual", "instituicao_nome", "liquidez"):
-        valor = getattr(dados, campo)
-        if valor is not None:
-            setattr(investimento, campo, valor)
+    # exclude_unset: só mexe nos campos que o cliente realmente enviou -- mas
+    # respeita null explícito (ex: ao alternar de "data de vencimento" pra
+    # "liquidez", o front manda data_vencimento=null pra limpar o outro modo).
+    atualizacoes = dados.model_dump(exclude_unset=True)
+    atualizacoes.pop("alocacoes", None)
+    for campo, valor in atualizacoes.items():
+        setattr(investimento, campo, valor)
     db.flush()
     if dados.alocacoes is not None:
         _aplicar_alocacoes(db, investimento.id, cliente_id, investimento.profissional_id, dados.alocacoes)
@@ -400,11 +423,16 @@ def _condicoes_fluxo_real():
     - parcelas previstas (previsto=True): ainda não caíram, não são posição real;
     - lançamentos de categoria neutra: movimentação financeira interna (ex:
       transferência entre contas próprias, aplicação/resgate) -- não é receita
-      nem despesa de verdade, então não entra no fluxo. Ver categorias.tipo."""
-    neutras = select(Categoria.id).where(Categoria.tipo == "neutra")
+      nem despesa de verdade, então não entra no fluxo. Ver categorias.tipo.
+    - lançamentos de categoria de investimento (tipo='investimento'): aplicar
+      dinheiro é alocação de patrimônio, não despesa de consumo -- entra na aba
+      Investimentos, não no fluxo de saídas."""
+    fora_do_fluxo = select(Categoria.id).where(
+        Categoria.tipo.in_(["neutra", "investimento"])
+    )
     return (
         Transacao.previsto.is_(False),
-        (Transacao.categoria_id.is_(None)) | (Transacao.categoria_id.not_in(neutras)),
+        (Transacao.categoria_id.is_(None)) | (Transacao.categoria_id.not_in(fora_do_fluxo)),
     )
 
 
@@ -423,6 +451,24 @@ def _calcular_patrimonio(db: Session, cliente_id: uuid.UUID) -> dict:
     )
     saldo_contas = float(entradas or 0) - float(abs(saidas or 0))
 
+    # Aportes classificados como investimento nos lançamentos: saem do caixa e
+    # viram patrimônio investido (relabel; não muda o patrimônio total). Ficam
+    # "editáveis" no sentido de que reclassificar o lançamento (tirar de
+    # Investimentos) automaticamente os remove daqui.
+    cats_investimento = select(Categoria.id).where(Categoria.tipo == "investimento")
+    investido_lancamentos = float(
+        db.scalar(
+            select(func.coalesce(func.sum(func.abs(Transacao.valor)), 0)).where(
+                Transacao.cliente_id == cliente_id,
+                Transacao.tipo == "saida",
+                Transacao.previsto.is_(False),
+                Transacao.categoria_id.in_(cats_investimento),
+            )
+        )
+        or 0
+    )
+    saldo_contas -= investido_lancamentos  # tira do caixa (dinheiro que foi aplicado)
+
     total_investido = float(
         db.scalar(
             select(func.coalesce(func.sum(Investimento.valor_atual), 0)).where(
@@ -430,7 +476,7 @@ def _calcular_patrimonio(db: Session, cliente_id: uuid.UUID) -> dict:
             )
         )
         or 0
-    )
+    ) + investido_lancamentos  # soma os aportes via lançamentos
     total_dividas = float(
         db.scalar(
             select(func.coalesce(func.sum(Divida.valor_restante), 0)).where(
@@ -447,6 +493,17 @@ def _calcular_patrimonio(db: Session, cliente_id: uuid.UUID) -> dict:
         )
         or 0
     )
+    # Saldo devedor dos bens financiados (ex: carro/imóvel ainda em financiamento)
+    # entra como passivo -- o bem soma o valor de mercado e abate o que se deve.
+    bens_saldo_devedor = float(
+        db.scalar(
+            select(func.coalesce(func.sum(BemPatrimonial.saldo_devedor), 0)).where(
+                BemPatrimonial.cliente_id == cliente_id
+            )
+        )
+        or 0
+    )
+    total_dividas += bens_saldo_devedor
 
     return {
         "saldo_contas": saldo_contas,
@@ -520,23 +577,20 @@ def _criterios_do_profissional(profissional) -> CriteriosSaude:
     )
 
 
-@router.get("/saude-financeira", response_model=SaudeFinanceiraResposta)
-def obter_saude_financeira(
-    cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)
-):
-    """Diagnóstico rápido do mês corrente pro cliente ver logo de cara: quanto
-    ganhou x gastou, e quanto das despesas está comprometido com dívidas.
-    Regras simples e determinísticas (sem IA) -- os dois alertas de exemplo
-    são só aritmética, não precisam de um modelo de linguagem pra soar
-    relevantes; mais barato, instantâneo e sempre consistente."""
+def _computar_saude(db: Session, cliente_id: uuid.UUID, contexto: str | None = None) -> dict:
+    """Núcleo do diagnóstico de saúde (organização financeira do mês). Devolve
+    um dict com score/mensagens/indicadores -- usado tanto pela rota
+    /saude-financeira quanto pelo /indice-saude (dimensão Organização)."""
     hoje = date.today()
     inicio_mes = hoje.replace(day=1)
+    # Respeita a visão Pessoal/Empresa: só soma os lançamentos do contexto pedido.
+    cond_ctx = [Transacao.contexto == contexto] if contexto in ("PF", "PJ") else []
 
     entradas_mes = float(
         db.scalar(
             select(func.coalesce(func.sum(Transacao.valor), 0)).where(
                 Transacao.cliente_id == cliente_id, Transacao.tipo == "entrada",
-                Transacao.data >= inicio_mes, *_condicoes_fluxo_real()
+                Transacao.data >= inicio_mes, *cond_ctx, *_condicoes_fluxo_real()
             )
         )
         or 0
@@ -546,7 +600,7 @@ def obter_saude_financeira(
             db.scalar(
                 select(func.coalesce(func.sum(Transacao.valor), 0)).where(
                     Transacao.cliente_id == cliente_id, Transacao.tipo == "saida",
-                    Transacao.data >= inicio_mes, *_condicoes_fluxo_real()
+                    Transacao.data >= inicio_mes, *cond_ctx, *_condicoes_fluxo_real()
                 )
             )
             or 0
@@ -627,7 +681,7 @@ def obter_saude_financeira(
                     ),
                     0,
                 )
-            ).where(Transacao.cliente_id == cliente_id, *_condicoes_fluxo_real())
+            ).where(Transacao.cliente_id == cliente_id, *cond_ctx, *_condicoes_fluxo_real())
         )
         or 0
     )
@@ -646,20 +700,187 @@ def obter_saude_financeira(
         tem_dados, entradas_mes, despesas_mes, reserva_meses, taxa_poupanca_pct, criterios
     )
 
-    return SaudeFinanceiraResposta(
-        classificacao=classificacao,
-        reserva_meses=reserva_meses,
-        taxa_poupanca_pct=taxa_poupanca_pct,
-        criterios=criterios,
-        tem_dados=tem_dados,
-        score=score,
-        receitas_mes=entradas_mes,
-        despesas_mes=despesas_mes,
-        gasto_acima_renda_pct=gasto_acima_renda_pct,
-        comprometimento_dividas_pct=comprometimento_dividas_pct,
-        mensagens=mensagens,
-        planejador_whatsapp=profissional.whatsapp if profissional else None,
+    return {
+        "classificacao": classificacao,
+        "reserva_meses": reserva_meses,
+        "taxa_poupanca_pct": taxa_poupanca_pct,
+        "criterios": criterios,
+        "tem_dados": tem_dados,
+        "score": score,
+        "receitas_mes": entradas_mes,
+        "despesas_mes": despesas_mes,
+        "gasto_acima_renda_pct": gasto_acima_renda_pct,
+        "comprometimento_dividas_pct": comprometimento_dividas_pct,
+        "mensagens": mensagens,
+        "planejador_whatsapp": profissional.whatsapp if profissional else None,
+    }
+
+
+@router.get("/saude-financeira", response_model=SaudeFinanceiraResposta)
+def obter_saude_financeira(
+    contexto: str | None = None,  # 'PF' | 'PJ' -- separa pessoal do controle da empresa
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    """Diagnóstico rápido do mês corrente pro cliente ver logo de cara: quanto
+    ganhou x gastou, e quanto das despesas está comprometido com dívidas."""
+    return SaudeFinanceiraResposta(**_computar_saude(db, cliente_id, contexto))
+
+
+def _zona_do_score(s: int | None) -> str:
+    if s is None:
+        return "Sem dados"
+    if s < 20:
+        return "Na contramão"
+    if s < 50:
+        return "Desvio de rota"
+    if s < 75:
+        return "Zona de atenção"
+    return "A todo vapor"
+
+
+def _msg(tipo: str, texto: str) -> MensagemSaudeFinanceira:
+    return MensagemSaudeFinanceira(tipo=tipo, texto=texto)
+
+
+def _indice_saude(db: Session, cliente_id: uuid.UUID, contexto: str | None = None) -> IndiceSaudeResposta:
+    """Compõe o índice geral a partir de 4 dimensões, reaproveitando os cálculos
+    que já existem (saúde do mês, patrimônio, simulação, alocação de metas). Não
+    recalcula nada do zero -- é uma camada de leitura/resumo."""
+    dims: list[DimensaoIndice] = []
+
+    # 1) Organização financeira -- reusa o diagnóstico de saúde do mês.
+    saude = _computar_saude(db, cliente_id, contexto)
+    org_score = saude["score"] if saude["tem_dados"] else None
+    dims.append(
+        DimensaoIndice(
+            chave="organizacao",
+            nome="Organização financeira",
+            score=org_score,
+            zona=_zona_do_score(org_score),
+            tem_dados=saude["tem_dados"],
+            mensagens=saude["mensagens"],
+        )
     )
+
+    # 2) Meu patrimônio -- endividamento x % de ativos gerando renda.
+    patr = _calcular_patrimonio(db, cliente_id)
+    ativos = max(0.0, patr["saldo_contas"]) + patr["total_investido"] + patr["total_bens"]
+    tem_patr = ativos > 0 or patr["total_dividas"] > 0
+    if tem_patr:
+        endivid_pct = min(100.0, patr["total_dividas"] / ativos * 100) if ativos > 0 else 100.0
+        pct_gerador = (patr["total_investido"] / ativos * 100) if ativos > 0 else 0.0
+        patr_score = round(max(0.0, min(100.0, 0.5 * (100 - endivid_pct) + 0.5 * pct_gerador)))
+        msgs_patr = []
+        if patr["total_dividas"] <= 0:
+            msgs_patr.append(_msg("positivo", "Sensacional! Você não possui nenhum tipo de dívida no seu patrimônio atual."))
+        else:
+            msgs_patr.append(_msg("alerta", f"Suas dívidas representam {round(endivid_pct, 1)}% dos seus ativos. Reduzi-las acelera seu patrimônio líquido."))
+        if pct_gerador >= 60:
+            msgs_patr.append(_msg("positivo", f"Você possui {round(pct_gerador, 1)}% dos ativos gerando renda. Continue acelerando rumo à independência!"))
+        else:
+            msgs_patr.append(_msg("neutro", f"Apenas {round(pct_gerador, 1)}% dos seus ativos geram renda. Investir mais aumenta esse número."))
+    else:
+        patr_score = None
+        msgs_patr = [_msg("neutro", "Cadastre seus investimentos, bens e dívidas em Patrimônio pra ver esta dimensão.")]
+    dims.append(
+        DimensaoIndice(
+            chave="patrimonio", nome="Meu patrimônio", score=patr_score,
+            zona=_zona_do_score(patr_score), tem_dados=tem_patr, mensagens=msgs_patr,
+        )
+    )
+
+    # 3) Liberdade financeira -- cobertura da independência na simulação mais recente.
+    sim = db.scalars(
+        select(Simulacao).where(Simulacao.cliente_id == cliente_id).order_by(Simulacao.criado_em.desc())
+    ).first()
+    if sim and sim.patrimonio_necessario and float(sim.patrimonio_necessario) > 0 and sim.valor_final_projetado is not None:
+        cobertura = float(sim.valor_final_projetado) / float(sim.patrimonio_necessario) * 100
+        lib_score = round(max(0.0, min(100.0, cobertura)))
+        if cobertura >= 100:
+            msgs_lib = [_msg("positivo", f"Seu patrimônio projetado já cobre {round(cobertura, 1)}% da sua independência financeira. A todo vapor!")]
+        else:
+            msgs_lib = [_msg("alerta", f"Seu patrimônio projetado representa {round(cobertura, 2)}% do necessário pra sua independência financeira. Continue acelerando!")]
+        tem_lib = True
+    else:
+        lib_score = None
+        tem_lib = False
+        msgs_lib = [_msg("neutro", "Faça uma simulação em Meu Futuro (com renda desejada e idade) pra calcular sua liberdade financeira.")]
+    dims.append(
+        DimensaoIndice(
+            chave="liberdade", nome="Liberdade financeira", score=lib_score,
+            zona=_zona_do_score(lib_score), tem_dados=tem_lib, mensagens=msgs_lib,
+        )
+    )
+
+    # 4) Gestão de ativos -- quanto das metas de reserva e de projetos já está alocado.
+    metas = db.scalars(
+        select(Meta).where(Meta.cliente_id == cliente_id, Meta.status != "concluida")
+    ).all()
+    meta_ids = [m.id for m in metas]
+    alocado_por_meta: dict = {}
+    if meta_ids:
+        linhas = db.execute(
+            select(InvestimentoAlocacao.meta_id, func.coalesce(func.sum(InvestimentoAlocacao.valor_alocado), 0))
+            .where(InvestimentoAlocacao.meta_id.in_(meta_ids))
+            .group_by(InvestimentoAlocacao.meta_id)
+        ).all()
+        alocado_por_meta = {mid: float(tot) for mid, tot in linhas}
+
+    def _progresso(grupo):
+        alvo = sum(float(m.valor_alvo) for m in grupo if m.valor_alvo)
+        aloc = sum(alocado_por_meta.get(m.id, 0.0) for m in grupo if m.valor_alvo)
+        return (min(100.0, aloc / alvo * 100) if alvo > 0 else None)
+
+    reserva_metas = [m for m in metas if m.tipo == "reserva_emergencia"]
+    projeto_metas = [m for m in metas if m.tipo != "reserva_emergencia"]
+    reserva_pct = _progresso(reserva_metas)
+    projetos_pct = _progresso(projeto_metas)
+    disponiveis = [x for x in (reserva_pct, projetos_pct) if x is not None]
+    if disponiveis:
+        gestao_score = round(sum(disponiveis) / len(disponiveis))
+        msgs_gestao = []
+        if reserva_pct is not None:
+            if reserva_pct >= 100:
+                msgs_gestao.append(_msg("positivo", "Sua meta de reserva de emergência está 100% alocada. Mandou bem!"))
+            else:
+                msgs_gestao.append(_msg("alerta", f"Você possui apenas {round(reserva_pct, 2)}% da sua meta de reserva de emergência alocada. Mantenha uma reserva adequada!"))
+        if projetos_pct is not None:
+            if projetos_pct >= 100:
+                msgs_gestao.append(_msg("positivo", "Seus projetos estão 100% financiados pelos investimentos alocados."))
+            else:
+                msgs_gestao.append(_msg("alerta", f"Você possui apenas {round(projetos_pct, 2)}% alocado para realizar os seus projetos. Revise a alocação ou peça auxílio ao planejador!"))
+        tem_gestao = True
+    else:
+        gestao_score = None
+        tem_gestao = False
+        msgs_gestao = [_msg("neutro", "Cadastre projetos com valor-alvo (aba Projetos) e aloque seus investimentos pra acompanhar esta dimensão.")]
+    dims.append(
+        DimensaoIndice(
+            chave="gestao_ativos", nome="Gestão de ativos", score=gestao_score,
+            zona=_zona_do_score(gestao_score), tem_dados=tem_gestao, mensagens=msgs_gestao,
+        )
+    )
+
+    scores = [d.score for d in dims if d.score is not None]
+    indice = round(sum(scores) / len(scores)) if scores else 0
+    return IndiceSaudeResposta(
+        indice_geral=indice,
+        zona=_zona_do_score(indice) if scores else "Sem dados",
+        dimensoes=dims,
+        planejador_whatsapp=saude["planejador_whatsapp"],
+    )
+
+
+@router.get("/indice-saude", response_model=IndiceSaudeResposta)
+def obter_indice_saude(
+    contexto: str | None = None,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    """Raio-X consolidado (índice geral + 4 dimensões) -- porta de entrada que
+    resume a saúde financeira e leva pra aba de detalhe de cada dimensão."""
+    return _indice_saude(db, cliente_id, contexto)
 
 
 # ============================================================================
@@ -687,10 +908,33 @@ def criar_bem(
         cliente_id=cliente_id,
         profissional_id=cliente.profissional_id,
         tipo=dados.tipo,
+        subtipo=dados.subtipo if dados.tipo == "imovel" else None,
         nome=dados.nome,
         valor=dados.valor,
+        proprietario=dados.proprietario if dados.proprietario in ("titular", "conjuge", "ambos") else "titular",
+        saldo_devedor=dados.saldo_devedor or 0,
+        valor_prestacao=dados.valor_prestacao or 0,
     )
     db.add(bem)
+    db.flush()
+    db.refresh(bem)
+    return bem
+
+
+@router.patch("/bens/{bem_id}", response_model=BemResposta)
+def atualizar_bem(
+    bem_id: uuid.UUID,
+    dados: BemAtualizar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    bem = db.get(BemPatrimonial, bem_id)
+    if bem is None or bem.cliente_id != cliente_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Bem não encontrado")
+    if dados.tipo is not None and dados.tipo not in TIPOS_BEM:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Tipo inválido: {dados.tipo}")
+    for campo, valor in dados.model_dump(exclude_unset=True).items():
+        setattr(bem, campo, valor)
     db.flush()
     db.refresh(bem)
     return bem
@@ -706,6 +950,69 @@ def excluir_bem(
     if bem is None or bem.cliente_id != cliente_id:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Bem não encontrado")
     db.delete(bem)
+
+
+# ============================================================================
+# Milhas aéreas (parte do Patrimônio)
+# ============================================================================
+@router.get("/milhas", response_model=list[MilhaResposta])
+def listar_milhas(cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)):
+    return db.scalars(
+        select(Milha).where(Milha.cliente_id == cliente_id).order_by(Milha.criado_em.desc())
+    ).all()
+
+
+@router.post("/milhas", response_model=MilhaResposta, status_code=status.HTTP_201_CREATED)
+def criar_milha(
+    dados: MilhaCriar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    cliente = _exigir_cliente(db, cliente_id)
+    milha = Milha(
+        cliente_id=cliente_id,
+        profissional_id=cliente.profissional_id,
+        categoria=dados.categoria,
+        programa=dados.programa,
+        quantidade=dados.quantidade or 0,
+        proprietario=dados.proprietario if dados.proprietario in ("titular", "conjuge") else "titular",
+        vencimento=dados.vencimento,
+    )
+    db.add(milha)
+    db.flush()
+    db.refresh(milha)
+    return milha
+
+
+@router.patch("/milhas/{milha_id}", response_model=MilhaResposta)
+def atualizar_milha(
+    milha_id: uuid.UUID,
+    dados: MilhaAtualizar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    milha = db.get(Milha, milha_id)
+    if milha is None or milha.cliente_id != cliente_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Milha não encontrada")
+    for campo in ("categoria", "programa", "quantidade", "proprietario", "vencimento"):
+        valor = getattr(dados, campo)
+        if valor is not None:
+            setattr(milha, campo, valor)
+    db.flush()
+    db.refresh(milha)
+    return milha
+
+
+@router.delete("/milhas/{milha_id}", status_code=status.HTTP_204_NO_CONTENT)
+def excluir_milha(
+    milha_id: uuid.UUID,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    milha = db.get(Milha, milha_id)
+    if milha is None or milha.cliente_id != cliente_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Milha não encontrada")
+    db.delete(milha)
 
 
 # ============================================================================
@@ -735,17 +1042,27 @@ def _calcular_realizado(
     return float(realizado or 0)
 
 
-def _orcamento_resposta(db: Session, orc: OrcamentoCategoria, categoria_nome: str | None, subcategoria_nome: str | None) -> OrcamentoResposta:
+# Metas são RECORRENTES: guardadas com ano=0 (sentinela "todo mês"; o mês fica
+# num valor válido só pra respeitar o CHECK, mas é ignorado). O valor realizado
+# é sempre calculado pro mês que está sendo visto (ano_ref/mes_ref).
+def _orcamento_resposta(
+    db: Session,
+    orc: OrcamentoCategoria,
+    categoria_nome: str | None,
+    subcategoria_nome: str | None,
+    ano_ref: int,
+    mes_ref: int,
+) -> OrcamentoResposta:
     return OrcamentoResposta(
         id=orc.id,
         categoria_id=orc.categoria_id,
         categoria_nome=categoria_nome,
         subcategoria_id=orc.subcategoria_id,
         subcategoria_nome=subcategoria_nome,
-        ano=orc.ano,
-        mes=orc.mes,
+        ano=ano_ref,
+        mes=mes_ref,
         valor_orcado=orc.valor_orcado,
-        valor_realizado=_calcular_realizado(db, orc.cliente_id, orc.categoria_id, orc.ano, orc.mes, orc.subcategoria_id),
+        valor_realizado=_calcular_realizado(db, orc.cliente_id, orc.categoria_id, ano_ref, mes_ref, orc.subcategoria_id),
     )
 
 
@@ -756,13 +1073,14 @@ def listar_orcamentos(
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
     db: Session = Depends(get_db_admin),
 ):
+    # Metas recorrentes (ano=0) valem pra todo mês; o realizado é do mês pedido.
     linhas = db.execute(
         select(OrcamentoCategoria, Categoria.nome, Subcategoria.nome)
         .join(Categoria, Categoria.id == OrcamentoCategoria.categoria_id)
         .outerjoin(Subcategoria, Subcategoria.id == OrcamentoCategoria.subcategoria_id)
-        .where(OrcamentoCategoria.cliente_id == cliente_id, OrcamentoCategoria.ano == ano, OrcamentoCategoria.mes == mes)
+        .where(OrcamentoCategoria.cliente_id == cliente_id, OrcamentoCategoria.ano == 0)
     ).all()
-    return [_orcamento_resposta(db, orc, cat_nome, sub_nome) for orc, cat_nome, sub_nome in linhas]
+    return [_orcamento_resposta(db, orc, cat_nome, sub_nome, ano, mes) for orc, cat_nome, sub_nome in linhas]
 
 
 @router.post("/orcamentos", response_model=OrcamentoResposta, status_code=status.HTTP_201_CREATED)
@@ -782,31 +1100,32 @@ def criar_orcamento(
         if subcategoria is None or subcategoria.categoria_id != dados.categoria_id:
             raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "Subcategoria inválida pra essa categoria")
 
+    # Meta recorrente: uma por (categoria, subcategoria), vale pra todo mês.
     existente = db.scalar(
         select(OrcamentoCategoria).where(
             OrcamentoCategoria.cliente_id == cliente_id,
             OrcamentoCategoria.categoria_id == dados.categoria_id,
             OrcamentoCategoria.subcategoria_id == dados.subcategoria_id,
-            OrcamentoCategoria.ano == dados.ano,
-            OrcamentoCategoria.mes == dados.mes,
+            OrcamentoCategoria.ano == 0,
         )
     )
     if existente:
-        raise HTTPException(status.HTTP_409_CONFLICT, "Já existe uma meta igual (mesma categoria/subcategoria) neste mês.")
+        raise HTTPException(status.HTTP_409_CONFLICT, "Já existe uma meta pra essa categoria/subcategoria.")
 
     orcamento = OrcamentoCategoria(
         cliente_id=cliente_id,
         profissional_id=cliente.profissional_id,
         categoria_id=dados.categoria_id,
         subcategoria_id=dados.subcategoria_id,
-        ano=dados.ano,
-        mes=dados.mes,
+        ano=0,       # recorrente
+        mes=1,       # valor válido só pro CHECK; ignorado (filtramos por ano=0)
         valor_orcado=dados.valor_orcado,
     )
     db.add(orcamento)
     db.flush()
     db.refresh(orcamento)
-    return _orcamento_resposta(db, orcamento, categoria.nome, subcategoria.nome if subcategoria else None)
+    # Realizado exibido = do mês que o cliente está vendo (dados.ano/mes).
+    return _orcamento_resposta(db, orcamento, categoria.nome, subcategoria.nome if subcategoria else None, dados.ano, dados.mes)
 
 
 @router.patch("/orcamentos/{orcamento_id}", response_model=OrcamentoResposta)
@@ -825,7 +1144,11 @@ def atualizar_orcamento(
     db.refresh(orcamento)
     categoria = db.get(Categoria, orcamento.categoria_id)
     subcategoria = db.get(Subcategoria, orcamento.subcategoria_id) if orcamento.subcategoria_id else None
-    return _orcamento_resposta(db, orcamento, categoria.nome if categoria else None, subcategoria.nome if subcategoria else None)
+    hoje = date.today()
+    return _orcamento_resposta(
+        db, orcamento, categoria.nome if categoria else None,
+        subcategoria.nome if subcategoria else None, hoje.year, hoje.month,
+    )
 
 
 @router.delete("/orcamentos/{orcamento_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -965,6 +1288,109 @@ def excluir_simulacao(
 MULTIPLICADOR_COBERTURA_RECOMENDADA = 60  # ~5 anos de renda mensal
 
 
+# Nomes das categorias-grupo usadas na calculadora de seguro (padrão de vida).
+_GRUPOS_PROTECAO = {
+    "obrigatorias": "Despesas obrigatórias",
+    "empresa": "Empresa e autônomo",
+    "nao_obrigatorias": "Despesas não obrigatórias",
+    "projetos": "Projetos",
+}
+_MESES_MEDIA_PROTECAO = 6
+
+
+@router.get("/protecao/medias", response_model=ProtecaoMediasResposta)
+def protecao_medias(cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)):
+    """Média mensal de renda e de gasto por grupo de categoria (últimos ~6 meses)
+    -- usado pelo botão 'Preencher automaticamente' da aba Proteção."""
+    hoje = date.today()
+    # início ~6 meses atrás (1º dia)
+    y, m = hoje.year, hoje.month - _MESES_MEDIA_PROTECAO + 1
+    while m <= 0:
+        m += 12
+        y -= 1
+    inicio = date(y, m, 1)
+
+    def _media(*conds):
+        total = float(
+            db.scalar(
+                select(func.coalesce(func.sum(func.abs(Transacao.valor)), 0)).where(
+                    Transacao.cliente_id == cliente_id, Transacao.data >= inicio, *conds, *_condicoes_fluxo_real()
+                )
+            )
+            or 0
+        )
+        return round(total / _MESES_MEDIA_PROTECAO, 2)
+
+    renda = _media(Transacao.tipo == "entrada")
+    por_grupo = {}
+    for chave, nome_cat in _GRUPOS_PROTECAO.items():
+        cat_ids = [
+            c for c in db.scalars(
+                select(Categoria.id).where(Categoria.nome == nome_cat, Categoria.cliente_id.is_(None))
+            ).all()
+        ]
+        por_grupo[chave] = _media(Transacao.tipo == "saida", Transacao.categoria_id.in_(cat_ids)) if cat_ids else 0.0
+
+    patr = _calcular_patrimonio(db, cliente_id)
+    return ProtecaoMediasResposta(
+        renda_mensal=renda,
+        obrigatorias=por_grupo["obrigatorias"],
+        empresa=por_grupo["empresa"],
+        nao_obrigatorias=por_grupo["nao_obrigatorias"],
+        projetos=por_grupo["projetos"],
+        patrimonio_liquido=float(patr["patrimonio_liquido"]),
+        meses_considerados=_MESES_MEDIA_PROTECAO,
+    )
+
+
+@router.get("/protecao/config", response_model=ProtecaoConfigResposta)
+def obter_protecao_config(cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)):
+    pc = db.get(ProtecaoConfig, cliente_id)
+    return ProtecaoConfigResposta(config=pc.config if pc else {})
+
+
+@router.put("/protecao/config", response_model=ProtecaoConfigResposta)
+def salvar_protecao_config(
+    dados: ProtecaoConfigAtualizar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    cliente = _exigir_cliente(db, cliente_id)
+    pc = db.get(ProtecaoConfig, cliente_id)
+    if pc is None:
+        pc = ProtecaoConfig(cliente_id=cliente_id, profissional_id=cliente.profissional_id, config=dados.config)
+        db.add(pc)
+    else:
+        pc.config = dados.config
+    db.flush()
+    db.refresh(pc)
+    return ProtecaoConfigResposta(config=pc.config)
+
+
+@router.get("/plano-investimento/config", response_model=PlanoInvestimentoResposta)
+def obter_plano_investimento(cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)):
+    pc = db.get(PlanoInvestimentoConfig, cliente_id)
+    return PlanoInvestimentoResposta(config=pc.config if pc else {})
+
+
+@router.put("/plano-investimento/config", response_model=PlanoInvestimentoResposta)
+def salvar_plano_investimento(
+    dados: PlanoInvestimentoAtualizar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    cliente = _exigir_cliente(db, cliente_id)
+    pc = db.get(PlanoInvestimentoConfig, cliente_id)
+    if pc is None:
+        pc = PlanoInvestimentoConfig(cliente_id=cliente_id, profissional_id=cliente.profissional_id, config=dados.config)
+        db.add(pc)
+    else:
+        pc.config = dados.config
+    db.flush()
+    db.refresh(pc)
+    return PlanoInvestimentoResposta(config=pc.config)
+
+
 @router.get("/protecao", response_model=MinhaProtecaoResposta)
 def obter_minha_protecao(
     cliente_id: uuid.UUID = Depends(get_cliente_id_atual), db: Session = Depends(get_db_admin)
@@ -985,13 +1411,44 @@ def obter_minha_protecao(
         )
         or 0
     )
-    cobertura_recomendada = renda_mensal * MULTIPLICADOR_COBERTURA_RECOMENDADA
+    # Cobertura recomendada: se o cliente configurou a calculadora (educação +
+    # padrão de vida + sucessão), usa a soma dessas necessidades. Senão, cai no
+    # atalho renda × múltiplo.
+    pc = db.get(ProtecaoConfig, cliente_id)
+    ideal = _cobertura_ideal(pc.config, _calcular_patrimonio(db, cliente_id)) if pc and pc.config else 0.0
+    cobertura_recomendada = ideal if ideal > 0 else renda_mensal * MULTIPLICADOR_COBERTURA_RECOMENDADA
 
     return MinhaProtecaoResposta(
         cobertura_atual=cobertura_atual,
         cobertura_recomendada=cobertura_recomendada,
         apolices=apolices,
     )
+
+
+def _cobertura_ideal(config: dict, patr: dict) -> float:
+    """Soma das 3 necessidades de seguro de vida (mesma fórmula do frontend):
+    educação/dependentes + padrão de vida + sucessão patrimonial."""
+    def n(v):
+        try:
+            return float(v or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    total = 0.0
+    # Educação/dependentes: anos × 12 × auxílio mensal (só os ativos).
+    for dep in (config.get("dependentes") or []):
+        if dep.get("ativo", True):
+            total += n(dep.get("anos")) * 12 * n(dep.get("auxilio_mensal"))
+    # Padrão de vida: soma das categorias ativas × 12 × período (anos).
+    pv = config.get("padrao_vida") or {}
+    cats = pv.get("categorias") or {}
+    mensal = sum(n(c.get("valor")) for c in cats.values() if c.get("ativo"))
+    total += mensal * 12 * n(pv.get("periodo_anos"))
+    # Sucessão: despesas específicas + (honorários% + ITCMD%) × patrimônio líquido.
+    suc = config.get("sucessao") or {}
+    pl = n(patr.get("patrimonio_liquido"))
+    total += n(suc.get("despesas_especificas")) + (n(suc.get("honorarios_pct")) + n(suc.get("itcmd_pct"))) / 100 * pl
+    return round(total, 2)
 
 
 @router.post("/apolices", response_model=ApoliceResposta, status_code=status.HTTP_201_CREATED)
@@ -1006,13 +1463,34 @@ def criar_apolice(
     apolice = ApoliceSeguro(
         cliente_id=cliente_id,
         profissional_id=cliente.profissional_id,
+        titular=dados.titular,
         tipo=dados.tipo,
         seguradora=dados.seguradora,
         valor_cobertura=dados.valor_cobertura,
         premio_mensal=dados.premio_mensal,
+        vigencia_inicio=dados.vigencia_inicio,
         vencimento=dados.vencimento,
     )
     db.add(apolice)
+    db.flush()
+    db.refresh(apolice)
+    return apolice
+
+
+@router.patch("/apolices/{apolice_id}", response_model=ApoliceResposta)
+def atualizar_apolice(
+    apolice_id: uuid.UUID,
+    dados: ApoliceAtualizar,
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    apolice = db.get(ApoliceSeguro, apolice_id)
+    if apolice is None or apolice.cliente_id != cliente_id:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Apólice não encontrada")
+    if dados.tipo is not None and dados.tipo not in TIPOS_APOLICE:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, f"Tipo inválido: {dados.tipo}")
+    for campo, valor in dados.model_dump(exclude_unset=True).items():
+        setattr(apolice, campo, valor)
     db.flush()
     db.refresh(apolice)
     return apolice

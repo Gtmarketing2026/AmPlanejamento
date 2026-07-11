@@ -12,6 +12,7 @@ const NAV = [
   { to: "/negocio", label: "Painel do Negócio", end: true },
   { to: "/negocio/planejadores", label: "Planejadores", end: false },
   { to: "/negocio/financeiro", label: "Financeiro da Plataforma", end: false },
+  { to: "/negocio/novidades", label: "Novidades", end: false },
 ]
 
 export default function NegocioLayout() {

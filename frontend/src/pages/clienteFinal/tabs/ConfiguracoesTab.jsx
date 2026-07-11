@@ -1,7 +1,10 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import Card from "../../../components/ui/Card"
+import Button from "../../../components/ui/Button"
+import Field from "../../../components/ui/Field"
 import { obterMinhasPreferencias, atualizarMinhasPreferencias, listarMinhasContas } from "../../../api/contas"
+import { atualizarMeuConjuge, meuPerfilCliente } from "../../../api/clientes"
 
 export default function ConfiguracoesTab({ token }) {
   const qc = useQueryClient()
@@ -16,6 +19,26 @@ export default function ConfiguracoesTab({ token }) {
     queryKey: ["cliente-eu-contas", token],
     queryFn: () => listarMinhasContas(token),
     enabled: !!token,
+  })
+  const { data: perfil } = useQuery({
+    queryKey: ["cliente-eu", token],
+    queryFn: () => meuPerfilCliente(token),
+    enabled: !!token,
+  })
+
+  // Cônjuge (cadastro simples)
+  const [conjuge, setConjuge] = useState("")
+  const [conjugeSalvo, setConjugeSalvo] = useState(false)
+  useEffect(() => {
+    if (perfil) setConjuge(perfil.conjuge_nome || "")
+  }, [perfil])
+  const salvarConjuge = useMutation({
+    mutationFn: () => atualizarMeuConjuge(token, conjuge.trim() || null),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["cliente-eu", token] })
+      setConjugeSalvo(true)
+      setTimeout(() => setConjugeSalvo(false), 2500)
+    },
   })
 
   const salvar = useMutation({
@@ -37,6 +60,33 @@ export default function ConfiguracoesTab({ token }) {
 
   return (
     <div className="flex flex-col gap-5">
+      <Card>
+        <div className="text-[14px] font-medium mb-1">Cônjuge</div>
+        <p className="text-text-dim text-[12.5px] mb-3">
+          Cadastre seu cônjuge para separar as contas e cartões dele(a) das suas (marque na aba <strong>Contas</strong>).
+        </p>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            salvarConjuge.mutate()
+          }}
+          className="flex items-end gap-3 flex-wrap"
+        >
+          <div className="w-64">
+            <Field
+              label="Nome do cônjuge"
+              value={conjuge}
+              onChange={(e) => setConjuge(e.target.value)}
+              placeholder="ex: Maria Silva (deixe vazio para remover)"
+            />
+          </div>
+          <Button type="submit" disabled={salvarConjuge.isPending} className="mb-0.5">
+            {salvarConjuge.isPending ? "Salvando…" : "Salvar"}
+          </Button>
+          {conjugeSalvo && <span className="text-accent text-[12.5px] mb-2.5">Salvo.</span>}
+        </form>
+      </Card>
+
       <Card>
         <div className="text-[14px] font-medium mb-1">Como contar seus gastos de cartão</div>
         <p className="text-text-dim text-[12.5px] mb-4">
@@ -76,10 +126,11 @@ export default function ConfiguracoesTab({ token }) {
           <div>
             <div className="text-[13.5px] font-medium">Virada do cartão</div>
             <div className="text-text-dim text-[12px] mt-0.5">
-              Se o seu cartão fecha todo dia 19, uma compra feita em 25/06 conta como gasto de julho, não de junho —
-              porque o seu "mês" vai de 19 a 18, não de 1 a 31. Assim você enxerga quanto gastou por mês de verdade,
-              não só o que caiu em cada fatura. A data de compra continua aparecendo igual nos lançamentos; só o mês
-              em que ela é somada muda.
+              Se o seu cartão vira (fecha) todo dia 19, o seu "mês" de cartão vai do dia 20 ao dia 19 do mês seguinte.
+              Assim, tanto uma compra de 25/06 quanto uma de 10/07 contam como gasto de <strong>junho</strong> — porque
+              estão no mesmo ciclo (o que abriu em junho, o mês do consumo). Você enxerga quanto gastou por ciclo do
+              cartão, não pelo mês-calendário de cada compra. A data da compra continua aparecendo igual nos
+              lançamentos; só muda em qual mês ela é somada.
             </div>
             {atual === "virada_cartao" && cartoesSemVirada.length > 0 && (
               <div className="text-amber text-[11.5px] mt-2">

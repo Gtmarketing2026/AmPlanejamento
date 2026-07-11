@@ -187,3 +187,7 @@ class TrialAtualizar(BaseModel):
 
 class StatusClienteAtualizar(BaseModel):
     status: str  # 'ativo' | 'excluido'
+
+
+class PlanejadorClienteAtualizar(BaseModel):
+    profissional_id: uuid.UUID  # planejador de destino

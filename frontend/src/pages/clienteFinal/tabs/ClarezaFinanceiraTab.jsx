@@ -41,9 +41,14 @@ export default function ClarezaFinanceiraTab({ token, contexto = "PF", onVerLanc
     queryFn: () => listarMinhasContas(token),
     enabled: !!token,
   })
-  // Categorias neutras (movimentação interna) não somam no fluxo.
+  // Fora do fluxo: neutras (movimentação interna) e investimento (patrimônio).
   const neutras = useMemo(
-    () => new Set(categorias.filter((c) => c.tipo === "neutra").map((c) => c.id)),
+    () =>
+      new Set(
+        categorias
+          .filter((c) => c.tipo === "neutra" || c.tipo === "investimento")
+          .map((c) => c.id)
+      ),
     [categorias]
   )
 
