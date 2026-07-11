@@ -8,3 +8,8 @@ pluggy_output/
 
 .vercel
 .env*
+
+# Backups do banco (NUNCA versionar dumps com dados reais)
+backups/
+*.sql.gz
+*.dump
