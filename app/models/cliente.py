@@ -47,6 +47,9 @@ class Cliente(Base):
     # Última vez que o cliente abriu o painel de Novidades (changelog) -- usado
     # pra contar quantas notas de atualização ainda não viu.
     novidades_vistas_em: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Consentimento LGPD no 1º acesso: quando o cliente aceitou e qual versão.
+    termos_aceitos_em: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    termos_versao: Mapped[str | None] = mapped_column(String, nullable=True)
     criado_em: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     @property

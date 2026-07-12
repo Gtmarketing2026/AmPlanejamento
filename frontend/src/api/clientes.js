@@ -18,6 +18,7 @@ export const loginCliente = (nickname, senha) =>
   apiPost("/clientes/login", { nickname, senha }, { auth: false })
 
 export const meuPerfilCliente = (token) => apiGet("/clientes/eu", { token })
+export const aceitarTermosCliente = (token) => apiPost("/clientes/eu/aceitar-termos", {}, { token })
 
 // Cadastro simples do cônjuge pelo próprio cliente (Configurações).
 export const atualizarMeuConjuge = (token, conjuge_nome) =>

@@ -6,6 +6,7 @@ import SinoNotificacoes from "../components/cliente/SinoNotificacoes"
 import SinoNovidades from "../components/ui/SinoNovidades"
 import { obterMinhasNovidades, marcarNovidadesVistas } from "../api/patrimonio"
 import MenuConfiguracoes from "../components/cliente/MenuConfiguracoes"
+import AceiteTermos from "../components/cliente/AceiteTermos"
 import { meuPerfilCliente } from "../api/clientes"
 import { ApiError } from "../api/client"
 import { getImpersonacao } from "../lib/impersonacao"
@@ -63,6 +64,12 @@ export default function ClienteLayout() {
 
   if (!token || !perfil) {
     return <div className="min-h-screen bg-bg flex items-center justify-center text-text-dim">Carregando…</div>
+  }
+
+  // Porta LGPD no 1º acesso: bloqueia até aceitar os termos. Não força quando é
+  // o planejador/admin "entrando como" cliente (aceite é do próprio cliente).
+  if (!perfil.termos_aceitos_em && !impersonando) {
+    return <AceiteTermos token={token} nome={perfil.nome} />
   }
 
   return (

@@ -358,6 +358,27 @@ def perfil_cliente_atual(
     return cliente
 
 
+@router.post("/eu/aceitar-termos", response_model=ClienteResposta)
+def aceitar_termos_cliente(
+    cliente_id: uuid.UUID = Depends(get_cliente_id_atual),
+    db: Session = Depends(get_db_admin),
+):
+    """Registra o aceite dos Termos + Privacidade pelo cliente final (1º acesso).
+    Guarda data e versão como prova (LGPD)."""
+    from datetime import datetime, timezone
+
+    from app.core.config import settings
+
+    cliente = db.get(Cliente, cliente_id)
+    if not cliente:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
+    cliente.termos_aceitos_em = datetime.now(timezone.utc)
+    cliente.termos_versao = settings.TERMOS_VERSAO
+    db.flush()
+    db.refresh(cliente)
+    return cliente
+
+
 @router.patch("/eu/conjuge", response_model=ClienteResposta)
 def atualizar_meu_conjuge(
     dados: ConjugeAtualizar,

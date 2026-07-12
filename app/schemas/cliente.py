@@ -100,6 +100,8 @@ class ClienteResposta(BaseModel):
     historico: str | None = None
     situacao_atual: str | None = None
     conjuge_nome: str | None = None
+    # Consentimento LGPD: null = ainda não aceitou (mostra a porta de aceite).
+    termos_aceitos_em: datetime | None = None
     criado_em: datetime
 
     model_config = {"from_attributes": True}
