@@ -2,9 +2,9 @@
 
 > ⚠️ MINUTA — revisar com jurídico e preencher os campos 〔…〕 antes de publicar.
 
-**Última atualização:** 〔DATA DE VIGÊNCIA〕
+**Última atualização:** 11 de julho de 2026
 
-Estes Termos regem o uso do **AMplanejador**, plataforma de planejamento financeiro operada por 〔RAZÃO SOCIAL〕, CNPJ 〔CNPJ〕 ("Plataforma"). Ao criar conta ou usar o serviço, você concorda com estes Termos.
+Estes Termos regem o uso do **AMplanejador**, plataforma de planejamento financeiro operada por GT - MARKETING DIGITAL LTDA, CNPJ 43.430.988/0001-31 ("Plataforma"). Ao criar conta ou usar o serviço, você concorda com estes Termos.
 
 ## 1. Objeto
 A Plataforma oferece ao **planejador financeiro** ferramentas para organizar, importar, categorizar e acompanhar dados financeiros de seus **clientes finais**, incluindo dashboard, importação de extratos, metas, patrimônio, CRM e, conforme o plano, marca própria e conexão via Open Finance.
@@ -29,7 +29,7 @@ A Plataforma oferece ao **planejador financeiro** ferramentas para organizar, im
 A Plataforma é uma **ferramenta de organização financeira**. Não presta consultoria de investimentos, recomendação personalizada, nem substitui a análise profissional do planejador. Projeções e simulações são estimativas e não garantem resultados. 〔Ajustar conforme escopo regulatório com jurídico.〕
 
 ## 6. Propriedade intelectual
-O software, a marca e os conteúdos da Plataforma pertencem à 〔RAZÃO SOCIAL〕. Os dados inseridos pelos usuários permanecem de titularidade dos respectivos titulares/controladores.
+O software, a marca e os conteúdos da Plataforma pertencem à GT - MARKETING DIGITAL LTDA. Os dados inseridos pelos usuários permanecem de titularidade dos respectivos titulares/controladores.
 
 ## 7. Disponibilidade
 Empregamos esforços para manter o serviço disponível, mas ele pode sofrer interrupções para manutenção ou por fatores de terceiros (hospedagem, provedores). 〔Definir SLA se aplicável.〕
@@ -41,6 +41,6 @@ Nos limites da lei, a Plataforma não se responsabiliza por decisões financeira
 O tratamento de dados pessoais segue a [Política de Privacidade](politica-de-privacidade.md), parte integrante destes Termos.
 
 ## 10. Alterações e foro
-Podemos alterar estes Termos, com aviso pelos canais da Plataforma. Fica eleito o foro de 〔COMARCA〕 para dirimir controvérsias, salvo regra legal em contrário.
+Podemos alterar estes Termos, com aviso pelos canais da Plataforma. Fica eleito o foro de Volta Redonda, RJ para dirimir controvérsias, salvo regra legal em contrário.
 
-**Contato:** 〔E-MAIL DO ENCARREGADO〕
+**Contato:** andreia.contabilrj@gmail.com

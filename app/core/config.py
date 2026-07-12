@@ -59,6 +59,11 @@ class Settings(BaseSettings):
     SENTRY_DSN: str = ""
     SENTRY_ENVIRONMENT: str = "production"
 
+    # Versão vigente dos Termos de Uso / Política de Privacidade. Registrada no
+    # aceite do cadastro (prova LGPD de qual versão a pessoa aceitou). Bumpar
+    # quando os textos mudarem materialmente.
+    TERMOS_VERSAO: str = "2026-07-11"
+
     # Regras de negócio (centralizadas aqui para não espalhar "números mágicos" no código)
     TRIAL_DIAS: int = 7  # trial concedido automaticamente no cadastro do planejador
     CLIENTES_INCLUSOS_PLANO_BASE: int = 4

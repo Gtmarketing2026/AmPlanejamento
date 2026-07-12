@@ -2,7 +2,7 @@ import LegalLayout, { H2 } from "./LegalLayout"
 
 export default function CanalLgpd() {
   return (
-    <LegalLayout titulo="Canal LGPD — Seus direitos" atualizado="〔data〕">
+    <LegalLayout titulo="Canal LGPD — Seus direitos" atualizado="11 de julho de 2026">
       <p>
         Levamos a sério a proteção dos seus dados. Por este canal você fala diretamente com nosso Encarregado (DPO) para
         exercer seus direitos ou tirar dúvidas sobre o tratamento dos seus dados pessoais.
@@ -10,8 +10,8 @@ export default function CanalLgpd() {
 
       <div className="rounded-[10px] border border-line bg-panel px-5 py-4 my-5">
         <div className="text-[12px] text-text-faint uppercase tracking-wide font-mono mb-1">Encarregado (DPO)</div>
-        <div className="text-text font-medium">〔nome do encarregado〕</div>
-        <a href="mailto:〔e-mail do encarregado〕" className="text-accent font-mono text-[13.5px]">〔e-mail do encarregado〕</a>
+        <div className="text-text font-medium">Andréia</div>
+        <a href="mailto:andreia.contabilrj@gmail.com" className="text-accent font-mono text-[13.5px]">andreia.contabilrj@gmail.com</a>
       </div>
 
       <H2>Direitos que você pode exercer</H2>

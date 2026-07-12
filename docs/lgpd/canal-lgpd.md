@@ -4,12 +4,12 @@
 > Encarregado e o fluxo interno de atendimento a solicitações de titulares.
 
 ## 1. Canal público (vai ao site/app)
-**Encarregado (DPO):** 〔NOME DO ENCARREGADO〕
-**E-mail LGPD:** 〔E-MAIL DO ENCARREGADO〕
+**Encarregado (DPO):** Andréia
+**E-mail LGPD:** andreia.contabilrj@gmail.com
 **Como solicitar:** envie e-mail informando seu pedido (acesso, correção, exclusão, portabilidade, revogação de consentimento etc.) e dados para identificarmos você com segurança.
 
 Texto sugerido para a página no app/site:
-> "Para exercer seus direitos previstos na LGPD ou tirar dúvidas sobre o tratamento dos seus dados, fale com nosso Encarregado pelo e-mail 〔E-MAIL DO ENCARREGADO〕. Responderemos no prazo legal."
+> "Para exercer seus direitos previstos na LGPD ou tirar dúvidas sobre o tratamento dos seus dados, fale com nosso Encarregado pelo e-mail andreia.contabilrj@gmail.com. Responderemos no prazo legal."
 
 ## 2. Direitos atendidos (art. 18 LGPD)
 Confirmação de tratamento; acesso; correção; anonimização/bloqueio/eliminação; portabilidade; informação sobre compartilhamento; informação sobre consequências de negar consentimento; revogação de consentimento.

@@ -2,7 +2,7 @@ import LegalLayout, { H2 } from "./LegalLayout"
 
 export default function PoliticaCookies() {
   return (
-    <LegalLayout titulo="Política de Cookies e Armazenamento Local" atualizado="〔data〕">
+    <LegalLayout titulo="Política de Cookies e Armazenamento Local" atualizado="11 de julho de 2026">
       <p>
         Atualmente a Plataforma <strong>não usa cookies de análise, publicidade ou rastreamento de terceiros</strong>.
         Usamos apenas armazenamento local essencial no seu navegador para o serviço funcionar.
@@ -31,7 +31,7 @@ export default function PoliticaCookies() {
       </p>
 
       <H2>Contato</H2>
-      <p>〔e-mail do encarregado〕</p>
+      <p>andreia.contabilrj@gmail.com</p>
     </LegalLayout>
   )
 }

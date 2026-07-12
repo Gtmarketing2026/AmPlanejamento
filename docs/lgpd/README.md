@@ -7,12 +7,12 @@
 > preenchidos antes de entrar no ar.
 
 ## Campos a preencher (valem para todos os documentos)
-- 〔RAZÃO SOCIAL〕 — razão social da empresa controladora da plataforma
-- 〔CNPJ〕
+- GT - MARKETING DIGITAL LTDA — razão social da empresa controladora da plataforma
+- 43.430.988/0001-31
 - 〔ENDEREÇO〕 — endereço completo da sede
-- 〔NOME DO ENCARREGADO〕 — Encarregado (DPO) pela proteção de dados
-- 〔E-MAIL DO ENCARREGADO〕 — e-mail do canal LGPD (ex: lgpd@…)
-- 〔DATA DE VIGÊNCIA〕
+- Andréia — Encarregado (DPO) pela proteção de dados
+- andreia.contabilrj@gmail.com — e-mail do canal LGPD (ex: lgpd@…)
+- 11 de julho de 2026
 
 ## Papéis (importante — negócio B2B2C)
 A plataforma tem **papel duplo** sob a LGPD:

@@ -3,9 +3,9 @@
 > ⚠️ MINUTA — documento interno (art. 37 da LGPD). Revisar com jurídico/DPO e
 > manter atualizado a cada nova operação de tratamento.
 
-**Controlador:** 〔RAZÃO SOCIAL〕 — CNPJ 〔CNPJ〕
-**Encarregado (DPO):** 〔NOME DO ENCARREGADO〕 — 〔E-MAIL DO ENCARREGADO〕
-**Atualizado em:** 〔DATA〕
+**Controlador:** GT - MARKETING DIGITAL LTDA — CNPJ 43.430.988/0001-31
+**Encarregado (DPO):** Andréia — andreia.contabilrj@gmail.com
+**Atualizado em:** 11 de julho de 2026
 
 ## Como ler
 Cada linha é uma operação de tratamento. "Papel" indica se, naquela operação, a Plataforma atua como **Controladora (C)** ou **Operadora (O)**.

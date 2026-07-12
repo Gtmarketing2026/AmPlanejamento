@@ -17,6 +17,7 @@ export default function CadastroPage() {
     senha: "",
     confirmarSenha: "",
   })
+  const [aceite, setAceite] = useState(false)
   const [erro, setErro] = useState(null)
   const [enviando, setEnviando] = useState(false)
 
@@ -35,11 +36,16 @@ export default function CadastroPage() {
       setErro("A senha precisa ter pelo menos 8 caracteres.")
       return
     }
+    if (!aceite) {
+      setErro("Você precisa ler e aceitar os Termos de Uso e a Política de Privacidade.")
+      return
+    }
     setEnviando(true)
     try {
       await cadastrar(form.nome, form.email, form.senha, {
         nome_empresa: form.nome_empresa || null,
         whatsapp: form.whatsapp ? form.whatsapp.replace(/\D/g, "") : null,
+        aceite_termos: true,
       })
       // Recém-cadastrado entra em trial de 7 dias -> já consegue usar o produto.
       navigate("/inicio")
@@ -94,8 +100,27 @@ export default function CadastroPage() {
           onChange={set("confirmarSenha")}
           required
         />
+        <label className="flex items-start gap-2 mb-3 mt-1 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={aceite}
+            onChange={(e) => setAceite(e.target.checked)}
+            className="mt-0.5 accent-accent"
+          />
+          <span className="text-text-dim text-[12.5px] leading-snug">
+            Li e aceito os{" "}
+            <a href="/termos" target="_blank" rel="noreferrer" className="text-accent hover:underline">
+              Termos de Uso
+            </a>{" "}
+            e a{" "}
+            <a href="/privacidade" target="_blank" rel="noreferrer" className="text-accent hover:underline">
+              Política de Privacidade
+            </a>
+            .
+          </span>
+        </label>
         {erro && <p className="text-red text-[12.5px] mb-3">{erro}</p>}
-        <Button type="submit" block disabled={enviando}>
+        <Button type="submit" block disabled={enviando || !aceite}>
           {enviando ? "Criando conta…" : "Criar conta"}
         </Button>
       </form>

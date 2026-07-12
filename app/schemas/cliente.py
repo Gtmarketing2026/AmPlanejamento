@@ -15,6 +15,9 @@ class ProfissionalCadastro(BaseModel):
     whatsapp: str | None = None
     # Opcional: se não vier, geramos a partir do nome_empresa/nome.
     subdominio: str | None = None
+    # Consentimento LGPD: precisa vir True (aceite dos Termos + Privacidade).
+    # A data e a versão aceitas ficam registradas como prova.
+    aceite_termos: bool = False
 
 
 class LoginRequest(BaseModel):

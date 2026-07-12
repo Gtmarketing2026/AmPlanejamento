@@ -2,9 +2,9 @@ import LegalLayout, { H2 } from "./LegalLayout"
 
 export default function TermosUso() {
   return (
-    <LegalLayout titulo="Termos de Uso" atualizado="〔data〕">
+    <LegalLayout titulo="Termos de Uso" atualizado="11 de julho de 2026">
       <p>
-        Estes Termos regem o uso do <strong>AMplanejador</strong>, operado por 〔razão social〕, CNPJ 〔CNPJ〕. Ao criar
+        Estes Termos regem o uso do <strong>AMplanejador</strong>, operado por GT - MARKETING DIGITAL LTDA, CNPJ 43.430.988/0001-31. Ao criar
         conta ou usar o serviço, você concorda com eles.
       </p>
 
@@ -45,7 +45,7 @@ export default function TermosUso() {
       <p>O tratamento de dados segue a Política de Privacidade, parte integrante destes Termos.</p>
 
       <H2>7. Alterações e foro</H2>
-      <p>Podemos alterar estes Termos, com aviso pelos canais da Plataforma. Foro de 〔comarca〕, salvo regra legal em contrário.</p>
+      <p>Podemos alterar estes Termos, com aviso pelos canais da Plataforma. Foro de Volta Redonda, RJ, salvo regra legal em contrário.</p>
     </LegalLayout>
   )
 }

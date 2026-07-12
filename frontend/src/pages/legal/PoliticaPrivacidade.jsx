@@ -2,9 +2,9 @@ import LegalLayout, { H2 } from "./LegalLayout"
 
 export default function PoliticaPrivacidade() {
   return (
-    <LegalLayout titulo="Política de Privacidade" atualizado="〔data〕">
+    <LegalLayout titulo="Política de Privacidade" atualizado="11 de julho de 2026">
       <p>
-        Esta Política explica como o <strong>AMplanejador</strong> (〔razão social〕, CNPJ 〔CNPJ〕) trata dados
+        Esta Política explica como o <strong>AMplanejador</strong> (GT - MARKETING DIGITAL LTDA, CNPJ 43.430.988/0001-31) trata dados
         pessoais, conforme a Lei nº 13.709/2018 (LGPD).
       </p>
 
@@ -58,7 +58,7 @@ export default function PoliticaPrivacidade() {
       </p>
 
       <H2>9. Encarregado (DPO) e contato</H2>
-      <p>〔nome do encarregado〕 — <strong>〔e-mail do encarregado〕</strong>.</p>
+      <p>Andréia — <strong>andreia.contabilrj@gmail.com</strong>.</p>
     </LegalLayout>
   )
 }

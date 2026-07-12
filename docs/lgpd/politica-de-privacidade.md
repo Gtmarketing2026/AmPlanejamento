@@ -2,9 +2,9 @@
 
 > ⚠️ MINUTA — revisar com jurídico e preencher os campos 〔…〕 antes de publicar.
 
-**Última atualização:** 〔DATA DE VIGÊNCIA〕
+**Última atualização:** 11 de julho de 2026
 
-Esta Política explica como o **AMplanejador** (〔RAZÃO SOCIAL〕, CNPJ 〔CNPJ〕, com sede em 〔ENDEREÇO〕), doravante "Plataforma", trata dados pessoais, em conformidade com a Lei nº 13.709/2018 (LGPD).
+Esta Política explica como o **AMplanejador** (GT - MARKETING DIGITAL LTDA, CNPJ 43.430.988/0001-31, com sede em 〔ENDEREÇO〕), doravante "Plataforma", trata dados pessoais, em conformidade com a Lei nº 13.709/2018 (LGPD).
 
 ## 1. A quem esta Política se aplica
 - **Planejadores** — profissionais que assinam a Plataforma.
@@ -59,7 +59,7 @@ Você pode solicitar: confirmação de tratamento, acesso, correção, anonimiza
 A Plataforma não se destina a menores de 18 anos.
 
 ## 10. Encarregado (DPO) e contato
-**Encarregado:** 〔NOME DO ENCARREGADO〕 — **〔E-MAIL DO ENCARREGADO〕**. Também via [Canal LGPD](canal-lgpd.md).
+**Encarregado:** Andréia — **andreia.contabilrj@gmail.com**. Também via [Canal LGPD](canal-lgpd.md).
 
 ## 11. Alterações
 Podemos atualizar esta Política; a data de vigência acima indica a versão atual. Mudanças relevantes serão comunicadas pelos canais da Plataforma.

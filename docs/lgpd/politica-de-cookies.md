@@ -5,7 +5,7 @@
 > for adicionado Google Analytics, pixel, ou qualquer rastreamento, esta
 > política e o banner de consentimento precisam ser atualizados.
 
-**Última atualização:** 〔DATA DE VIGÊNCIA〕
+**Última atualização:** 11 de julho de 2026
 
 ## 1. O que usamos hoje
 Atualmente a Plataforma **não usa cookies de análise, publicidade ou rastreamento de terceiros**. Utilizamos apenas **armazenamento local essencial** no seu navegador para o funcionamento do serviço:
@@ -26,4 +26,4 @@ Você pode limpar o armazenamento local pelas configurações do navegador. Isso
 ## 4. Se adicionarmos analytics no futuro
 Caso passemos a usar ferramentas de análise/marketing, implementaremos **banner de consentimento** com opção de aceitar/recusar categorias não essenciais, e esta política será atualizada com a lista de cookies, finalidades e prazos.
 
-**Contato:** 〔E-MAIL DO ENCARREGADO〕
+**Contato:** andreia.contabilrj@gmail.com

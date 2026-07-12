@@ -29,6 +29,9 @@ class Profissional(Base):
     status: Mapped[str] = mapped_column(String, default="ativa")  # ativa | congelada | cancelada
     # Última vez que o planejador abriu o painel de Novidades (changelog).
     novidades_vistas_em: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Consentimento LGPD no cadastro: quando aceitou e qual versão dos termos.
+    termos_aceitos_em: Mapped[DateTime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    termos_versao: Mapped[str | None] = mapped_column(String, nullable=True)
     criado_em: Mapped[DateTime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     # Critérios da saúde financeira do cliente (o planejador pode ajustar na aba

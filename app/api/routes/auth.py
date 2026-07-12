@@ -35,7 +35,13 @@ def _gerar_subdominio(db: Session, base_texto: str) -> str:
 
 @router.post("/cadastro", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 def cadastrar_profissional(dados: ProfissionalCadastro, db: Session = Depends(get_db_sem_rls)):
-    from datetime import timedelta
+    from datetime import datetime, timedelta, timezone
+
+    if not dados.aceite_termos:
+        raise HTTPException(
+            status_code=422,
+            detail="É necessário ler e aceitar os Termos de Uso e a Política de Privacidade.",
+        )
 
     validar_senha_forte(dados.senha)
 
@@ -62,6 +68,9 @@ def cadastrar_profissional(dados: ProfissionalCadastro, db: Session = Depends(ge
         # Trial de 7 dias já no cadastro: o planejador consegue testar o produto
         # antes de escolher/pagar um plano (ver core/planos.py::tem_plano_ativo).
         trial_ate=date.today() + timedelta(days=settings.TRIAL_DIAS),
+        # Prova do consentimento LGPD: quando e qual versão dos termos aceitou.
+        termos_aceitos_em=datetime.now(timezone.utc),
+        termos_versao=settings.TERMOS_VERSAO,
     )
     db.add(profissional)
     db.commit()

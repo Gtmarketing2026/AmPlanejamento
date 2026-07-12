@@ -9,7 +9,7 @@ Definir como detectar, conter, tratar e comunicar incidentes de segurança que p
 ## 2. Papéis e contatos
 | Papel | Responsável | Contato |
 |-------|-------------|---------|
-| Encarregado (DPO) | 〔NOME DO ENCARREGADO〕 | 〔E-MAIL/TELEFONE〕 |
+| Encarregado (DPO) | Andréia | 〔E-MAIL/TELEFONE〕 |
 | Responsável técnico | 〔NOME〕 | 〔CONTATO〕 |
 | Jurídico | 〔NOME/ESCRITÓRIO〕 | 〔CONTATO〕 |
 

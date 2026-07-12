@@ -203,19 +203,20 @@ def _calcular_mes_referencia(data_transacao: date, natureza: str, dia_virada: in
     contas/cartões sem dia de virada configurado) é o próprio mês calendário
     de `data_transacao`. Com a preferência "virada_cartao" e um cartão com
     dia_virada definido, a fatura é nomeada pelo MÊS EM QUE O GASTO OCORREU
-    (mesmo que só seja paga no mês seguinte). Ex: cartão vira dia 9 -> a fatura
-    de maio cobre 10/05 a 09/06. Então:
-      - compra em 10/05 (dia > virada): começa o ciclo deste mês -> maio;
-      - compra em 09/06 (dia <= virada): ainda é o ciclo do mês anterior -> maio;
-      - compra em 09/05 (dia <= virada): ciclo de abril -> abril;
-      - compra em 10/06 (dia > virada): já é o ciclo de junho -> junho."""
+    (mesmo que só seja paga no mês seguinte). O dia da virada é o PRIMEIRO dia
+    do novo ciclo. Ex: cartão vira dia 9 -> a fatura de maio cobre 09/05 a
+    08/06. Então:
+      - compra em 09/05 (dia >= virada): começa o ciclo deste mês -> maio;
+      - compra em 08/06 (dia < virada): ainda é o ciclo do mês anterior -> maio;
+      - compra em 08/05 (dia < virada): ciclo de abril -> abril;
+      - compra em 09/06 (dia >= virada): já é o ciclo de junho -> junho."""
     mes_calendario = date(data_transacao.year, data_transacao.month, 1)
     if modo_visualizacao != "virada_cartao" or natureza != "cartao" or not dia_virada:
         return mes_calendario
-    if data_transacao.day > dia_virada:
-        # Compras depois da virada começam o ciclo/fatura DESTE mês.
+    if data_transacao.day >= dia_virada:
+        # A partir da virada (inclusive): começa o ciclo/fatura DESTE mês.
         return mes_calendario
-    # Até a virada (inclusive): ainda pertencem ao ciclo aberto no mês anterior.
+    # Antes da virada: ainda pertence ao ciclo aberto no mês anterior.
     if data_transacao.month == 1:
         return date(data_transacao.year - 1, 12, 1)
     return date(data_transacao.year, data_transacao.month - 1, 1)
