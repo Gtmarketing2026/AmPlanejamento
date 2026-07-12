@@ -10,7 +10,7 @@
 - GT - MARKETING DIGITAL LTDA — razão social da empresa controladora da plataforma
 - 43.430.988/0001-31
 - 〔ENDEREÇO〕 — endereço completo da sede
-- Andréia — Encarregado (DPO) pela proteção de dados
+- Andreia Michele Menezes Luz — Encarregado (DPO) pela proteção de dados
 - andreia.contabilrj@gmail.com — e-mail do canal LGPD (ex: lgpd@…)
 - 11 de julho de 2026
 

@@ -10,7 +10,7 @@ export default function CanalLgpd() {
 
       <div className="rounded-[10px] border border-line bg-panel px-5 py-4 my-5">
         <div className="text-[12px] text-text-faint uppercase tracking-wide font-mono mb-1">Encarregado (DPO)</div>
-        <div className="text-text font-medium">Andréia</div>
+        <div className="text-text font-medium">Andreia Michele Menezes Luz</div>
         <a href="mailto:andreia.contabilrj@gmail.com" className="text-accent font-mono text-[13.5px]">andreia.contabilrj@gmail.com</a>
       </div>
 

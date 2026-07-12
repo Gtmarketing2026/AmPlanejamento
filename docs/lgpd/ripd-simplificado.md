@@ -3,7 +3,7 @@
 > ⚠️ MINUTA — documento interno (art. 38 da LGPD). O RIPD é recomendado por
 > tratarmos **dados financeiros + CPF em escala**. Revisar com jurídico/DPO.
 
-**Controlador:** GT - MARKETING DIGITAL LTDA · **DPO:** Andréia · **Data:** 11 de julho de 2026
+**Controlador:** GT - MARKETING DIGITAL LTDA · **DPO:** Andreia Michele Menezes Luz · **Data:** 11 de julho de 2026
 
 ## 1. Descrição do tratamento
 Plataforma SaaS que organiza e acompanha finanças de clientes finais para planejadores. Trata dados de identificação (nome, CPF/CNPJ), de acesso (senha em hash) e **dados financeiros detalhados** (lançamentos, saldos, investimentos, dívidas, patrimônio), inclusive extraídos de extratos enviados e, futuramente, via Open Finance.

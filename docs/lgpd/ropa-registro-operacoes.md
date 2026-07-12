@@ -4,7 +4,7 @@
 > manter atualizado a cada nova operação de tratamento.
 
 **Controlador:** GT - MARKETING DIGITAL LTDA — CNPJ 43.430.988/0001-31
-**Encarregado (DPO):** Andréia — andreia.contabilrj@gmail.com
+**Encarregado (DPO):** Andreia Michele Menezes Luz — andreia.contabilrj@gmail.com
 **Atualizado em:** 11 de julho de 2026
 
 ## Como ler

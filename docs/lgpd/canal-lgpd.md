@@ -4,7 +4,7 @@
 > Encarregado e o fluxo interno de atendimento a solicitações de titulares.
 
 ## 1. Canal público (vai ao site/app)
-**Encarregado (DPO):** Andréia
+**Encarregado (DPO):** Andreia Michele Menezes Luz
 **E-mail LGPD:** andreia.contabilrj@gmail.com
 **Como solicitar:** envie e-mail informando seu pedido (acesso, correção, exclusão, portabilidade, revogação de consentimento etc.) e dados para identificarmos você com segurança.
 

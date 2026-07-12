@@ -58,7 +58,7 @@ export default function PoliticaPrivacidade() {
       </p>
 
       <H2>9. Encarregado (DPO) e contato</H2>
-      <p>Andréia — <strong>andreia.contabilrj@gmail.com</strong>.</p>
+      <p>Andreia Michele Menezes Luz — <strong>andreia.contabilrj@gmail.com</strong>.</p>
     </LegalLayout>
   )
 }

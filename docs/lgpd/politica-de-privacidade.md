@@ -59,7 +59,7 @@ Você pode solicitar: confirmação de tratamento, acesso, correção, anonimiza
 A Plataforma não se destina a menores de 18 anos.
 
 ## 10. Encarregado (DPO) e contato
-**Encarregado:** Andréia — **andreia.contabilrj@gmail.com**. Também via [Canal LGPD](canal-lgpd.md).
+**Encarregado:** Andreia Michele Menezes Luz — **andreia.contabilrj@gmail.com**. Também via [Canal LGPD](canal-lgpd.md).
 
 ## 11. Alterações
 Podemos atualizar esta Política; a data de vigência acima indica a versão atual. Mudanças relevantes serão comunicadas pelos canais da Plataforma.
