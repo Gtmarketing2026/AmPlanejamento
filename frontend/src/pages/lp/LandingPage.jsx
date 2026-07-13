@@ -6,7 +6,6 @@ import Button from "../../components/ui/Button"
 import Pill from "../../components/ui/Pill"
 import KpiStat from "../../components/ui/KpiStat"
 import BarRow from "../../components/ui/BarRow"
-import DonutMultiChart from "../../components/ui/DonutMultiChart"
 import Termometro from "../../components/ui/Termometro"
 import Logo from "../../components/ui/Logo"
 import { catalogoPlanos } from "../../api/assinatura"
@@ -173,16 +172,16 @@ function TelaMetas() {
 
 function TelaInvestimentos() {
   const ativos = [
-    { nome: "Tesouro IPCA+ 2035", tipo: "Renda fixa", inst: "XP Investimentos", valor: "R$ 50.000,00" },
-    { nome: "Ações BOVA11", tipo: "Ação", inst: "XP Investimentos", valor: "R$ 25.000,00" },
-    { nome: "Fundo Multimercado", tipo: "Fundo", inst: "Itaú", valor: "R$ 10.000,00" },
+    { nome: "Tesouro IPCA+ 2035", tipo: "Renda fixa", inst: "XP Investimentos", resgate: "vence 15/05/2035", valor: "R$ 50.000,00" },
+    { nome: "Ações BOVA11", tipo: "Ação", inst: "XP Investimentos", resgate: "liquidez diária", valor: "R$ 25.000,00" },
+    { nome: "CDB Liquidez", tipo: "Renda fixa", inst: "Nubank", resgate: "liquidez diária", valor: "R$ 10.000,00" },
   ]
   return (
     <JanelaApp titulo="Investimentos · painel do cliente">
       <div className="grid grid-cols-3 gap-3 mb-4">
         <KpiStat label="Total investido" value="R$ 85.000,00" deltaColor="accent" />
-        <KpiStat label="Renda fixa" value="R$ 50.000,00" />
-        <KpiStat label="Renda variável" value="R$ 35.000,00" />
+        <KpiStat label="Reserva de emergência" value="90% · R$ 45.000" />
+        <KpiStat label="Meta mensal" value="R$ 3.080,00" />
       </div>
       <Card>
         <div className="flex flex-col gap-2.5">
@@ -191,7 +190,7 @@ function TelaInvestimentos() {
               <div>
                 <div className="font-medium text-text">{a.nome}</div>
                 <div className="text-text-faint text-[11px]">
-                  {a.tipo} · {a.inst}
+                  {a.tipo} · {a.inst} · {a.resgate}
                 </div>
               </div>
               <span className="font-mono text-accent">{a.valor}</span>
@@ -204,26 +203,33 @@ function TelaInvestimentos() {
 }
 
 function TelaPatrimonio() {
+  const bens = [
+    { nome: "Apartamento", tag: "Residencial", tagCor: "bg-panel text-text-dim", valor: "R$ 320.000", deve: "deve R$ 120.000 · ~48x de R$ 3.200" },
+    { nome: "Onix 2022", tag: "cônjuge", tagCor: "bg-blue/15 text-blue", valor: "R$ 60.000", deve: "deve R$ 25.000 · ~10x de R$ 2.500" },
+  ]
   return (
     <JanelaApp titulo="Bens e dívidas · painel do cliente">
       <div className="grid grid-cols-3 gap-3 mb-4">
-        <KpiStat label="Patrimônio líquido" value="R$ 238.832,00" deltaColor="accent" />
-        <KpiStat label="Total de ativos" value="R$ 238.832,00" />
-        <KpiStat label="Total de passivos" value="R$ 0,00" />
+        <KpiStat label="Patrimônio líquido" value="R$ 213.832,00" deltaColor="accent" />
+        <KpiStat label="Total de ativos" value="R$ 358.832,00" />
+        <KpiStat label="Total de passivos" value="R$ 145.000,00" deltaColor="red" />
       </div>
       <Card>
-        <div className="flex items-center justify-between mb-3">
-          <div className="text-[10.5px] text-text-faint uppercase tracking-wide font-mono">Resumo patrimonial</div>
-          <span className="text-accent text-[11px] font-mono">35,6% em ativos geradores de renda</span>
+        <div className="text-[10.5px] text-text-faint uppercase tracking-wide font-mono mb-2">Bens e financiamentos</div>
+        <div className="flex flex-col gap-2.5">
+          {bens.map((b) => (
+            <div key={b.nome} className="flex items-center justify-between text-[12.5px] border-b border-line last:border-0 pb-2.5 last:pb-0">
+              <div>
+                <div className="font-medium text-text flex items-center gap-1.5">
+                  {b.nome}
+                  <span className={`text-[9.5px] font-mono rounded-full px-1.5 py-0.5 ${b.tagCor}`}>{b.tag}</span>
+                </div>
+                <div className="text-red text-[10.5px] font-mono">{b.deve}</div>
+              </div>
+              <span className="font-mono text-text">{b.valor}</span>
+            </div>
+          ))}
         </div>
-        <DonutMultiChart
-          size={120}
-          fatias={[
-            { label: "Investimentos", valor: 85000, cor: "#26D9A8" },
-            { label: "Saldo em conta", valor: 18832.9, cor: "#4C8DFF" },
-            { label: "Bens móveis/imóveis", valor: 135000, cor: "#F0A63C" },
-          ]}
-        />
       </Card>
     </JanelaApp>
   )
@@ -425,8 +431,39 @@ function TelaIndiceSaude() {
   )
 }
 
+function TelaProtecao() {
+  const necessidades = [
+    { icone: "🎓", nome: "Educação e dependentes", valor: "R$ 420.000" },
+    { icone: "💵", nome: "Padrão de vida", valor: "R$ 780.000" },
+    { icone: "🏛️", nome: "Sucessão patrimonial", valor: "R$ 96.000" },
+  ]
+  return (
+    <JanelaApp titulo="Proteção · calculadora do seguro de vida ideal">
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <KpiStat label="Cobertura de vida atual" value="R$ 500.000" deltaColor="accent" />
+        <KpiStat label="Cobertura recomendada" value="R$ 1.296.000" />
+      </div>
+      <Card>
+        <div className="text-[10.5px] text-text-faint uppercase tracking-wide font-mono mb-2">Cobertura ideal · 3 necessidades</div>
+        <div className="flex flex-col gap-2.5">
+          {necessidades.map((n) => (
+            <div key={n.nome} className="flex items-center justify-between text-[12.5px] border-b border-line last:border-0 pb-2.5 last:pb-0">
+              <span className="flex items-center gap-2 text-text">
+                <span>{n.icone}</span>
+                {n.nome}
+              </span>
+              <span className="font-mono text-accent">{n.valor}</span>
+            </div>
+          ))}
+        </div>
+      </Card>
+    </JanelaApp>
+  )
+}
+
 const TELAS_CARROSSEL = [
   { key: "indice", label: "Índice de saúde financeira", render: TelaIndiceSaude },
+  { key: "protecao", label: "Proteção (seguro ideal)", render: TelaProtecao },
   { key: "fluxo", label: "Fluxo de caixa", render: TelaFluxoCaixa },
   { key: "planejamento", label: "Metas", render: TelaPlanejamento },
   { key: "metas", label: "Projetos", render: TelaMetas },
