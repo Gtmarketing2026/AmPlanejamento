@@ -396,7 +396,37 @@ function TelaPessoalEmpresa() {
   )
 }
 
+function TelaIndiceSaude() {
+  const dims = [
+    { nome: "Organização financeira", score: 78, cor: "#26D9A8" },
+    { nome: "Meu patrimônio", score: 92, cor: "#26D9A8" },
+    { nome: "Liberdade financeira", score: 71, cor: "#EAD94C" },
+    { nome: "Gestão de ativos", score: 64, cor: "#F0A63C" },
+  ]
+  return (
+    <JanelaApp titulo="Índice de saúde financeira · painel do cliente">
+      <div className="flex flex-col items-center pb-2">
+        <Termometro score={82} label="A todo vapor" />
+        <div className="font-display text-[30px] font-semibold text-accent -mt-9 leading-none">82</div>
+        <div className="text-text-faint text-[11px] mt-1">índice geral · 4 dimensões</div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 mt-2">
+        {dims.map((d) => (
+          <Card key={d.nome}>
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[12px] font-medium">{d.nome}</span>
+              <span className="font-mono text-[11.5px]" style={{ color: d.cor }}>{d.score}/100</span>
+            </div>
+            <BarRow pct={d.score} value={`${d.score}%`} labelWidth="w-0" />
+          </Card>
+        ))}
+      </div>
+    </JanelaApp>
+  )
+}
+
 const TELAS_CARROSSEL = [
+  { key: "indice", label: "Índice de saúde financeira", render: TelaIndiceSaude },
   { key: "fluxo", label: "Fluxo de caixa", render: TelaFluxoCaixa },
   { key: "planejamento", label: "Metas", render: TelaPlanejamento },
   { key: "metas", label: "Projetos", render: TelaMetas },
@@ -512,18 +542,20 @@ const DESTAQUES = [
 ]
 
 const RECURSOS = [
+  { icone: "🧭", titulo: "Índice de saúde financeira", texto: "Um raio-X com nota de 0 a 100, composto por 4 dimensões (organização, patrimônio, liberdade e gestão de ativos), cada uma com um diagnóstico e o caminho pra melhorar." },
   { icone: "🔎", titulo: "Filtros e ações em massa", texto: "Filtre por conta, cartão, categoria, subcategoria ou período; importe ou exclua lançamentos em massa." },
   { icone: "💸", titulo: "Fluxo de caixa", texto: "Receitas, despesas e resultado por mês, com gráfico e exportação em PDF/Excel." },
   { icone: "📊", titulo: "Resumo financeiro", texto: "Visão anual mês a mês — clique num valor e veja os lançamentos por trás dele." },
   { icone: "🎯", titulo: "Metas", texto: "Metas de gasto por categoria, com faixa de uso colorida e aviso de estouro — clique numa meta e veja os lançamentos dela." },
   { icone: "🚀", titulo: "Projetos", texto: "Projetos de vida por prioridade (essencial/desejo/sonho), com aportes e investimentos vinculados contando no progresso." },
   { icone: "🧓", titulo: "Meu Futuro (FIRE)", texto: "Simulador de independência financeira: quanto investir por mês pra aposentar na idade que quiser." },
-  { icone: "📈", titulo: "Investimentos", texto: "Carteira por instituição, classe e liquidez, com alocação direta pra cada projeto. Classificou um lançamento como investimento? Ele sai das despesas e entra aqui — e aparece como aporte no fluxo de caixa." },
-  { icone: "🏦", titulo: "Bens e dívidas", texto: "Ativos, dívidas, bens móveis e imóveis e milhas — patrimônio líquido sempre atualizado." },
-  { icone: "🛡️", titulo: "Proteção", texto: "Cobertura de seguro de vida atual vs. recomendada, com apólices cadastradas." },
+  { icone: "📈", titulo: "Investimentos", texto: "Carteira por instituição, classe e tipo de resgate (liquidez ou vencimento), com alocação em % pra cada projeto, reserva de emergência calculada pela média dos gastos e distribuição da meta mensal. Classificou um lançamento como investimento? Ele sai das despesas e entra aqui — e aparece como aporte no fluxo de caixa." },
+  { icone: "🏦", titulo: "Bens e dívidas", texto: "Ativos, dívidas, bens móveis e imóveis e milhas — com proprietário, saldo devedor e prestação. A parcela do financiamento lançada abate a dívida automaticamente, e o patrimônio líquido fica sempre atualizado." },
+  { icone: "🛡️", titulo: "Proteção", texto: "Calculadora do seguro de vida ideal — educação e dependentes, padrão de vida e sucessão patrimonial — com cobertura atual vs. recomendada e apólices cadastradas." },
   { icone: "💳", titulo: "Contas e cartões", texto: "Cada meio de pagamento com o ícone do banco; vincule a fatura ao cartão pra o gasto abater do limite. Saldo atualizado automaticamente pelos lançamentos e virada de fatura configurável." },
   { icone: "🏷️", titulo: "Categorias sob medida", texto: "Categorias padrão prontas, mais as que você e cada cliente quiserem criar." },
   { icone: "🤝", titulo: "CRM com plano de ação e Google Agenda", texto: "Perfil comportamental, histórico, roadmap “onde estou → onde quero chegar”, follow-ups sincronizados com o Google Agenda e checklist de tarefas." },
+  { icone: "📣", titulo: "Novidades do sistema", texto: "Um sino de atualizações no painel do cliente e do planejador: cada melhoria ou correção vira uma nota, então todos veem o produto evoluindo." },
   { icone: "🎨", titulo: "Sua marca (white label)", texto: "Subdomínio, cor e logo próprios — seu cliente vê o painel com a cara do seu escritório." },
 ]
 
