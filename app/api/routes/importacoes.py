@@ -488,6 +488,26 @@ def _chave_descricao(descricao: str) -> str:
     return re.sub(r"\s+", " ", d).strip().lower()
 
 
+def chave_cross_fonte(data, valor, tipo: str, descricao: str) -> str:
+    """Chave pra detectar o MESMO lançamento vindo de fontes DIFERENTES (arquivo
+    x Open Finance): data + valor + tipo + descrição normalizada. Conservadora
+    -- só casa quando a descrição normaliza igual, então não junta dois gastos
+    legítimos parecidos só por terem mesmo dia/valor."""
+    return f"{data.isoformat()}|{abs(float(valor)):.2f}|{tipo}|{_chave_descricao(descricao)}"
+
+
+def chaves_existentes_cliente(db: Session, cliente_id, contas_excluidas=()) -> set:
+    """Conjunto de chaves cross-fonte dos lançamentos REAIS (não previstos) do
+    cliente, ignorando as contas passadas (as que estão sendo escritas agora --
+    a dedup DENTRO da mesma conta já é feita por hash_dedup). Uma query só."""
+    q = select(Transacao.data, Transacao.valor, Transacao.tipo, Transacao.descricao).where(
+        Transacao.cliente_id == cliente_id, Transacao.previsto.is_(False)
+    )
+    if contas_excluidas:
+        q = q.where(Transacao.conta_conectada_id.notin_(list(contas_excluidas)))
+    return {chave_cross_fonte(d, v, tp, desc) for d, v, tp, desc in db.execute(q)}
+
+
 def aplicar_classificacao_por_regras(db: Session, txs: list) -> int:
     """Classificação INSTANTÂNEA por palavra-chave (sem IA), via as regras de
     negócio em app/integrations/regras_categoria.py (padaria->Mercado, ifood->
@@ -803,8 +823,16 @@ def processar_upload(
     duplicadas = 0
     parcelamentos_detectados = 0  # compras parceladas c/ parcelas futuras a gerar
     inseridas = []  # [{"id", "descricao", "tipo"}] -- só as que entraram de fato (não duplicadas)
+    # Dedup cross-fonte: chaves dos lançamentos que o cliente já tem em OUTRAS
+    # contas (ex: importados por Open Finance) -- pra não duplicar o mesmo
+    # lançamento vindo por arquivo. A dedup dentro desta conta é o hash_dedup.
+    chaves_outras = chaves_existentes_cliente(db, cliente_id, contas_excluidas=[conta.id])
     for t in transacoes_parseadas:
         hash_dedup = calcular_hash_dedup(conta.id, t["data"], t["valor"], t["descricao"])
+        ck = chave_cross_fonte(t["data"], t["valor"], t["tipo"], t["descricao"])
+        if ck in chaves_outras:
+            duplicadas += 1  # já existe em outra fonte/conta -> não duplica
+            continue
         mes_referencia = mes_ref_forcado or _calcular_mes_referencia(
             t["data"], conta.natureza, conta.dia_virada, modo_visualizacao
         )
@@ -856,6 +884,7 @@ def processar_upload(
         if linha:
             importadas += 1
             inseridas.append({"id": linha[0], "descricao": t["descricao"], "tipo": t["tipo"]})
+            chaves_outras.add(ck)
         else:
             duplicadas += 1
 

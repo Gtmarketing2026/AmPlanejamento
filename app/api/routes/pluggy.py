@@ -21,6 +21,8 @@ from app.api.routes.importacoes import (
     aplicar_classificacao_por_historico,
     aplicar_classificacao_por_regras,
     aplicar_classificacao_renda,
+    chave_cross_fonte,
+    chaves_existentes_cliente,
 )
 from app.integrations import pluggy
 from app.models.cliente import Cliente
@@ -80,6 +82,22 @@ def sincronizar(
     importadas = duplicadas = 0
     inseridas_ids: list = []
 
+    # Dedup cross-fonte: chaves dos lançamentos que o cliente já tem em OUTRAS
+    # contas (ex: importados por arquivo/planilha) -- pra não duplicar o mesmo
+    # lançamento vindo por Open Finance. Ignora as contas deste item (a dedup
+    # dentro delas é o hash_dedup).
+    acc_ids = [str(a.get("id")) for a in contas_pluggy]
+    contas_do_item = (
+        db.scalars(
+            select(ContaConectada.id).where(
+                ContaConectada.cliente_id == cliente_id, ContaConectada.item_id_provedor.in_(acc_ids)
+            )
+        ).all()
+        if acc_ids
+        else []
+    )
+    chaves_existentes = chaves_existentes_cliente(db, cliente_id, contas_excluidas=contas_do_item)
+
     for acc in contas_pluggy:
         acc_id = str(acc.get("id"))
         natureza = "cartao" if str(acc.get("type") or "").upper() == "CREDIT" else "conta"
@@ -108,6 +126,10 @@ def sincronizar(
             m = pluggy.mapear_transacao(tx)
             if not m or not _transacao_valida(m):
                 continue
+            ck = chave_cross_fonte(m["data"], m["valor"], m["tipo"], m["descricao"])
+            if ck in chaves_existentes:
+                duplicadas += 1  # já existe em outra fonte (ex: arquivo) -> não duplica
+                continue
             hd = calcular_hash_dedup(conta.id, m["data"], m["valor"], m["descricao"])
             stmt = (
                 pg_insert(Transacao)
@@ -124,6 +146,7 @@ def sincronizar(
             if row:
                 importadas += 1
                 inseridas_ids.append(row[0])
+                chaves_existentes.add(ck)
             else:
                 duplicadas += 1
 
