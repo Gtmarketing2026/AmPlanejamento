@@ -16,7 +16,7 @@ custo (bancos de mentira); produção é paga.
 import time
 from datetime import date
 
-import httpx
+import requests
 
 from app.core.config import settings
 
@@ -45,14 +45,14 @@ def _apikey() -> str:
     if _apikey_cache["valor"] and agora < _apikey_cache["expira"]:
         return _apikey_cache["valor"]
     try:
-        r = httpx.post(
+        r = requests.post(
             f"{_BASE}/auth",
             json={"clientId": settings.PLUGGY_CLIENT_ID, "clientSecret": settings.PLUGGY_CLIENT_SECRET},
             timeout=30,
         )
         r.raise_for_status()
         ak = r.json()["apiKey"]
-    except (httpx.HTTPError, KeyError) as e:
+    except (requests.RequestException, KeyError) as e:
         raise PluggyIndisponivel(f"Falha ao autenticar no Pluggy: {e}") from e
     _apikey_cache["valor"] = ak
     _apikey_cache["expira"] = agora + _TTL_APIKEY_S
@@ -61,10 +61,10 @@ def _apikey() -> str:
 
 def _get(path: str, params: dict | None = None) -> dict:
     try:
-        r = httpx.get(f"{_BASE}{path}", params=params, headers={"X-API-KEY": _apikey()}, timeout=45)
+        r = requests.get(f"{_BASE}{path}", params=params, headers={"X-API-KEY": _apikey()}, timeout=45)
         r.raise_for_status()
         return r.json()
-    except httpx.HTTPError as e:
+    except requests.RequestException as e:
         raise PluggyIndisponivel(f"Erro no Pluggy ({path}): {e}") from e
 
 
@@ -75,10 +75,10 @@ def criar_connect_token(cliente_id: str | None = None) -> str:
     if cliente_id:
         corpo["clientUserId"] = str(cliente_id)
     try:
-        r = httpx.post(f"{_BASE}/connect_token", json=corpo, headers={"X-API-KEY": _apikey()}, timeout=30)
+        r = requests.post(f"{_BASE}/connect_token", json=corpo, headers={"X-API-KEY": _apikey()}, timeout=30)
         r.raise_for_status()
         return r.json()["accessToken"]
-    except (httpx.HTTPError, KeyError) as e:
+    except (requests.RequestException, KeyError) as e:
         raise PluggyIndisponivel(f"Falha ao criar connect token: {e}") from e
 
 
