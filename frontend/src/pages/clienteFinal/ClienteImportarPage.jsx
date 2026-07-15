@@ -6,6 +6,7 @@ import Button from "../../components/ui/Button"
 import Pill from "../../components/ui/Pill"
 import Field, { Select } from "../../components/ui/Field"
 import { Table, Thead, Th, Tr, Td } from "../../components/ui/Table"
+import ConectarBanco from "../../components/cliente/ConectarBanco"
 import {
   atualizarContaImportacao,
   atualizarMesRefImportacao,
@@ -213,9 +214,16 @@ export default function ClienteImportarPage() {
 
       <h1 className="font-display text-xl font-semibold mb-1">Importar extrato / fatura</h1>
       <p className="text-text-dim text-sm mb-5">
-        Envie seu extrato bancário ou fatura de cartão (OFX, CSV ou PDF). Os lançamentos entram no seu
-        painel já com a categoria sugerida automaticamente — você pode ajustar depois.
+        Conecte seu banco pelo Open Finance (automático) ou envie um arquivo (OFX, CSV ou PDF). Os
+        lançamentos entram no seu painel já com a categoria sugerida — você pode ajustar depois.
       </p>
+
+      {/* Conexão automática via Open Finance (só aparece se o Pluggy estiver ligado). */}
+      <ConectarBanco token={token} />
+
+      <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono my-5">
+        ou envie um arquivo
+      </div>
 
       <Card className="mb-5">
         <form onSubmit={onEnviar} className="flex items-end gap-3 flex-wrap">
