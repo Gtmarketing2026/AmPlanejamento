@@ -412,9 +412,12 @@ function TelaIndiceSaude() {
   return (
     <JanelaApp titulo="Índice de saúde financeira · painel do cliente">
       <div className="flex flex-col items-center pb-2">
-        <Termometro score={82} label="A todo vapor" />
-        <div className="font-display text-[30px] font-semibold text-accent -mt-9 leading-none">82</div>
-        <div className="text-text-faint text-[11px] mt-1">índice geral · 4 dimensões</div>
+        <Termometro score={82} label="" />
+        <div className="flex flex-col items-center">
+          <div className="font-display text-[30px] font-semibold text-accent leading-none">82</div>
+          <div className="text-[12px] font-medium text-accent mt-1">A todo vapor</div>
+        </div>
+        <div className="text-text-faint text-[11px] mt-1.5">índice geral · 4 dimensões</div>
       </div>
       <div className="grid grid-cols-2 gap-3 mt-2">
         {dims.map((d) => (

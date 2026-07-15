@@ -96,15 +96,15 @@ export default function IndiceSaudeCard({ token, contexto = "PF", onIrParaTab })
     <Card className="mb-5">
       <div className="flex flex-col items-center pt-1 pb-3">
         <Termometro score={data.indice_geral} semDados={semDados} label="" />
-        <div className="flex flex-col items-center -mt-9">
-          <div className="font-display text-[32px] font-semibold" style={{ color: semDados ? undefined : corGeral }}>
+        <div className="flex flex-col items-center">
+          <div className="font-display text-[30px] font-semibold leading-none" style={{ color: semDados ? undefined : corGeral }}>
             {semDados ? "–" : data.indice_geral}
           </div>
-          <div className="text-[12.5px] font-medium" style={{ color: semDados ? undefined : corGeral }}>
+          <div className="text-[12.5px] font-medium mt-1" style={{ color: semDados ? undefined : corGeral }}>
             {data.zona}
           </div>
         </div>
-        <div className="text-text-faint text-[11.5px] mt-2">índice geral de saúde financeira</div>
+        <div className="text-text-faint text-[11.5px] mt-1.5">índice geral de saúde financeira</div>
       </div>
 
       <div className="grid grid-cols-2 gap-3 max-md:grid-cols-1 pt-3 border-t border-line">
