@@ -87,6 +87,24 @@ def obter_item(item_id: str) -> dict:
     return _get(f"/items/{item_id}")
 
 
+# Status "em andamento" do Pluggy -- enquanto o item estiver num desses, ainda
+# está sincronizando e as transações podem não ter chegado.
+_EM_ANDAMENTO = {"UPDATING", "CREATING", "LOGIN_IN_PROGRESS", "WAITING_USER_ACTION"}
+
+
+def esperar_item(item_id: str, tentativas: int = 15, intervalo_s: float = 2.5) -> dict:
+    """Aguarda o item sair do estado 'em andamento' (vira UPDATED, erro, etc.)
+    antes de puxar as transações -- o widget às vezes retorna antes de os dados
+    ficarem prontos. Trava por tempo (Vercel maxDuration): ~37s."""
+    item = obter_item(item_id)
+    for _ in range(tentativas):
+        if item.get("status") not in _EM_ANDAMENTO:
+            break
+        time.sleep(intervalo_s)
+        item = obter_item(item_id)
+    return item
+
+
 def listar_contas(item_id: str) -> list[dict]:
     return _get("/accounts", {"itemId": item_id}).get("results", [])
 

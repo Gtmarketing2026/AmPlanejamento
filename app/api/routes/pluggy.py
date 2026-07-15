@@ -69,7 +69,9 @@ def sincronizar(
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Cliente não encontrado")
     prof_id = cliente.profissional_id
     try:
-        item = pluggy.obter_item(pedido.item_id)
+        # Espera o item terminar de sincronizar antes de puxar (evita 0 lançamentos
+        # quando o widget retorna com os dados ainda a caminho).
+        item = pluggy.esperar_item(pedido.item_id)
         contas_pluggy = pluggy.listar_contas(pedido.item_id)
     except pluggy.PluggyIndisponivel as e:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(e)) from e
