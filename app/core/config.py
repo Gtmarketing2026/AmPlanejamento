@@ -24,6 +24,12 @@ class Settings(BaseSettings):
     OPENFINANCE_CLIENT_SECRET: str = ""
     OPENFINANCE_WEBHOOK_SECRET: str = ""
 
+    # Pluggy (Open Finance) -- conexão automática de contas. Vazio = desligado
+    # (a UI não mostra o botão "Conectar banco"). Sandbox pra testar sem custo;
+    # ver dashboard.pluggy.ai. As chaves ficam no cofre local e nas env vars.
+    PLUGGY_CLIENT_ID: str = ""
+    PLUGGY_CLIENT_SECRET: str = ""
+
     # Google Calendar
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""

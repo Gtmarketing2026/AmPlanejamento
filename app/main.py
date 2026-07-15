@@ -17,6 +17,7 @@ from app.api.routes import (
     negocio,
     notificacoes,
     patrimonio,
+    pluggy,
     webhooks,
 )
 from app.core.config import settings
@@ -79,6 +80,7 @@ app.include_router(contas.router_profissional)
 app.include_router(notificacoes.router)
 app.include_router(notificacoes.router_cliente)
 app.include_router(configuracoes.router)
+app.include_router(pluggy.router)
 
 
 @app.get("/health")
