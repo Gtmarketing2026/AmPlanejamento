@@ -114,6 +114,33 @@ export default function AssinaturaPage() {
       title="Escolha seu plano"
       description="Você já está cadastrado. Escolha um plano e pague pra ativar sua conta e começar a cadastrar clientes."
     >
+      <Card className="max-w-3xl mb-5">
+        <div className="text-[11px] text-text-faint uppercase tracking-wide font-mono mb-2">
+          Como funciona a cobrança
+        </div>
+        <ul className="space-y-1.5 text-[12.5px] text-text-dim list-disc pl-4">
+          <li>
+            <strong className="text-text">7 dias grátis</strong> no cadastro — o período de teste não conta como
+            cliente ativo e você não paga nada pra experimentar.
+          </li>
+          <li>
+            Ao escolher um plano, a <strong className="text-text">primeira cobrança</strong> é gerada na hora — pague
+            por Pix, boleto ou cartão no link do Asaas.
+          </li>
+          <li>
+            Depois é uma <strong className="text-text">cobrança mensal recorrente</strong> (ciclo de 30 dias), no mesmo
+            dia da contratação.
+          </li>
+          <li>
+            Cada plano <strong className="text-text">inclui até 4 clientes ativos</strong>. Cada cliente a mais (5º em
+            diante) tem um valor por cliente/mês — mostrado em cada plano abaixo.
+          </li>
+          <li>
+            <strong className="text-text">Sem taxa de adesão</strong> e sem fidelidade.
+          </li>
+        </ul>
+      </Card>
+
       <div className="grid grid-cols-2 gap-5 max-w-3xl">
         {planos?.map((p) => {
           const selecionado = tipoEscolhido === p.tipo_plano
