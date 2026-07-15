@@ -14,7 +14,7 @@ custo (bancos de mentira); produção é paga.
 """
 
 import time
-from datetime import date
+from datetime import date, datetime
 
 import requests
 
@@ -91,9 +91,50 @@ def listar_contas(item_id: str) -> list[dict]:
     return _get("/accounts", {"itemId": item_id}).get("results", [])
 
 
-def listar_transacoes(account_id: str, desde: date | None = None, pagina_tam: int = 500) -> list[dict]:
-    """Transações de uma conta. `desde` limita a busca (ISO date)."""
-    params: dict = {"accountId": account_id, "pageSize": pagina_tam}
+def _data_tx(tx: dict) -> date | None:
+    bruto = tx.get("date")
+    try:
+        return datetime.fromisoformat(bruto.replace("Z", "+00:00")).date() if bruto else None
+    except (ValueError, AttributeError):
+        return None
+
+
+def listar_transacoes(account_id: str, desde: date | None = None, max_paginas: int = 40) -> list[dict]:
+    """Transações de uma conta via /v2/transactions (paginação por CURSOR -- o
+    endpoint /transactions v1 foi deprecado). v2 não aceita 'from'/'pageSize',
+    então o filtro `desde` é aplicado no cliente. `max_paginas` é trava de
+    segurança contra loop infinito."""
+    todas: list[dict] = []
+    cursor: str | None = None
+    for _ in range(max_paginas):
+        params: dict = {"accountId": account_id}
+        if cursor:
+            params["cursor"] = cursor
+        d = _get("/v2/transactions", params)
+        todas.extend(d.get("results", []))
+        cursor = d.get("next")
+        if not cursor:
+            break
     if desde:
-        params["from"] = desde.isoformat()
-    return _get("/transactions", params).get("results", [])
+        todas = [t for t in todas if (dt := _data_tx(t)) and dt >= desde]
+    return todas
+
+
+def mapear_transacao(tx: dict) -> dict | None:
+    """Converte uma transação do Pluggy (v2) pro formato interno do pipeline
+    ({data, descricao, valor, tipo}). v2 traz `type` (CREDIT/DEBIT) e `amount`
+    COM SINAL (negativo = saída). Usa o type; cai pro sinal se faltar. Valor
+    sempre positivo. Devolve None se faltar data/valor/descrição."""
+    data = _data_tx(tx)
+    valor = tx.get("amount")
+    desc = (tx.get("description") or tx.get("descriptionRaw") or "").strip()
+    if data is None or valor is None or not desc:
+        return None
+    t = str(tx.get("type") or "").upper()
+    if t == "CREDIT":
+        tipo = "entrada"
+    elif t == "DEBIT":
+        tipo = "saida"
+    else:
+        tipo = "entrada" if float(valor) >= 0 else "saida"
+    return {"data": data, "descricao": desc, "valor": abs(float(valor)), "tipo": tipo}
