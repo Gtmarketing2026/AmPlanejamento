@@ -77,7 +77,9 @@ export default function ClienteDashboardPage() {
         </div>
       )}
 
-      <IndiceSaudeCard token={token} contexto={ctx} onIrParaTab={mudarTab} />
+      {/* Índice de saúde só na visão geral (aba Fluxo de caixa) -- é grande,
+          não precisa aparecer fixo no topo de todas as abas. */}
+      {tab === "fluxo" && <IndiceSaudeCard token={token} contexto={ctx} onIrParaTab={mudarTab} />}
 
       <div className="mb-5">
         <TabsAgrupadas

@@ -140,19 +140,16 @@ def listar_transacoes(account_id: str, desde: date | None = None, max_paginas: i
 
 def mapear_transacao(tx: dict) -> dict | None:
     """Converte uma transação do Pluggy (v2) pro formato interno do pipeline
-    ({data, descricao, valor, tipo}). v2 traz `type` (CREDIT/DEBIT) e `amount`
-    COM SINAL (negativo = saída). Usa o type; cai pro sinal se faltar. Valor
-    sempre positivo. Devolve None se faltar data/valor/descrição."""
+    ({data, descricao, valor, tipo}). O que manda é o SINAL de `amount`
+    (negativo = saída, positivo = entrada) -- vale pra conta E pra cartão. O
+    campo `type` NÃO serve: no cartão uma compra vem como type=CREDIT com
+    amount negativo (ver investigação no sandbox), o que invertia o sinal.
+    Valor sempre positivo. Devolve None se faltar data/valor/descrição."""
     data = _data_tx(tx)
     valor = tx.get("amount")
     desc = (tx.get("description") or tx.get("descriptionRaw") or "").strip()
     if data is None or valor is None or not desc:
         return None
-    t = str(tx.get("type") or "").upper()
-    if t == "CREDIT":
-        tipo = "entrada"
-    elif t == "DEBIT":
-        tipo = "saida"
-    else:
-        tipo = "entrada" if float(valor) >= 0 else "saida"
-    return {"data": data, "descricao": desc, "valor": abs(float(valor)), "tipo": tipo}
+    v = float(valor)
+    tipo = "saida" if v < 0 else "entrada"
+    return {"data": data, "descricao": desc, "valor": abs(v), "tipo": tipo}
